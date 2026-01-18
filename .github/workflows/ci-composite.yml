@@ -18,23 +18,49 @@ on:
       - reopened
       - ready_for_review
   workflow_dispatch:
+    inputs:
+      vipc_changes:
+        description: "For manual runs: true/false to force VIPC detection, auto to diff against last commit."
+        required: false
+        default: "auto"
 
 jobs:
   changes:
     name: Detect VIPC changes
     runs-on: ubuntu-latest
     outputs:
-      vipc: ${{ steps.filter.outputs.vipc }}
+      vipc: ${{ steps.filter.outputs.vipc || steps.dispatch.outputs.vipc }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - id: filter
+        if: github.event_name != 'workflow_dispatch'
         uses: dorny/paths-filter@v3
         with:
           filters: |
             vipc:
               - '**/*.vipc'
+      - id: dispatch
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          case "${{ github.event.inputs.vipc_changes }}" in
+            true|false)
+              echo "vipc=${{ github.event.inputs.vipc_changes }}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+                if git diff --name-only HEAD~1 | grep -E '\.vipc$' >/dev/null 2>&1; then
+                  echo "vipc=true" >> "$GITHUB_OUTPUT"
+                else
+                  echo "vipc=false" >> "$GITHUB_OUTPUT"
+                fi
+              else
+                echo "vipc=true" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+          esac
 
   apply-deps-2021-x64:
     name: Apply VIPC (2021 x64)
