@@ -155,8 +155,6 @@ $gcliArgs = @(
     "--lv-ver", $MinimumSupportedLVVersion.ToString(),
     "--arch", $SupportedBitness,
     "--connect-timeout", "120000",
-    "--kill",
-    "--kill-timeout", "20000",
     "--verbose",
     "vipb", "--",
     "--buildspec", $ResolvedVIPBPath,
