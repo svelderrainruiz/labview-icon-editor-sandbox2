@@ -160,96 +160,24 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  missing-in-project-2021-x64:
-    name: Test Missing-In-Project (2021 x64)
-    needs: close-lv-2021-after-deps
+  pipeline-2021-x64:
+    name: Pipeline (2021 x64)
+    needs: [close-lv-2021-after-deps, version]
     runs-on: self-hosted-windows-lv
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/missing-in-project
         with:
           lv-ver:       "2021"
           arch:         "64"
           project-file: "lv_icon_editor.lvproj"
-
-  missing-in-project-2021-x86:
-    name: Test Missing-In-Project (2021 x86)
-    needs: missing-in-project-2021-x64
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/missing-in-project
-        with:
-          lv-ver:       "2021"
-          arch:         "32"
-          project-file: "lv_icon_editor.lvproj"
-
-  test-2021-x64:
-    name: Run Unit Tests (2021 x64)
-    needs: missing-in-project-2021-x86
-    runs-on: self-hosted-windows-lv
-    steps:
       - uses: ./.github/actions/run-unit-tests
         with:
           minimum_supported_lv_version: "2021"
           supported_bitness:            "64"
-      - if: always()
-        name: Close LabVIEW 2021 64-bit after unit tests
-        uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 64
-
-  test-2021-x86:
-    name: Run Unit Tests (2021 x86)
-    needs: test-2021-x64
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/run-unit-tests
-        with:
-          minimum_supported_lv_version: "2021"
-          supported_bitness:            "32"
-      - if: always()
-        name: Close LabVIEW 2021 32-bit after unit tests
-        uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 32
-
-  build-ppl-x86:
-    name: Build 32-bit Packed Library
-    needs: [build-ppl-x64, version]
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/build-lvlibp
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 32
-          relative_path: ${{ github.workspace }}
-          major: ${{ needs.version.outputs.MAJOR }}
-          minor: ${{ needs.version.outputs.MINOR }}
-          patch: ${{ needs.version.outputs.PATCH }}
-          build: ${{ needs.version.outputs.BUILD }}
-          commit: ${{ github.sha }}
-      - if: always()
-        uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 32
-      - uses: ./.github/actions/rename-file
-        with:
-          current_filename: ${{ github.workspace }}/resource/plugins/lv_icon.lvlibp
-          new_filename: ${{ github.workspace }}/resource/plugins/lv_icon_x86.lvlibp
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lv_icon_x86.lvlibp
-          path: resource/plugins/lv_icon_x86.lvlibp
-
-  build-ppl-x64:
-    name: Build 64-bit Packed Library
-    needs: [test-2021-x86, version]
-    runs-on: self-hosted-windows-lv
-    steps:
+          checkout:                     "false"
       - uses: ./.github/actions/build-lvlibp
         with:
           minimum_supported_lv_version: 2021
@@ -260,6 +188,7 @@ jobs:
           patch: ${{ needs.version.outputs.PATCH }}
           build: ${{ needs.version.outputs.BUILD }}
           commit: ${{ github.sha }}
+          checkout: "false"
       - if: always()
         uses: ./.github/actions/close-labview
         with:
@@ -274,10 +203,53 @@ jobs:
           name: lv_icon_x64.lvlibp
           path: resource/plugins/lv_icon_x64.lvlibp
 
+  pipeline-2021-x86:
+    name: Pipeline (2021 x86)
+    needs: [pipeline-2021-x64, version]
+    runs-on: self-hosted-windows-lv
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/missing-in-project
+        with:
+          lv-ver:       "2021"
+          arch:         "32"
+          project-file: "lv_icon_editor.lvproj"
+      - uses: ./.github/actions/run-unit-tests
+        with:
+          minimum_supported_lv_version: "2021"
+          supported_bitness:            "32"
+          checkout:                     "false"
+      - uses: ./.github/actions/build-lvlibp
+        with:
+          minimum_supported_lv_version: 2021
+          supported_bitness: 32
+          relative_path: ${{ github.workspace }}
+          major: ${{ needs.version.outputs.MAJOR }}
+          minor: ${{ needs.version.outputs.MINOR }}
+          patch: ${{ needs.version.outputs.PATCH }}
+          build: ${{ needs.version.outputs.BUILD }}
+          commit: ${{ github.sha }}
+          checkout: "false"
+      - if: always()
+        uses: ./.github/actions/close-labview
+        with:
+          minimum_supported_lv_version: 2021
+          supported_bitness: 32
+      - uses: ./.github/actions/rename-file
+        with:
+          current_filename: ${{ github.workspace }}/resource/plugins/lv_icon.lvlibp
+          new_filename: ${{ github.workspace }}/resource/plugins/lv_icon_x86.lvlibp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lv_icon_x86.lvlibp
+          path: resource/plugins/lv_icon_x86.lvlibp
+
   build-vip:
     name: Build VI Package
-    # Chain after 32-bit build, which already depends on 64-bit, to enforce x64 -> x86 -> build-vip ordering
-    needs: [build-ppl-x86, version]
+    # Chain after x86 pipeline, which already depends on x64, to enforce x64 -> x86 -> build-vip ordering
+    needs: [pipeline-2021-x86, version]
     runs-on: self-hosted-windows-lv
     steps:
       - uses: actions/checkout@v4
