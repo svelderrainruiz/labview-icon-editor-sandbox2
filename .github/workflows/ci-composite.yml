@@ -295,6 +295,8 @@ jobs:
       - name: Generate release notes
         uses: ./.github/actions/generate-release-notes
         # output_path defaults to Tooling/deployment/release_notes.md
+        with:
+          checkout: "false"
       - uses: actions/download-artifact@v4
         with:
           name: lv_icon_x86.lvlibp
@@ -356,28 +358,6 @@ jobs:
 
           $json = $info | ConvertTo-Json -Depth 5 -Compress
           "json=$json" >> $Env:GITHUB_OUTPUT
-      - name: Update VIPB package file name
-        shell: pwsh
-        env:
-          VIPB_PATH: ${{ github.workspace }}/Tooling/deployment/NI Icon editor.vipb
-          PACKAGE_FILE_NAME: ${{ steps.fork-info.outputs.package_file_name }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          if (-not (Test-Path $Env:VIPB_PATH)) {
-            throw "VIPB file not found at $Env:VIPB_PATH"
-          }
-          [xml]$vipbXml = Get-Content -Raw -Path $Env:VIPB_PATH
-          $generalSettings = $vipbXml.VI_Package_Builder_Settings.Library_General_Settings
-          if (-not $generalSettings) {
-            throw "VIPB missing Library_General_Settings."
-          }
-          $element = $generalSettings.SelectSingleNode("Package_File_Name")
-          if (-not $element) {
-            $element = $vipbXml.CreateElement("Package_File_Name")
-            [void]$generalSettings.AppendChild($element)
-          }
-          $element.InnerText = $Env:PACKAGE_FILE_NAME
-          $vipbXml.Save($Env:VIPB_PATH)
       - uses: ./.github/actions/modify-vipb-display-info
         with:
           supported_bitness: 64
@@ -392,6 +372,8 @@ jobs:
           commit: ${{ github.sha }}
           release_notes_file: ${{ github.workspace }}/Tooling/deployment/release_notes.md
           display_information_json: ${{ steps.display-info.outputs.json }}
+          package_file_name: ${{ steps.fork-info.outputs.package_file_name }}
+          checkout: "false"
       - name: Assert VIPB metadata
         shell: pwsh
         env:
@@ -445,10 +427,11 @@ jobs:
             $expectedValue = $expected[$key]
             $actualValue = $actual[$key]
             $line = "{0}: expected='{1}' actual='{2}'" -f $key, $expectedValue, $actualValue
-            $line | Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append
-            if ($expectedValue -ne $actualValue) {
-              $mismatches += $key
-            }
+          $line | Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append
+          Write-Host $line
+          if ($expectedValue -ne $actualValue) {
+            $mismatches += $key
+          }
           }
 
           if ($mismatches.Count -gt 0) {
@@ -468,11 +451,13 @@ jobs:
           commit: ${{ github.sha }}
           release_notes_file: ${{ github.workspace }}/Tooling/deployment/release_notes.md
           display_information_json: ${{ steps.display-info.outputs.json }}
+          checkout: "false"
       - if: always()
         uses: ./.github/actions/close-labview
         with:
           minimum_supported_lv_version: 2021
           supported_bitness: 64
+          checkout: "false"
       - name: Validate tag matches computed version (if provided)
         if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dispatch_tag != '')
         shell: pwsh

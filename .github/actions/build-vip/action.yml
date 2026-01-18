@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: inputs.checkout == 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -269,5 +270,9 @@ inputs:
     required: true
   fail_on_multiple_vips:
     description: 'If true, fail when multiple .vip files exist after the build step'
+    required: false
+    default: 'true'
+  checkout:
+    description: 'Whether to checkout the repository before running'
     required: false
     default: 'true'

@@ -62,6 +62,7 @@ param (
     [int]$Patch,
     [int]$Build,
     [string]$Commit,
+    [string]$PackageFileName,
     [string]$ReleaseNotesFile,
 
     [Parameter(Mandatory=$true)]
@@ -212,6 +213,12 @@ if (-not $generalSettings -or -not $descriptionSettings) {
 # Update high-level metadata
 Set-VipbElementValue -ParentNode $generalSettings -ElementName "Library_Version" -Value "$Major.$Minor.$Patch.$Build"
 Set-VipbElementValue -ParentNode $generalSettings -ElementName "Package_LabVIEW_Version" -Value $VIP_LVVersion_A
+if (-not [string]::IsNullOrWhiteSpace($PackageFileName)) {
+    Set-VipbElementValue -ParentNode $generalSettings -ElementName "Package_File_Name" -Value $PackageFileName
+}
+else {
+    Write-Host "Package file name not provided; leaving existing Package_File_Name."
+}
 
 # Update metadata based on known DisplayInformation keys
 $metadataMap = @(

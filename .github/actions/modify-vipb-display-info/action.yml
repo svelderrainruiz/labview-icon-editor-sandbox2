@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: inputs.checkout == 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -27,6 +28,7 @@ runs:
           -Patch ${{ inputs.patch }} `
           -Build ${{ inputs.build }} `
           -Commit "${{ inputs.commit }}" `
+          -PackageFileName "${{ inputs.package_file_name }}" `
           -ReleaseNotesFile "${{ inputs.release_notes_file }}" `
           -DisplayInformationJSON $displayInformationJson
 inputs:
@@ -61,9 +63,16 @@ inputs:
   commit:
     description: 'Commit identifier'
     required: true
+  package_file_name:
+    description: 'Package file name to set in the VIPB metadata'
+    required: false
   release_notes_file:
     description: 'Path to release notes file'
     required: true
   display_information_json:
     description: 'DisplayInformation JSON string'
     required: true
+  checkout:
+    description: 'Whether to checkout the repository before running'
+    required: false
+    default: 'true'
