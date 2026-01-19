@@ -118,7 +118,7 @@ runs:
           -ReleaseNotesFile "${{ inputs.release_notes_file }}" `
           -DisplayInformationJSON $displayInformationJson
 
-    - name: Dump g-cli build logs on failure
+    - name: Dump VIPM build logs on failure
       if: failure()
       shell: pwsh
       run: |
@@ -129,17 +129,15 @@ runs:
           exit 0
         }
 
-        $logs = Get-ChildItem -Path $logDir -Filter "gcli-build-attempt-*.log" -File | Sort-Object Name
-        if (-not $logs) {
-          Write-Host "No g-cli build attempt logs found under $logDir."
+        $logFile = Join-Path -Path $logDir -ChildPath "vipm-build.log"
+        if (-not (Test-Path $logFile)) {
+          Write-Host "No VIPM build log found at $logFile."
           exit 0
         }
 
-        foreach ($log in $logs) {
-          Write-Host ("---- g-cli build log ({0}) ----" -f $log.FullName)
-          Get-Content -Path $log.FullName | ForEach-Object { Write-Host $_ }
-          Write-Host ("---- end g-cli build log ({0}) ----" -f $log.FullName)
-        }
+        Write-Host ("---- VIPM build log ({0}) ----" -f $logFile)
+        Get-Content -Path $logFile | ForEach-Object { Write-Host $_ }
+        Write-Host ("---- end VIPM build log ({0}) ----" -f $logFile)
     
     - name: Prepare release notes artifact
       id: release-notes
@@ -209,11 +207,11 @@ runs:
         path: ${{ steps.locate-vip.outputs.vip_path }}
         if-no-files-found: ignore
 
-    - name: Upload g-cli logs (if present)
+    - name: Upload build logs (if present)
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: gcli-logs
+        name: vipm-logs
         path: ${{ inputs.relative_path }}/builds/logs
         if-no-files-found: ignore
 

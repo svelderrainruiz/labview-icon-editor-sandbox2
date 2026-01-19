@@ -305,6 +305,23 @@ jobs:
         with:
           name: lv_icon_x64.lvlibp
           path: resource/plugins
+      - name: Verify packed libraries present
+        shell: pwsh
+        env:
+          PPL_X86: ${{ github.workspace }}/resource/plugins/lv_icon_x86.lvlibp
+          PPL_X64: ${{ github.workspace }}/resource/plugins/lv_icon_x64.lvlibp
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $missing = @()
+          foreach ($path in @($Env:PPL_X86, $Env:PPL_X64)) {
+            if (-not (Test-Path $path)) {
+              $missing += $path
+            }
+          }
+          if ($missing.Count -gt 0) {
+            throw ("Missing packed library file(s): {0}" -f ($missing -join ", "))
+          }
+          Write-Host "Packed library artifacts are present."
       - name: Generate display information JSON
         id: display-info
         shell: pwsh
@@ -350,7 +367,7 @@ jobs:
               $Env:REPO_URL
             }
             "Legal Copyright" = "© $(Get-Date -Format yyyy) $($Env:COMPANY)"
-            "License Agreement Name" = "See LICENSE.md"
+            "License Agreement Name" = "LICENSE"
             "Product Description Summary" = $description
             "Product Description" = $description
             "Release Notes - Change Log" = $releaseNotes
