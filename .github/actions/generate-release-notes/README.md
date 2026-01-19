@@ -6,6 +6,7 @@ The resulting file can be injected into the VI Package build process.
 ## Inputs
 
 - `output_path` (optional): Path for the generated release notes file relative to the repository root. Defaults to `Tooling/deployment/release_notes.md`.
+- `checkout` (optional, defaults to `true`): Skip repo checkout when already checked out.
 
 ## Example Usage
 

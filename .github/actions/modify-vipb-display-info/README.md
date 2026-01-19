@@ -15,8 +15,10 @@ Execute **`ModifyVIPBDisplayInfo.ps1`** to merge metadata into a `.vipb` file be
 | `patch` | **Yes** | `0` | Patch version component. |
 | `build` | **Yes** | `1` | Build number component. |
 | `commit` | **Yes** | `abcdef` | Commit identifier. |
+| `package_file_name` | No | `NI_Icon_editor` | Package file name for the VIPB metadata. |
 | `release_notes_file` | **Yes** | `Tooling/deployment/release_notes.md` | Release notes file. |
 | `display_information_json` | **Yes** | `'{}'` | JSON for display information. |
+| `checkout` | No (defaults to `true`) | `false` | Skip repo checkout when already checked out. |
 
 ## Quick-start
 ```yaml

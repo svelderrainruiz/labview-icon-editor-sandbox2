@@ -363,8 +363,8 @@ jobs:
           supported_bitness: 64
           relative_path: ${{ github.workspace }}
           vipb_path: Tooling/deployment/NI Icon editor.vipb
-          minimum_supported_lv_version: 2021
-          labview_minor_revision: 0
+          minimum_supported_lv_version: 2023
+          labview_minor_revision: 3
           major: ${{ needs.version.outputs.MAJOR }}
           minor: ${{ needs.version.outputs.MINOR }}
           patch: ${{ needs.version.outputs.PATCH }}
@@ -378,7 +378,7 @@ jobs:
         shell: pwsh
         env:
           VIPB_PATH: ${{ github.workspace }}/Tooling/deployment/NI Icon editor.vipb
-          EXPECTED_LV_VERSION: "21.0 (64-bit)"
+          EXPECTED_LV_VERSION: "23.3 (64-bit)"
           EXPECTED_LIBRARY_VERSION: ${{ needs.version.outputs.MAJOR }}.${{ needs.version.outputs.MINOR }}.${{ needs.version.outputs.PATCH }}.${{ needs.version.outputs.BUILD }}
           EXPECTED_COMPANY_NAME: ${{ steps.fork-info.outputs.company_name }}
           EXPECTED_PACKAGE_FILE_NAME: ${{ steps.fork-info.outputs.package_file_name }}
@@ -442,8 +442,8 @@ jobs:
           supported_bitness: 64
           relative_path: ${{ github.workspace }}
           vipb_path: Tooling/deployment/NI Icon editor.vipb
-          minimum_supported_lv_version: 2021
-          labview_minor_revision: 0
+          minimum_supported_lv_version: 2023
+          labview_minor_revision: 3
           major: ${{ needs.version.outputs.MAJOR }}
           minor: ${{ needs.version.outputs.MINOR }}
           patch: ${{ needs.version.outputs.PATCH }}
@@ -455,7 +455,7 @@ jobs:
       - if: always()
         uses: ./.github/actions/close-labview
         with:
-          minimum_supported_lv_version: 2021
+          minimum_supported_lv_version: 2023
           supported_bitness: 64
           checkout: "false"
       - name: Validate tag matches computed version (if provided)

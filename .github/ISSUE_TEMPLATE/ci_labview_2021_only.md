@@ -1,16 +1,16 @@
 ---
-name: CI: LabVIEW 2021-only (21.0)
-about: Remove LabVIEW 2023 usage and harden CI to rely only on LabVIEW 2021 (21.0).
-title: "CI: LabVIEW 2021-only (21.0) pipeline hardening"
+name: CI: LabVIEW 2021 + 2023 (VIP build)
+about: Use LabVIEW 2021 for deps/tests/ppl builds, and LabVIEW 2023 for the VI Package build only.
+title: "CI: LabVIEW 2021 + 2023 (VIP build) pipeline hardening"
 labels: ["Enhancement"]
 ---
 
 ## Summary
 
-Update `.github/workflows/ci-composite.yml` (and a small set of supporting composite actions) so CI relies only on **LabVIEW 2021 (21.0)**.
+Update `.github/workflows/ci-composite.yml` (and a small set of supporting composite actions) so CI uses **LabVIEW 2021 (21.0)** for deps/tests/ppl builds and **LabVIEW 2023 (23.3)** only for the VI Package build.
 
 This includes:
-- Removing any LabVIEW 2023 usage.
+- Limiting LabVIEW 2023 usage to the Build VI Package job (no 2023 VIPC deps).
 - Adding a manual override to force VIPC dependency re-application on a freshly reprovisioned runner.
 - Adding traceability artifacts for the VIPC used in CI.
 - Enforcing VIPB metadata contracts (including fork-aware `Company_Name` and `Package_File_Name`).
@@ -18,7 +18,8 @@ This includes:
 
 ## Decisions / Constraints (confirmed)
 
-- Target LabVIEW: **2021** with minor revision **0** (i.e., **21.0**).
+- Target LabVIEW (deps/tests/ppl): **2021** with minor revision **0** (i.e., **21.0**).
+- Build VI Package LabVIEW: **2023** with minor revision **3** (i.e., **23.3**) and **no** 2023 dependency apply.
 - Keep **x86 coverage** (both x64 and x86 deps/tests/builds remain).
 - Runner label `self-hosted-windows-lv` is a **single runner**.
 - `workflow_dispatch` only: add `force_apply_vipc` to force VIPC apply for **both** bitness.
@@ -35,15 +36,15 @@ This includes:
 
 ## Work Items
 
-### A) Workflow: LabVIEW 2021-only
+### A) Workflow: LabVIEW 2021 for deps/tests + LabVIEW 2023 for VI Package
 
 - [ ] `.github/workflows/ci-composite.yml`: Remove `apply-deps-2023-x64` job and all dependencies that require it.
 - [ ] `.github/workflows/ci-composite.yml`: Rename `close-lv-2021-before-2023` to `close-lv-2021-after-deps` and update `needs:` links.
 - [ ] `.github/workflows/ci-composite.yml`: Ensure `missing-in-project-2021-x64.needs` depends on the 2021 deps chain end (e.g. `close-lv-2021-after-deps`).
-- [ ] `.github/workflows/ci-composite.yml`: Update `build-vip` steps:
-  - `modify-vipb-display-info`: `minimum_supported_lv_version: 2021`, `labview_minor_revision: 0`
-  - `build-vip`: `minimum_supported_lv_version: 2021`, `labview_minor_revision: 0`
-  - final `close-labview`: `minimum_supported_lv_version: 2021`
+- [ ] `.github/workflows/ci-composite.yml`: Update `build-vip` steps to use LabVIEW 2023:
+  - `modify-vipb-display-info`: `minimum_supported_lv_version: 2023`, `labview_minor_revision: 3`
+  - `build-vip`: `minimum_supported_lv_version: 2023`, `labview_minor_revision: 3`
+  - final `close-labview`: `minimum_supported_lv_version: 2023`
 
 ### B) Workflow: Forced VIPC apply (workflow_dispatch only)
 
@@ -88,7 +89,7 @@ This includes:
   - not fork: `NI_Icon_editor`
   - where `owner_sanitized` uses: `[^A-Za-z0-9] -> _`, collapse `_+`, trim `_`.
 - [ ] `.github/workflows/ci-composite.yml`: After `modify-vipb-display-info`, add a pwsh assert step that parses `Tooling/deployment/NI Icon editor.vipb` (XML) and fails unless:
-  - `Package_LabVIEW_Version == "21.0 (64-bit)"`
+  - `Package_LabVIEW_Version == "23.3 (64-bit)"`
   - `Library_Version == "${MAJOR}.${MINOR}.${PATCH}.${BUILD}"` (from `needs.version.outputs.*`)
   - `Company_Name == (fork owner or "NI")`
   - `Package_File_Name == (fork-dependent or "NI_Icon_editor")`
@@ -103,7 +104,7 @@ This includes:
 
 ## Validation / Acceptance Criteria
 
-- [ ] `rg -n "2023" .github/workflows/ci-composite.yml` returns nothing.
+- [ ] `rg -n "2023" .github/workflows/ci-composite.yml` only shows Build VI Package usage (no 2023 deps/tests/ppl jobs).
 - [ ] No kill flag remains under `.github` (verify with ripgrep).
 - [ ] Every run uploads a VIPC traceability artifact containing both `.vipc` and `.sha256` (retention 90 days), and the SHA appears in the job summary.
 - [ ] `workflow_dispatch` with `force_apply_vipc: true` applies VIPC for both x64 and x86, even if the VIPC file did not change.

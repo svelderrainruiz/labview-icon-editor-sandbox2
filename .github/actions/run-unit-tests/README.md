@@ -7,6 +7,7 @@ Invoke **`RunUnitTests.ps1`** to execute LabVIEW unit tests and output a result 
 |------|----------|---------|-------------|
 | `minimum_supported_lv_version` | **Yes** | `2021` | LabVIEW major version. |
 | `supported_bitness` | **Yes** | `32` or `64` | Target LabVIEW bitness. |
+| `checkout` | No (defaults to `true`) | `false` | Skip repo checkout when already checked out. |
 
 ## Quick-start
 ```yaml
