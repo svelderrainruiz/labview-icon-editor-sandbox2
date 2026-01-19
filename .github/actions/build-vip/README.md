@@ -1,6 +1,6 @@
 # Build VI Package 📦
 
-Runs **`build_vip.ps1`** to update a `.vipb` file's display info and build the VI Package via g-cli.
+Runs **`build_vip.ps1`** to update a `.vipb` file's display info and build the VI Package via VIPM CLI.
 
 ## Inputs
 | Name | Required | Example | Description |
@@ -17,6 +17,8 @@ Runs **`build_vip.ps1`** to update a `.vipb` file's display info and build the V
 | `commit` | **Yes** | `abcdef` | Commit identifier. |
 | `release_notes_file` | **Yes** | `Tooling/deployment/release_notes.md` | Release notes file. |
 | `display_information_json` | **Yes** | `'{}'` | JSON for VIPB display information. |
+| `fail_on_multiple_vips` | No (defaults to `true`) | `false` | Fail if multiple `.vip` files are found after build. |
+| `checkout` | No (defaults to `true`) | `false` | Skip repo checkout when already checked out. |
 
 ## Quick-start
 ```yaml

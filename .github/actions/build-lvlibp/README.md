@@ -13,6 +13,7 @@ Call **`Build_lvlibp.ps1`** to compile the editor packed library using g-cli.
 | `patch` | **Yes** | `0` | Patch version component. |
 | `build` | **Yes** | `1` | Build number component. |
 | `commit` | **Yes** | `abcdef` | Commit identifier. |
+| `checkout` | No (defaults to `true`) | `false` | Skip repo checkout when already checked out. |
 
 ## Quick-start
 ```yaml

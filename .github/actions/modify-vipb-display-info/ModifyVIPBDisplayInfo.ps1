@@ -62,6 +62,7 @@ param (
     [int]$Patch,
     [int]$Build,
     [string]$Commit,
+    [string]$PackageFileName,
     [string]$ReleaseNotesFile,
 
     [Parameter(Mandatory=$true)]
@@ -212,6 +213,12 @@ if (-not $generalSettings -or -not $descriptionSettings) {
 # Update high-level metadata
 Set-VipbElementValue -ParentNode $generalSettings -ElementName "Library_Version" -Value "$Major.$Minor.$Patch.$Build"
 Set-VipbElementValue -ParentNode $generalSettings -ElementName "Package_LabVIEW_Version" -Value $VIP_LVVersion_A
+if (-not [string]::IsNullOrWhiteSpace($PackageFileName)) {
+    Set-VipbElementValue -ParentNode $generalSettings -ElementName "Package_File_Name" -Value $PackageFileName
+}
+else {
+    Write-Host "Package file name not provided; leaving existing Package_File_Name."
+}
 
 # Update metadata based on known DisplayInformation keys
 $metadataMap = @(
@@ -274,7 +281,6 @@ Set-VipbElementValue -ParentNode $descriptionSettings -ElementName "Description"
 $licenseAgreementInput = $jsonObj.'License Agreement Name'
 if (-not [string]::IsNullOrWhiteSpace($licenseAgreementInput)) {
     $candidatePath = $licenseAgreementInput
-    $relativePath  = $licenseAgreementInput
 
     if (-not [System.IO.Path]::IsPathRooted($candidatePath)) {
         $candidatePath = Join-Path -Path $ResolvedRelativePath -ChildPath $licenseAgreementInput
@@ -283,20 +289,22 @@ if (-not [string]::IsNullOrWhiteSpace($licenseAgreementInput)) {
     if (Test-Path $candidatePath) {
         try {
             $resolvedLicensePath = (Resolve-Path -Path $candidatePath -ErrorAction Stop).Path
+            $vipbDir = Split-Path -Parent $ResolvedVIPBPath
+            $relativePath = [System.IO.Path]::GetRelativePath($vipbDir, $resolvedLicensePath)
 
-            if ($resolvedLicensePath.StartsWith($ResolvedRelativePath, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $relativePath = $resolvedLicensePath.Substring($ResolvedRelativePath.Length).TrimStart('\','/')
+            if ([string]::IsNullOrWhiteSpace($relativePath)) {
+                $relativePath = $resolvedLicensePath
             }
+
+            Set-VipbElementValue -ParentNode $advancedSettings -ElementName "License_Agreement_Filepath" -Value $relativePath
         }
         catch {
-            Write-Warning "Unable to resolve license file path '$candidatePath'. Using literal value instead."
+            Write-Warning "Unable to resolve license file path '$candidatePath'. Leaving License_Agreement_Filepath empty."
         }
     }
     else {
-        Write-Warning "License agreement path '$licenseAgreementInput' does not exist relative to the repository."
+        Write-Warning "License agreement path '$licenseAgreementInput' does not exist; leaving License_Agreement_Filepath empty."
     }
-
-    Set-VipbElementValue -ParentNode $advancedSettings -ElementName "License_Agreement_Filepath" -Value $relativePath
 }
 
 # Warn about any DisplayInformation JSON keys we don't yet handle

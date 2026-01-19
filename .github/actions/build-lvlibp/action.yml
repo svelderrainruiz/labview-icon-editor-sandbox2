@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: inputs.checkout == 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -45,3 +46,7 @@ inputs:
   commit:
     description: 'Commit identifier'
     required: true
+  checkout:
+    description: 'Whether to checkout the repository before building'
+    required: false
+    default: 'true'

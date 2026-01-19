@@ -5,10 +5,15 @@ inputs:
     description: 'Path for the release notes file (relative to workspace).'
     required: false
     default: 'Tooling/deployment/release_notes.md'
+  checkout:
+    description: 'Whether to checkout the repository before running'
+    required: false
+    default: 'true'
 runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: inputs.checkout == 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0

@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: inputs.checkout == 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -21,3 +22,7 @@ inputs:
   supported_bitness:
     description: '32 or 64'
     required: true
+  checkout:
+    description: 'Whether to checkout the repository before running tests'
+    required: false
+    default: 'true'

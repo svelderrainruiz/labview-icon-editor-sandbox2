@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: inputs.checkout == 'true'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -21,16 +22,21 @@ runs:
           "--lv-ver", "${{ inputs.minimum_supported_lv_version }}",
           "--arch", "${{ inputs.supported_bitness }}",
           "--connect-timeout", "60000",
-          "--kill",
-          "--kill-timeout", "5000",
           "--verbose",
           "QuitLabVIEW"
         )
 
         Write-Host "Pre-flight command: g-cli $($gcliArgs -join ' ')"
-        & g-cli @gcliArgs 2>&1 | Tee-Object -FilePath $logFile | Out-Null
+        $output = & g-cli @gcliArgs 2>&1
+        $exitCode = $LASTEXITCODE
+        $output | Tee-Object -FilePath $logFile | Out-Null
 
-        if ($LASTEXITCODE -ne 0) {
+        if ($exitCode -ne 0) {
+          $joined = ($output -join ' ')
+          if ($joined -match 'not (currently )?running' -or $joined -match 'does not appear to be running') {
+            Write-Host "LabVIEW is not running; pre-flight QuitLabVIEW not needed."
+            exit 0
+          }
           if (Test-Path $logFile) {
             Write-Host "---- g-cli preflight log ($logFile) ----"
             Get-Content -Path $logFile | ForEach-Object { Write-Host $_ }
@@ -39,7 +45,7 @@ runs:
             Write-Host "Pre-flight log file not found at $logFile."
           }
           Write-Error "Pre-flight g-cli check failed. Inspect $logFile for details."
-          exit $LASTEXITCODE
+          exit $exitCode
         }
 
     - name: Clean previous VI packages
@@ -112,7 +118,7 @@ runs:
           -ReleaseNotesFile "${{ inputs.release_notes_file }}" `
           -DisplayInformationJSON $displayInformationJson
 
-    - name: Dump g-cli build logs on failure
+    - name: Dump VIPM build logs on failure
       if: failure()
       shell: pwsh
       run: |
@@ -123,17 +129,15 @@ runs:
           exit 0
         }
 
-        $logs = Get-ChildItem -Path $logDir -Filter "gcli-build-attempt-*.log" -File | Sort-Object Name
-        if (-not $logs) {
-          Write-Host "No g-cli build attempt logs found under $logDir."
+        $logFile = Join-Path -Path $logDir -ChildPath "vipm-build.log"
+        if (-not (Test-Path $logFile)) {
+          Write-Host "No VIPM build log found at $logFile."
           exit 0
         }
 
-        foreach ($log in $logs) {
-          Write-Host ("---- g-cli build log ({0}) ----" -f $log.FullName)
-          Get-Content -Path $log.FullName | ForEach-Object { Write-Host $_ }
-          Write-Host ("---- end g-cli build log ({0}) ----" -f $log.FullName)
-        }
+        Write-Host ("---- VIPM build log ({0}) ----" -f $logFile)
+        Get-Content -Path $logFile | ForEach-Object { Write-Host $_ }
+        Write-Host ("---- end VIPM build log ({0}) ----" -f $logFile)
     
     - name: Prepare release notes artifact
       id: release-notes
@@ -203,11 +207,11 @@ runs:
         path: ${{ steps.locate-vip.outputs.vip_path }}
         if-no-files-found: ignore
 
-    - name: Upload g-cli logs (if present)
+    - name: Upload build logs (if present)
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: gcli-logs
+        name: vipm-logs
         path: ${{ inputs.relative_path }}/builds/logs
         if-no-files-found: ignore
 
@@ -264,5 +268,9 @@ inputs:
     required: true
   fail_on_multiple_vips:
     description: 'If true, fail when multiple .vip files exist after the build step'
+    required: false
+    default: 'true'
+  checkout:
+    description: 'Whether to checkout the repository before running'
     required: false
     default: 'true'

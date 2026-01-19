@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Resolves paths, merges version details into DisplayInformation JSON, and
-    calls g-cli to modify the VIPB file and create the final VI package.
+    calls VIPM CLI to build the VI package from the VIPB file.
 
 .PARAMETER SupportedBitness
     LabVIEW bitness for the build ("32" or "64").
@@ -150,72 +150,47 @@ else {
 # Re-convert to a JSON string with a comfortable nesting depth
 $UpdatedDisplayInformationJSON = $jsonObj | ConvertTo-Json -Depth 5
 
-# 5) Construct reusable g-cli arguments
-$gcliArgs = @(
-    "--lv-ver", $MinimumSupportedLVVersion.ToString(),
-    "--arch", $SupportedBitness,
-    "--connect-timeout", "120000",
-    "--kill",
-    "--kill-timeout", "20000",
-    "--verbose",
-    "vipb", "--",
-    "--buildspec", $ResolvedVIPBPath,
-    "-v", "$Major.$Minor.$Patch.$Build",
-    "--release-notes", $ResolvedReleaseNotesFile,
-    "--timeout", "300"
-)
-
-$prettyCommand = "g-cli " + ($gcliArgs -join ' ')
-Write-Output "Base build command:"
-Write-Output $prettyCommand
-
-# 6) Execute the commands with retries and log capture
-$maxAttempts = 3
-$retryDelaySeconds = 15
-$success = $false
-$attemptLogs = @()
-
-for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-    $logFile = Join-Path -Path $LogDirectory -ChildPath ("gcli-build-attempt-{0}.log" -f $attempt)
-    $attemptLogs += $logFile
-    Write-Host "Starting g-cli build attempt $attempt of $maxAttempts. Logs: $logFile"
-
-    try {
-        & g-cli @gcliArgs 2>&1 | Tee-Object -FilePath $logFile
-    }
-    catch {
-        $_ | Out-String | Tee-Object -FilePath $logFile -Append | Out-Null
-        $LASTEXITCODE = 1
-    }
-
-    if ($LASTEXITCODE -eq 0) {
-        $success = $true
-        break
-    }
-
-    if ($attempt -lt $maxAttempts) {
-        Write-Warning "g-cli attempt $attempt failed with exit code $LASTEXITCODE. Retrying in $retryDelaySeconds seconds..."
-        Start-Sleep -Seconds $retryDelaySeconds
-    }
+# 5) Build via VIPM CLI (single attempt)
+if (-not (Get-Command vipm -ErrorAction SilentlyContinue)) {
+    throw "vipm executable not found in PATH."
 }
 
-if (-not $success) {
-    for ($i = 0; $i -lt $attemptLogs.Count; $i++) {
-        $log = $attemptLogs[$i]
-        if (Test-Path $log) {
-            Write-Host ("---- g-cli build log attempt {0} ({1}) ----" -f ($i + 1), $log)
-            Get-Content -Path $log | ForEach-Object { Write-Host $_ }
-            Write-Host ("---- end g-cli build log attempt {0} ----" -f ($i + 1))
-        }
-        else {
-            Write-Host ("g-cli build log for attempt {0} not found at {1}" -f ($i + 1), $log)
-        }
+$vipmArgs = @(
+    "--labview-version", $MinimumSupportedLVVersion.ToString(),
+    "--labview-bitness", $SupportedBitness,
+    "--color-mode", "never",
+    "build", $ResolvedVIPBPath
+)
+
+$prettyCommand = "vipm " + ($vipmArgs -join ' ')
+Write-Output "Build command:"
+Write-Output $prettyCommand
+
+$logFile = Join-Path -Path $LogDirectory -ChildPath "vipm-build.log"
+Write-Host "Starting VIPM build. Logs: $logFile"
+
+try {
+    & vipm @vipmArgs 2>&1 | Tee-Object -FilePath $logFile
+}
+catch {
+    $_ | Out-String | Tee-Object -FilePath $logFile -Append | Out-Null
+    $LASTEXITCODE = 1
+}
+
+if ($LASTEXITCODE -ne 0) {
+    if (Test-Path $logFile) {
+        Write-Host ("---- VIPM build log ({0}) ----" -f $logFile)
+        Get-Content -Path $logFile | ForEach-Object { Write-Host $_ }
+        Write-Host ("---- end VIPM build log ({0}) ----" -f $logFile)
+    }
+    else {
+        Write-Host ("VIPM build log not found at {0}" -f $logFile)
     }
 
     $errorObject = [PSCustomObject]@{
-        error      = "g-cli failed after $maxAttempts attempt(s)."
-        exitCode   = $LASTEXITCODE
-        logs       = $attemptLogs
+        error    = "VIPM build failed."
+        exitCode = $LASTEXITCODE
+        log      = $logFile
     }
     $errorObject | ConvertTo-Json -Depth 10
     exit 1

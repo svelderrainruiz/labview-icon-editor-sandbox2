@@ -30,6 +30,14 @@ on:
         description: "Expected tag for this run (optional, for dispatched builds)"
         required: false
         type: string
+      force_apply_vipc:
+        description: "Force VIPC apply even when the VIPC file is unchanged."
+        required: false
+        type: boolean
+        default: false
+
+env:
+  FORCE_APPLY_VIPC: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_apply_vipc == 'true' }}
 
 jobs:
   changes:
@@ -46,15 +54,53 @@ jobs:
         with:
           filters: |
             vipc:
-              - '**/*.vipc'
+              - '.github/actions/apply-vipc/runner_dependencies.vipc'
+      - name: Create VIPC traceability artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          vipc_path=".github/actions/apply-vipc/runner_dependencies.vipc"
+          if [ ! -f "$vipc_path" ]; then
+            echo "VIPC file not found at $vipc_path" >&2
+            exit 1
+          fi
+          mkdir -p vipc-traceability
+          sha=$(sha256sum "$vipc_path" | awk '{print $1}')
+          cp "$vipc_path" "vipc-traceability/runner_dependencies.vipc"
+          printf "%s  %s\n" "$sha" "$vipc_path" > "vipc-traceability/runner_dependencies.vipc.sha256"
+          {
+            echo "VIPC traceability"
+            echo ""
+            echo "Path: $vipc_path"
+            echo "SHA256: $sha"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload VIPC traceability
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipc-traceability
+          path: vipc-traceability
+          retention-days: 90
+
+  preflight-close-lv-2021:
+    name: Preflight close LabVIEW 2021
+    runs-on: self-hosted-windows-lv
+    steps:
+      - uses: ./.github/actions/close-labview
+        with:
+          minimum_supported_lv_version: 2021
+          supported_bitness: 64
+      - uses: ./.github/actions/close-labview
+        with:
+          minimum_supported_lv_version: 2021
+          supported_bitness: 32
 
   apply-deps-2021-x64:
     name: Apply VIPC (2021 x64)
-    needs: changes
+    needs: [changes, preflight-close-lv-2021]
     runs-on: self-hosted-windows-lv
     steps:
       - uses: ./.github/actions/apply-vipc
-        if: needs.changes.outputs.vipc == 'true'
+        if: needs.changes.outputs.vipc == 'true' || env.FORCE_APPLY_VIPC == 'true'
         with:
           minimum_supported_lv_version: 2021
           vip_lv_version:               2021
@@ -62,7 +108,7 @@ jobs:
           relative_path:                ${{ github.workspace }}
           vipc_path:                    ".github/actions/apply-vipc/runner_dependencies.vipc"
       - run: echo "No .vipc changes detected; skipping dependency application."
-        if: needs.changes.outputs.vipc != 'true'
+        if: needs.changes.outputs.vipc != 'true' && env.FORCE_APPLY_VIPC != 'true'
 
   apply-deps-2021-x86:
     name: Apply VIPC (2021 x86)
@@ -70,7 +116,7 @@ jobs:
     runs-on: self-hosted-windows-lv
     steps:
       - uses: ./.github/actions/apply-vipc
-        if: needs.changes.outputs.vipc == 'true'
+        if: needs.changes.outputs.vipc == 'true' || env.FORCE_APPLY_VIPC == 'true'
         with:
           minimum_supported_lv_version: 2021
           vip_lv_version:               2021
@@ -78,26 +124,10 @@ jobs:
           relative_path:                ${{ github.workspace }}
           vipc_path:                    ".github/actions/apply-vipc/runner_dependencies.vipc"
       - run: echo "No .vipc changes detected; skipping dependency application."
-        if: needs.changes.outputs.vipc != 'true'
+        if: needs.changes.outputs.vipc != 'true' && env.FORCE_APPLY_VIPC != 'true'
 
-  apply-deps-2023-x64:
-    name: Apply VIPC (2023 x64)
-    needs: [close-lv-2021-before-2023, changes]
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/apply-vipc
-        if: needs.changes.outputs.vipc == 'true'
-        with:
-          minimum_supported_lv_version: 2023
-          vip_lv_version:               2023
-          supported_bitness:            64
-          relative_path:                ${{ github.workspace }}
-          vipc_path:                    ".github/actions/apply-vipc/runner_dependencies.vipc"
-      - run: echo "No .vipc changes detected; skipping dependency application."
-        if: needs.changes.outputs.vipc != 'true'
-
-  close-lv-2021-before-2023:
-    name: Close LabVIEW 2021 before 2023 tasks
+  close-lv-2021-after-deps:
+    name: Close LabVIEW 2021 after dependency tasks
     needs: apply-deps-2021-x86
     runs-on: self-hosted-windows-lv
     steps:
@@ -113,6 +143,7 @@ jobs:
   version:
     name: Compute Version
     runs-on: self-hosted-windows-lv
+    needs: preflight-close-lv-2021
     outputs:
       VERSION:       ${{ steps.compute.outputs.VERSION }}
       MAJOR:         ${{ steps.compute.outputs.MAJOR }}
@@ -129,94 +160,24 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-  missing-in-project-2021-x64:
-    name: Test Missing-In-Project (2021 x64)
-    needs: apply-deps-2023-x64
+  pipeline-2021-x64:
+    name: Pipeline (2021 x64)
+    needs: [close-lv-2021-after-deps, version]
     runs-on: self-hosted-windows-lv
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/missing-in-project
         with:
           lv-ver:       "2021"
           arch:         "64"
           project-file: "lv_icon_editor.lvproj"
-
-  missing-in-project-2021-x86:
-    name: Test Missing-In-Project (2021 x86)
-    needs: missing-in-project-2021-x64
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/missing-in-project
-        with:
-          lv-ver:       "2021"
-          arch:         "32"
-          project-file: "lv_icon_editor.lvproj"
-
-  test-2021-x64:
-    name: Run Unit Tests (2021 x64)
-    needs: missing-in-project-2021-x86
-    runs-on: self-hosted-windows-lv
-    steps:
       - uses: ./.github/actions/run-unit-tests
         with:
           minimum_supported_lv_version: "2021"
           supported_bitness:            "64"
-      - if: always()
-        name: Close LabVIEW 2021 64-bit after unit tests
-        uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 64
-
-  test-2021-x86:
-    name: Run Unit Tests (2021 x86)
-    needs: test-2021-x64
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/run-unit-tests
-        with:
-          minimum_supported_lv_version: "2021"
-          supported_bitness:            "32"
-      - if: always()
-        name: Close LabVIEW 2021 32-bit after unit tests
-        uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 32
-
-  build-ppl-x86:
-    name: Build 32-bit Packed Library
-    needs: [build-ppl-x64, version]
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/build-lvlibp
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 32
-          relative_path: ${{ github.workspace }}
-          major: ${{ needs.version.outputs.MAJOR }}
-          minor: ${{ needs.version.outputs.MINOR }}
-          patch: ${{ needs.version.outputs.PATCH }}
-          build: ${{ needs.version.outputs.BUILD }}
-          commit: ${{ github.sha }}
-      - if: always()
-        uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 32
-      - uses: ./.github/actions/rename-file
-        with:
-          current_filename: ${{ github.workspace }}/resource/plugins/lv_icon.lvlibp
-          new_filename: ${{ github.workspace }}/resource/plugins/lv_icon_x86.lvlibp
-      - uses: actions/upload-artifact@v4
-        with:
-          name: lv_icon_x86.lvlibp
-          path: resource/plugins/lv_icon_x86.lvlibp
-
-  build-ppl-x64:
-    name: Build 64-bit Packed Library
-    needs: [test-2021-x86, version]
-    runs-on: self-hosted-windows-lv
-    steps:
+          checkout:                     "false"
       - uses: ./.github/actions/build-lvlibp
         with:
           minimum_supported_lv_version: 2021
@@ -227,6 +188,7 @@ jobs:
           patch: ${{ needs.version.outputs.PATCH }}
           build: ${{ needs.version.outputs.BUILD }}
           commit: ${{ github.sha }}
+          checkout: "false"
       - if: always()
         uses: ./.github/actions/close-labview
         with:
@@ -241,18 +203,100 @@ jobs:
           name: lv_icon_x64.lvlibp
           path: resource/plugins/lv_icon_x64.lvlibp
 
-  build-vip:
-    name: Build VI Package
-    # Chain after 32-bit build, which already depends on 64-bit, to enforce x64 -> x86 -> build-vip ordering
-    needs: [build-ppl-x86, version]
+  pipeline-2021-x86:
+    name: Pipeline (2021 x86)
+    needs: [pipeline-2021-x64, version]
     runs-on: self-hosted-windows-lv
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/missing-in-project
+        with:
+          lv-ver:       "2021"
+          arch:         "32"
+          project-file: "lv_icon_editor.lvproj"
+      - uses: ./.github/actions/run-unit-tests
+        with:
+          minimum_supported_lv_version: "2021"
+          supported_bitness:            "32"
+          checkout:                     "false"
+      - uses: ./.github/actions/build-lvlibp
+        with:
+          minimum_supported_lv_version: 2021
+          supported_bitness: 32
+          relative_path: ${{ github.workspace }}
+          major: ${{ needs.version.outputs.MAJOR }}
+          minor: ${{ needs.version.outputs.MINOR }}
+          patch: ${{ needs.version.outputs.PATCH }}
+          build: ${{ needs.version.outputs.BUILD }}
+          commit: ${{ github.sha }}
+          checkout: "false"
+      - if: always()
+        uses: ./.github/actions/close-labview
+        with:
+          minimum_supported_lv_version: 2021
+          supported_bitness: 32
+      - uses: ./.github/actions/rename-file
+        with:
+          current_filename: ${{ github.workspace }}/resource/plugins/lv_icon.lvlibp
+          new_filename: ${{ github.workspace }}/resource/plugins/lv_icon_x86.lvlibp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lv_icon_x86.lvlibp
+          path: resource/plugins/lv_icon_x86.lvlibp
+
+  build-vip:
+    name: Build VI Package
+    # Chain after x86 pipeline, which already depends on x64, to enforce x64 -> x86 -> build-vip ordering
+    needs: [pipeline-2021-x86, version]
+    runs-on: self-hosted-windows-lv
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute fork metadata
+        id: fork-info
+        shell: pwsh
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+          IS_FORK: ${{ github.event.repository.fork }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Sanitize-Owner {
+            param([string]$Value)
+            $sanitized = $Value -replace '[^A-Za-z0-9]', '_'
+            $sanitized = $sanitized -replace '_{2,}', '_'
+            $sanitized = $sanitized.Trim('_')
+            return $sanitized
+          }
+
+          $owner = $Env:REPO_OWNER
+          $isFork = $Env:IS_FORK -eq 'true'
+
+          if ($isFork) {
+            $ownerSanitized = Sanitize-Owner -Value $owner
+            if ([string]::IsNullOrWhiteSpace($ownerSanitized)) {
+              throw "Sanitized fork owner is empty."
+            }
+            $companyName = $owner
+            $packageFileName = "{0}_Icon_Editor" -f $ownerSanitized
+          }
+          else {
+            $ownerSanitized = "NI"
+            $companyName = "NI"
+            $packageFileName = "NI_Icon_editor"
+          }
+
+          "company_name=$companyName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "package_file_name=$packageFileName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "owner_sanitized=$ownerSanitized" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "is_fork=$isFork" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
       - name: Generate release notes
         uses: ./.github/actions/generate-release-notes
         # output_path defaults to Tooling/deployment/release_notes.md
+        with:
+          checkout: "false"
       - uses: actions/download-artifact@v4
         with:
           name: lv_icon_x86.lvlibp
@@ -261,6 +305,23 @@ jobs:
         with:
           name: lv_icon_x64.lvlibp
           path: resource/plugins
+      - name: Verify packed libraries present
+        shell: pwsh
+        env:
+          PPL_X86: ${{ github.workspace }}/resource/plugins/lv_icon_x86.lvlibp
+          PPL_X64: ${{ github.workspace }}/resource/plugins/lv_icon_x64.lvlibp
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $missing = @()
+          foreach ($path in @($Env:PPL_X86, $Env:PPL_X64)) {
+            if (-not (Test-Path $path)) {
+              $missing += $path
+            }
+          }
+          if ($missing.Count -gt 0) {
+            throw ("Missing packed library file(s): {0}" -f ($missing -join ", "))
+          }
+          Write-Host "Packed library artifacts are present."
       - name: Generate display information JSON
         id: display-info
         shell: pwsh
@@ -269,7 +330,7 @@ jobs:
           REPO_NAME: ${{ github.event.repository.name }}
           REPO_DESCRIPTION: ${{ github.event.repository.description }}
           REPO_URL: ${{ github.event.repository.html_url }}
-          COMPANY: ${{ github.repository_owner }}
+          COMPANY: ${{ steps.fork-info.outputs.company_name }}
           REPOSITORY: ${{ github.repository }}
         run: |
           $releaseNotes = if (Test-Path $Env:RELEASE_NOTES_PATH) {
@@ -306,7 +367,7 @@ jobs:
               $Env:REPO_URL
             }
             "Legal Copyright" = "© $(Get-Date -Format yyyy) $($Env:COMPANY)"
-            "License Agreement Name" = "See LICENSE.md"
+            "License Agreement Name" = ""
             "Product Description Summary" = $description
             "Product Description" = $description
             "Release Notes - Change Log" = $releaseNotes
@@ -328,6 +389,71 @@ jobs:
           commit: ${{ github.sha }}
           release_notes_file: ${{ github.workspace }}/Tooling/deployment/release_notes.md
           display_information_json: ${{ steps.display-info.outputs.json }}
+          package_file_name: ${{ steps.fork-info.outputs.package_file_name }}
+          checkout: "false"
+      - name: Assert VIPB metadata
+        shell: pwsh
+        env:
+          VIPB_PATH: ${{ github.workspace }}/Tooling/deployment/NI Icon editor.vipb
+          EXPECTED_LV_VERSION: "23.3 (64-bit)"
+          EXPECTED_LIBRARY_VERSION: ${{ needs.version.outputs.MAJOR }}.${{ needs.version.outputs.MINOR }}.${{ needs.version.outputs.PATCH }}.${{ needs.version.outputs.BUILD }}
+          EXPECTED_COMPANY_NAME: ${{ steps.fork-info.outputs.company_name }}
+          EXPECTED_PACKAGE_FILE_NAME: ${{ steps.fork-info.outputs.package_file_name }}
+          EXPECTED_VIPC: "NI Icon editor.vipc"
+          EXPECTED_SOURCE_FOLDER: "..\\.."
+          EXPECTED_OUTPUT_FOLDER: "..\\..\\builds\\VI Package"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path $Env:VIPB_PATH)) {
+            throw "VIPB file not found at $Env:VIPB_PATH"
+          }
+
+          [xml]$vipbXml = Get-Content -Raw -Path $Env:VIPB_PATH
+          $generalSettings = $vipbXml.VI_Package_Builder_Settings.Library_General_Settings
+          $advancedSettings = $vipbXml.VI_Package_Builder_Settings.Advanced_Settings
+
+          if (-not $generalSettings -or -not $advancedSettings) {
+            throw "VIPB missing expected metadata sections."
+          }
+
+          $expected = [ordered]@{
+            "Package_LabVIEW_Version"        = $Env:EXPECTED_LV_VERSION
+            "Library_Version"               = $Env:EXPECTED_LIBRARY_VERSION
+            "Company_Name"                  = $Env:EXPECTED_COMPANY_NAME
+            "Package_File_Name"             = $Env:EXPECTED_PACKAGE_FILE_NAME
+            "VI_Package_Configuration_File" = $Env:EXPECTED_VIPC
+            "Library_Source_Folder"         = $Env:EXPECTED_SOURCE_FOLDER
+            "Library_Output_Folder"         = $Env:EXPECTED_OUTPUT_FOLDER
+          }
+
+          $actual = [ordered]@{
+            "Package_LabVIEW_Version"        = $generalSettings.Package_LabVIEW_Version
+            "Library_Version"               = $generalSettings.Library_Version
+            "Company_Name"                  = $generalSettings.Company_Name
+            "Package_File_Name"             = $generalSettings.Package_File_Name
+            "VI_Package_Configuration_File" = $advancedSettings.VI_Package_Configuration_File
+            "Library_Source_Folder"         = $generalSettings.Library_Source_Folder
+            "Library_Output_Folder"         = $generalSettings.Library_Output_Folder
+          }
+
+          "VIPB metadata assertion" | Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append
+          "" | Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append
+
+          $mismatches = @()
+          foreach ($key in $expected.Keys) {
+            $expectedValue = $expected[$key]
+            $actualValue = $actual[$key]
+            $line = "{0}: expected='{1}' actual='{2}'" -f $key, $expectedValue, $actualValue
+          $line | Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append
+          Write-Host $line
+          if ($expectedValue -ne $actualValue) {
+            $mismatches += $key
+          }
+          }
+
+          if ($mismatches.Count -gt 0) {
+            throw ("VIPB metadata assertion failed: {0}" -f ($mismatches -join ", "))
+          }
       - uses: ./.github/actions/build-vip
         with:
           supported_bitness: 64
@@ -342,18 +468,20 @@ jobs:
           commit: ${{ github.sha }}
           release_notes_file: ${{ github.workspace }}/Tooling/deployment/release_notes.md
           display_information_json: ${{ steps.display-info.outputs.json }}
+          checkout: "false"
       - if: always()
         uses: ./.github/actions/close-labview
         with:
           minimum_supported_lv_version: 2023
           supported_bitness: 64
+          checkout: "false"
       - name: Validate tag matches computed version (if provided)
-        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.dispatch_tag != ''
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.dispatch_tag != '')
         shell: pwsh
         env:
           EXPECTED_TAG: v${{ needs.version.outputs.MAJOR }}.${{ needs.version.outputs.MINOR }}.${{ needs.version.outputs.PATCH }}.${{ needs.version.outputs.BUILD }}
           REF_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          INPUT_TAG: ${{ github.event.inputs.dispatch_tag || '' }}
+          INPUT_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dispatch_tag || '' }}
         run: |
           $ErrorActionPreference = 'Stop'
           $provided = if (-not [string]::IsNullOrWhiteSpace($Env:INPUT_TAG)) { $Env:INPUT_TAG } else { $Env:REF_TAG }
