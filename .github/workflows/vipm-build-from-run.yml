@@ -1,0 +1,272 @@
+name: Build VI Package (Reuse Artifacts)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Workflow run ID to reuse artifacts from"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-vip-from-run:
+    name: Build VI Package
+    runs-on: self-hosted-windows-lv
+    steps:
+      - name: Resolve source run metadata
+        id: source
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const runIdRaw = '${{ inputs.source_run_id }}';
+            const runId = Number(runIdRaw);
+            if (!runId) {
+              core.setFailed(`Invalid source_run_id: ${runIdRaw}`);
+              return;
+            }
+
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+              per_page: 100,
+            });
+
+            const items = artifacts.artifacts || [];
+            const releaseNotes = items.find(item => item.name.startsWith('release_notes_'));
+            const pplX86 = items.find(item => item.name === 'lv_icon_x86.lvlibp');
+            const pplX64 = items.find(item => item.name === 'lv_icon_x64.lvlibp');
+
+            if (!releaseNotes) {
+              core.setFailed(`No release_notes_ artifact found in run ${runId}.`);
+              return;
+            }
+            if (!pplX86 || !pplX64) {
+              core.setFailed(`Missing packed library artifact(s) in run ${runId}.`);
+              return;
+            }
+
+            const match = releaseNotes.name.match(/^release_notes_(\\d+\\.\\d+\\.\\d+\\.\\d+)$/);
+            if (!match) {
+              core.setFailed(`Release notes artifact '${releaseNotes.name}' does not include a version.`);
+              return;
+            }
+
+            const version = match[1];
+            const [major, minor, patch, build] = version.split('.');
+            const headRepo = run.head_repository && run.head_repository.full_name
+              ? run.head_repository.full_name
+              : `${context.repo.owner}/${context.repo.repo}`;
+
+            core.setOutput('run_id', runId);
+            core.setOutput('head_sha', run.head_sha);
+            core.setOutput('head_repository', headRepo);
+            core.setOutput('release_notes_artifact', releaseNotes.name);
+            core.setOutput('version', version);
+            core.setOutput('major', major);
+            core.setOutput('minor', minor);
+            core.setOutput('patch', patch);
+            core.setOutput('build', build);
+
+      - name: Checkout source at run SHA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.source.outputs.head_sha }}
+          repository: ${{ steps.source.outputs.head_repository }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          name: lv_icon_x86.lvlibp
+          path: resource/plugins
+
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          name: lv_icon_x64.lvlibp
+          path: resource/plugins
+
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          name: ${{ steps.source.outputs.release_notes_artifact }}
+          path: Tooling/deployment
+
+      - name: Resolve release notes path
+        id: release-notes
+        shell: pwsh
+        env:
+          NOTES_DIR: ${{ github.workspace }}/Tooling/deployment
+          NOTES_VERSION: ${{ steps.source.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = Join-Path -Path $Env:NOTES_DIR -ChildPath ("release_notes_{0}.md" -f $Env:NOTES_VERSION)
+          if (-not (Test-Path $expected)) {
+            throw "Release notes file not found at $expected."
+          }
+          "notes_path=$expected" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+
+      - name: Verify packed libraries present
+        shell: pwsh
+        env:
+          PPL_X86: ${{ github.workspace }}/resource/plugins/lv_icon_x86.lvlibp
+          PPL_X64: ${{ github.workspace }}/resource/plugins/lv_icon_x64.lvlibp
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $missing = @()
+          foreach ($path in @($Env:PPL_X86, $Env:PPL_X64)) {
+            if (-not (Test-Path $path)) {
+              $missing += $path
+            }
+          }
+          if ($missing.Count -gt 0) {
+            throw ("Missing packed library file(s): {0}" -f ($missing -join ", "))
+          }
+          Write-Host "Packed library artifacts are present."
+
+      - name: Compute fork metadata
+        id: fork-info
+        shell: pwsh
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+          IS_FORK: ${{ github.event.repository.fork }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Sanitize-Owner {
+            param([string]$Value)
+            $sanitized = $Value -replace '[^A-Za-z0-9]', '_'
+            $sanitized = $sanitized -replace '_{2,}', '_'
+            $sanitized = $sanitized.Trim('_')
+            return $sanitized
+          }
+
+          $owner = $Env:REPO_OWNER
+          $isFork = $Env:IS_FORK -eq 'true'
+
+          if ($isFork) {
+            $ownerSanitized = Sanitize-Owner -Value $owner
+            if ([string]::IsNullOrWhiteSpace($ownerSanitized)) {
+              throw "Sanitized fork owner is empty."
+            }
+            $companyName = $owner
+            $packageFileName = "{0}_Icon_Editor" -f $ownerSanitized
+          }
+          else {
+            $ownerSanitized = "NI"
+            $companyName = "NI"
+            $packageFileName = "NI_Icon_editor"
+          }
+
+          "company_name=$companyName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "package_file_name=$packageFileName" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "owner_sanitized=$ownerSanitized" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "is_fork=$isFork" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+
+      - name: Generate display information JSON
+        id: display-info
+        shell: pwsh
+        env:
+          RELEASE_NOTES_PATH: ${{ steps.release-notes.outputs.notes_path }}
+          REPO_NAME: ${{ github.event.repository.name }}
+          REPO_DESCRIPTION: ${{ github.event.repository.description }}
+          REPO_URL: ${{ github.event.repository.html_url }}
+          COMPANY: ${{ steps.fork-info.outputs.company_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          $releaseNotes = if (Test-Path $Env:RELEASE_NOTES_PATH) {
+            Get-Content -Raw -Path $Env:RELEASE_NOTES_PATH
+          } else {
+            "Release notes file not generated."
+          }
+
+          $productName = if ([string]::IsNullOrWhiteSpace($Env:REPO_NAME)) {
+            $Env:REPOSITORY
+          } else {
+            $Env:REPO_NAME
+          }
+
+          $description = if ([string]::IsNullOrWhiteSpace($Env:REPO_DESCRIPTION)) {
+            "$($Env:REPO_NAME) VI Package build for $($Env:REPOSITORY)."
+          } else {
+            $Env:REPO_DESCRIPTION
+          }
+
+          $info = @{
+            "Package Version" = @{
+              "major" = ${{ steps.source.outputs.major }}
+              "minor" = ${{ steps.source.outputs.minor }}
+              "patch" = ${{ steps.source.outputs.patch }}
+              "build" = ${{ steps.source.outputs.build }}
+            }
+            "Product Name" = $productName
+            "Company Name" = $Env:COMPANY
+            "Author Name (Person or Company)" = $Env:REPOSITORY
+            "Product Homepage (URL)" = if ([string]::IsNullOrWhiteSpace($Env:REPO_URL)) {
+              "https://github.com/$($Env:REPOSITORY)"
+            } else {
+              $Env:REPO_URL
+            }
+            "Legal Copyright" = "c $(Get-Date -Format yyyy) $($Env:COMPANY)"
+            "License Agreement Name" = ""
+            "Product Description Summary" = $description
+            "Product Description" = $description
+            "Release Notes - Change Log" = $releaseNotes
+          }
+
+          $json = $info | ConvertTo-Json -Depth 5 -Compress
+          "json=$json" >> $Env:GITHUB_OUTPUT
+
+      - uses: ./.github/actions/modify-vipb-display-info
+        with:
+          supported_bitness: 64
+          relative_path: ${{ github.workspace }}
+          vipb_path: Tooling/deployment/NI Icon editor.vipb
+          minimum_supported_lv_version: 2023
+          labview_minor_revision: 3
+          major: ${{ steps.source.outputs.major }}
+          minor: ${{ steps.source.outputs.minor }}
+          patch: ${{ steps.source.outputs.patch }}
+          build: ${{ steps.source.outputs.build }}
+          commit: ${{ steps.source.outputs.head_sha }}
+          release_notes_file: ${{ steps.release-notes.outputs.notes_path }}
+          display_information_json: ${{ steps.display-info.outputs.json }}
+          package_file_name: ${{ steps.fork-info.outputs.package_file_name }}
+          checkout: "false"
+
+      - uses: ./.github/actions/build-vip
+        with:
+          supported_bitness: 64
+          relative_path: ${{ github.workspace }}
+          vipb_path: Tooling/deployment/NI Icon editor.vipb
+          minimum_supported_lv_version: 2023
+          labview_minor_revision: 3
+          major: ${{ steps.source.outputs.major }}
+          minor: ${{ steps.source.outputs.minor }}
+          patch: ${{ steps.source.outputs.patch }}
+          build: ${{ steps.source.outputs.build }}
+          commit: ${{ steps.source.outputs.head_sha }}
+          release_notes_file: ${{ steps.release-notes.outputs.notes_path }}
+          display_information_json: ${{ steps.display-info.outputs.json }}
+          checkout: "false"
+
+      - if: always()
+        uses: ./.github/actions/close-labview
+        with:
+          minimum_supported_lv_version: 2023
+          supported_bitness: 64
+          checkout: "false"
