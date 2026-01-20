@@ -4,7 +4,7 @@
     This version includes additional debug/verbose output.
 
 .EXAMPLE
-    .\applyvipc.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64" -RelativePath "C:\release\labview-icon-editor-fork" -VIPCPath "Tooling\deployment\runner_dependencies.vipc" -VIP_LVVersion "2021" -Verbose
+    .\applyvipc.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64" -RepoRoot "C:\release\labview-icon-editor-fork" -VIPCPath "Tooling\deployment\runner_dependencies.vipc" -VIP_LVVersion "2021" -Verbose
 #>
 
 [CmdletBinding()]  # Enables -Verbose and other common parameters
@@ -12,7 +12,7 @@ Param (
     [string]$MinimumSupportedLVVersion,
     [string]$VIP_LVVersion,
     [string]$SupportedBitness,
-    [string]$RelativePath,
+    [string]$RepoRoot,
     [string]$VIPCPath
 )
 
@@ -21,19 +21,19 @@ Write-Verbose "Parameters provided:"
 Write-Verbose " - MinimumSupportedLVVersion: $MinimumSupportedLVVersion"
 Write-Verbose " - VIP_LVVersion:             $VIP_LVVersion"
 Write-Verbose " - SupportedBitness:          $SupportedBitness"
-Write-Verbose " - RelativePath:              $RelativePath"
+Write-Verbose " - RepoRoot:              $RepoRoot"
 Write-Verbose " - VIPCPath:                  $VIPCPath"
 
 # -------------------------
 # 1) Resolve Paths & Validate
 # -------------------------
 try {
-    Write-Verbose "Attempting to resolve the 'RelativePath'..."
-    $ResolvedRelativePath = Resolve-Path -Path $RelativePath -ErrorAction Stop
-    Write-Verbose "ResolvedRelativePath: $ResolvedRelativePath"
+    Write-Verbose "Attempting to resolve the 'RepoRoot'..."
+    $ResolvedRepoRoot = Resolve-Path -Path $RepoRoot -ErrorAction Stop
+    Write-Verbose "ResolvedRepoRoot: $ResolvedRepoRoot"
 
     Write-Verbose "Building full path for the .vipc file..."
-    $ResolvedVIPCPath = Join-Path -Path $ResolvedRelativePath -ChildPath $VIPCPath -ErrorAction Stop
+    $ResolvedVIPCPath = Join-Path -Path $ResolvedRepoRoot -ChildPath $VIPCPath -ErrorAction Stop
     Write-Verbose "ResolvedVIPCPath:     $ResolvedVIPCPath"
 
     # Verify that the .vipc file actually exists
@@ -52,7 +52,7 @@ try {
     }
 }
 catch {
-    Write-Error "Error resolving paths. Ensure RelativePath and VIPCPath are valid. Details: $($_.Exception.Message)"
+    Write-Error "Error resolving paths. Ensure RepoRoot and VIPCPath are valid. Details: $($_.Exception.Message)"
     exit 1
 }
 
@@ -103,7 +103,7 @@ Write-Verbose "VIP_LVVersion_B (for minimum LVVersion): $VIP_LVVersion_B"
 # -------------------------
 Write-Verbose "Constructing the g-cli command script..."
 $script = @"
-g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness -v "$($ResolvedRelativePath)\Tooling\Deployment\Applyvipc.vi" -- "$ResolvedVIPCPath" "$VIP_LVVersion_B"
+g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness -v "$($ResolvedRepoRoot)\Tooling\Deployment\Applyvipc.vi" -- "$ResolvedVIPCPath" "$VIP_LVVersion_B"
 "@
 
 if ($VIP_LVVersion -ne $MinimumSupportedLVVersion) {
@@ -133,3 +133,4 @@ catch {
     Write-Error "An error occurred while applying the .vipc dependencies. Details: $($_.Exception.Message)"
     exit 1
 }
+

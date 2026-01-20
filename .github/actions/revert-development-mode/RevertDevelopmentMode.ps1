@@ -6,16 +6,16 @@
     Restores the packaged LabVIEW sources for both 32-bit and 64-bit
     environments and closes any running LabVIEW instances.
 
-.PARAMETER RelativePath
+.PARAMETER RepoRoot
     Path to the repository root.
 
 .EXAMPLE
-    .\RevertDevelopmentMode.ps1 -RelativePath "C:\labview-icon-editor"
+    .\RevertDevelopmentMode.ps1 -RepoRoot "C:\labview-icon-editor"
 #>
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$RelativePath
+    [string]$RepoRoot
 )
 
 # Define LabVIEW project name
@@ -54,7 +54,7 @@ try {
     $CloseScript = Join-Path -Path $ScriptDirectory -ChildPath 'Close_LabVIEW.ps1'
 
     # Restore setup for LabVIEW 2021 (32-bit)
-    $Command1 = "& `"$RestoreScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath `"$RelativePath`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec `'Editor Packed Library`'"
+    $Command1 = "& `"$RestoreScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RepoRoot `"$RepoRoot`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec `'Editor Packed Library`'"
 
     Execute-Script $Command1
 
@@ -64,7 +64,7 @@ try {
     Execute-Script $Command2
 
     # Restore setup for LabVIEW 2021 (64-bit)
-    $Command3 = "& `"$RestoreScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath `"$RelativePath`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec `'Editor Packed Library`'"
+    $Command3 = "& `"$RestoreScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RepoRoot `"$RepoRoot`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec `'Editor Packed Library`'"
 
     Execute-Script $Command3
 
@@ -79,4 +79,5 @@ try {
 }
 
 Write-Host "All scripts executed successfully." -ForegroundColor Green
+
 

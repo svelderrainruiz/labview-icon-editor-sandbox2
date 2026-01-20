@@ -5,14 +5,15 @@ Execute **`Set_Development_Mode.ps1`** to prepare the repository for active deve
 ## Inputs
 | Name | Required | Example | Description |
 |------|----------|---------|-------------|
-| `relative_path` | **Yes** | `${{ github.workspace }}` | Repository root path. |
+| `repo_root` | **Yes** | `${{ github.workspace }}` | Repository root path. |
 
 ## Quick-start
 ```yaml
 - uses: ./.github/actions/set-development-mode
   with:
-    relative_path: ${{ github.workspace }}
+    repo_root: ${{ github.workspace }}
 ```
 
 ## License
 This directory inherits the root repository’s license (MIT, unless otherwise noted).
+

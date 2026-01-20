@@ -12,7 +12,7 @@
 .PARAMETER SupportedBitness
     Bitness of the LabVIEW environment ("32" or "64").
 
-.PARAMETER RelativePath
+.PARAMETER RepoRoot
     Path to the repository root where the project file resides.
 
 .PARAMETER Major
@@ -31,12 +31,12 @@
     Commit hash or identifier recorded in the build.
 
 .EXAMPLE
-    .\Build_lvlibp.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64" -RelativePath "C:\labview-icon-editor" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "Placeholder"
+    .\Build_lvlibp.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64" -RepoRoot "C:\labview-icon-editor" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "Placeholder"
 #>
 param(
     [string]$MinimumSupportedLVVersion,
     [string]$SupportedBitness,
-    [string]$RelativePath,
+    [string]$RepoRoot,
     [Int32]$Major,
     [Int32]$Minor,
     [Int32]$Patch,
@@ -49,7 +49,7 @@ Write-Output "Commit: $Commit"
 
 # Construct the command
 $script = @"
-g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lvbuildspec -- -v "$Major.$Minor.$Patch.$Build" -p "$RelativePath\lv_icon_editor.lvproj" -b "Editor Packed Library"
+g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lvbuildspec -- -v "$Major.$Minor.$Patch.$Build" -p "$RepoRoot\lv_icon_editor.lvproj" -b "Editor Packed Library"
 "@
 Write-Output "Executing the following command:"
 Write-Output $script
@@ -66,4 +66,5 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Build succeeded."
     exit 0
 }
+
 

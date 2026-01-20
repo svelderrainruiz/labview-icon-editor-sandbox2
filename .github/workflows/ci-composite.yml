@@ -59,7 +59,7 @@ jobs:
           minimum_supported_lv_version: 2021
           vip_lv_version:               2021
           supported_bitness:            64
-          relative_path:                ${{ github.workspace }}
+          repo_root:                ${{ github.workspace }}
           vipc_path:                    ".github/actions/apply-vipc/runner_dependencies.vipc"
       - run: echo "No .vipc changes detected; skipping dependency application."
         if: needs.changes.outputs.vipc != 'true'
@@ -75,7 +75,7 @@ jobs:
           minimum_supported_lv_version: 2021
           vip_lv_version:               2021
           supported_bitness:            32
-          relative_path:                ${{ github.workspace }}
+          repo_root:                ${{ github.workspace }}
           vipc_path:                    ".github/actions/apply-vipc/runner_dependencies.vipc"
       - run: echo "No .vipc changes detected; skipping dependency application."
         if: needs.changes.outputs.vipc != 'true'
@@ -91,7 +91,7 @@ jobs:
           minimum_supported_lv_version: 2023
           vip_lv_version:               2023
           supported_bitness:            64
-          relative_path:                ${{ github.workspace }}
+          repo_root:                ${{ github.workspace }}
           vipc_path:                    ".github/actions/apply-vipc/runner_dependencies.vipc"
       - run: echo "No .vipc changes detected; skipping dependency application."
         if: needs.changes.outputs.vipc != 'true'
@@ -192,7 +192,7 @@ jobs:
         with:
           minimum_supported_lv_version: 2021
           supported_bitness: 32
-          relative_path: ${{ github.workspace }}
+          repo_root: ${{ github.workspace }}
           major: ${{ needs.version.outputs.MAJOR }}
           minor: ${{ needs.version.outputs.MINOR }}
           patch: ${{ needs.version.outputs.PATCH }}
@@ -221,7 +221,7 @@ jobs:
         with:
           minimum_supported_lv_version: 2021
           supported_bitness: 64
-          relative_path: ${{ github.workspace }}
+          repo_root: ${{ github.workspace }}
           major: ${{ needs.version.outputs.MAJOR }}
           minor: ${{ needs.version.outputs.MINOR }}
           patch: ${{ needs.version.outputs.PATCH }}
@@ -317,7 +317,7 @@ jobs:
       - uses: ./.github/actions/modify-vipb-display-info
         with:
           supported_bitness: 64
-          relative_path: ${{ github.workspace }}
+          repo_root: ${{ github.workspace }}
           vipb_path: Tooling/deployment/NI Icon editor.vipb
           minimum_supported_lv_version: 2023
           labview_minor_revision: 3
@@ -331,7 +331,7 @@ jobs:
       - uses: ./.github/actions/build-vip
         with:
           supported_bitness: 64
-          relative_path: ${{ github.workspace }}
+          repo_root: ${{ github.workspace }}
           vipb_path: Tooling/deployment/NI Icon editor.vipb
           minimum_supported_lv_version: 2023
           labview_minor_revision: 3
@@ -366,3 +366,4 @@ jobs:
           } else {
             Write-Host ("Tag validation ok: {0}" -f $provided)
           }
+

@@ -6,18 +6,18 @@
 #        Removes existing packed libraries, adds INI tokens, prepares LabVIEW
 #        sources for both 32-bit and 64-bit environments, and closes LabVIEW.
 #
-#    .PARAMETER RelativePath
+#    .PARAMETER RepoRoot
 #        Path to the repository root.
 #
 #    .EXAMPLE
-#        .\Set_Development_Mode.ps1 -RelativePath "C:\\labview-icon-editor"
+#        .\Set_Development_Mode.ps1 -RepoRoot "C:\\labview-icon-editor"
 #
 #>
 
 param(
     [Parameter(Mandatory = $true)]
     [ValidateScript({ Test-Path $_ })]
-    [string]$RelativePath
+    [string]$RepoRoot
 )
 
 # Define LabVIEW project name
@@ -59,7 +59,7 @@ function Execute-Script {
 
 try {
     # Remove existing packed libraries (if the folder exists)
-    $PluginsPath = Join-Path -Path $RelativePath -ChildPath 'resource\plugins'
+    $PluginsPath = Join-Path -Path $RepoRoot -ChildPath 'resource\plugins'
     if (Test-Path $PluginsPath) {
         # Build and execute the removal command only if the plugins folder exists
         # Wrap the plugins path in single quotes to avoid issues with spaces or special characters
@@ -71,20 +71,20 @@ try {
     }
 
     # 32-bit actions
-    $Command1 = "& `"$AddTokenScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath `"$RelativePath`""
+    $Command1 = "& `"$AddTokenScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RepoRoot `"$RepoRoot`""
     Execute-Script $Command1
 
-    $Command2 = "& `"$PrepareScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath `"$RelativePath`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec 'Editor Packed Library'"
+    $Command2 = "& `"$PrepareScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RepoRoot `"$RepoRoot`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec 'Editor Packed Library'"
     Execute-Script $Command2
 
     $Command3 = "& `"$CloseScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32"
     Execute-Script $Command3
 
     # 64-bit actions
-    $Command4 = "& `"$AddTokenScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath `"$RelativePath`""
+    $Command4 = "& `"$AddTokenScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RepoRoot `"$RepoRoot`""
     Execute-Script $Command4
 
-    $Command5 = "& `"$PrepareScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath `"$RelativePath`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec 'Editor Packed Library'"
+    $Command5 = "& `"$PrepareScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RepoRoot `"$RepoRoot`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec 'Editor Packed Library'"
     Execute-Script $Command5
 
     $Command6 = "& `"$CloseScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64"
@@ -97,3 +97,4 @@ catch {
 }
 
 Write-Host "All scripts executed successfully." -ForegroundColor Green
+

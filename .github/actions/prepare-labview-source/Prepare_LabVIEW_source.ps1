@@ -13,7 +13,7 @@
 .PARAMETER SupportedBitness
     Target bitness of the LabVIEW environment ("32" or "64").
 
-.PARAMETER RelativePath
+.PARAMETER RepoRoot
     Path to the repository root containing the project.
 
 .PARAMETER LabVIEW_Project
@@ -23,7 +23,7 @@
     Name of the build specification to prepare.
 
 .EXAMPLE
-    .\Prepare_LabVIEW_source.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64" -RelativePath "C:\labview icon editor" -LabVIEW_Project "lv_icon_editor" -Build_Spec "Editor Packed Library"
+    .\Prepare_LabVIEW_source.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64" -RepoRoot "C:\labview icon editor" -LabVIEW_Project "lv_icon_editor" -Build_Spec "Editor Packed Library"
 #>
 
 param(
@@ -36,7 +36,7 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidateScript({ Test-Path $_ })]
-    [string]$RelativePath,
+    [string]$RepoRoot,
 
     [Parameter(Mandatory = $true)]
     [string]$LabVIEW_Project,
@@ -46,13 +46,13 @@ param(
 )
 
 # Ensure paths with spaces are enclosed in double quotes
-$escapedRelativePath = "`"$RelativePath`""
-$escapedLabVIEWProjectPath = "`"$RelativePath\$LabVIEW_Project.lvproj`""
+$escapedRepoRoot = "`"$RepoRoot`""
+$escapedLabVIEWProjectPath = "`"$RepoRoot\$LabVIEW_Project.lvproj`""
 $escapedBuildSpec = "`"$Build_Spec`""
 
 # Construct the command
 $script = @"
-g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness -v `"$RelativePath\Tooling\PrepareIESource.vi`" -- LabVIEW Localhost.LibraryPaths `"$RelativePath\$LabVIEW_Project.lvproj`" $Build_Spec
+g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness -v `"$RepoRoot\Tooling\PrepareIESource.vi`" -- LabVIEW Localhost.LibraryPaths `"$RepoRoot\$LabVIEW_Project.lvproj`" `"$Build_Spec`"
 "@
 
 Write-Output "Executing the following command:"
@@ -75,4 +75,5 @@ try {
     Write-Error "Please check the parameters and ensure the command is valid."
     exit 1
 }
+
 

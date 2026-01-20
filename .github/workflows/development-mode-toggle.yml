@@ -62,16 +62,16 @@ jobs:
         run: |
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             if ('${{ github.event.inputs.mode }}' -eq 'enable') {
-              ./.github/actions/set-development-mode/Set_Development_Mode.ps1 -RelativePath $env:GITHUB_WORKSPACE
+              ./.github/actions/set-development-mode/Set_Development_Mode.ps1 -RepoRoot $env:GITHUB_WORKSPACE
             } else {
-              ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 -RelativePath $env:GITHUB_WORKSPACE
+              ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 -RepoRoot $env:GITHUB_WORKSPACE
             }
           }
           else {
             if ('${{ inputs.mode }}' -eq 'enable') {
-              ./.github/actions/set-development-mode/Set_Development_Mode.ps1 -RelativePath $env:GITHUB_WORKSPACE
+              ./.github/actions/set-development-mode/Set_Development_Mode.ps1 -RepoRoot $env:GITHUB_WORKSPACE
             } else {
-              ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 -RelativePath $env:GITHUB_WORKSPACE
+              ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 -RepoRoot $env:GITHUB_WORKSPACE
             }
           }
       #
@@ -118,3 +118,4 @@ jobs:
 
     outputs:
       environment_details: ${{ steps.set_output.outputs.environment_details }}
+

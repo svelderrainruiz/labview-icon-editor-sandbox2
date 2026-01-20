@@ -47,7 +47,7 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 
 5. **Enable Dev Mode**:
    ```powershell
-   .\Set_Development_Mode.ps1 -RelativePath "C:\labview-icon-editor"
+   .\Set_Development_Mode.ps1 -RepoRoot "C:\labview-icon-editor"
    ```
 
    Removes the default `lv_icon.lvlibp` and points LabVIEW to your local Icon Editor code.
@@ -76,7 +76,7 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 4. **Run** `Build.ps1`:
    ```powershell
    .\Build.ps1 `
-       -RelativePath "C:\labview-icon-editor" `
+       -RepoRoot "C:\labview-icon-editor" `
        -Major 1 -Minor 2 -Patch 3 -Build 45 `
     -Commit "my-commit-sha" `
     -LabVIEWMinorRevision 3 `
@@ -88,7 +88,7 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 
 5. **Revert Dev Mode (optional)**:
    ```powershell
-   ..\revert-development-mode\RevertDevelopmentMode.ps1 -RelativePath "C:\labview-icon-editor"
+   ..\revert-development-mode\RevertDevelopmentMode.ps1 -RepoRoot "C:\labview-icon-editor"
    ```
 
 6. **Install** the `.vip` in VIPM (as Admin). Validate your custom Icon Editor changes.
@@ -118,7 +118,7 @@ An example step in a GitHub Actions file might look like:
 - name: Build Icon Editor
   run: |
     pwsh .\.github\actions\build\Build.ps1 `
-      -RelativePath "$env:GITHUB_WORKSPACE" `
+      -RepoRoot "$env:GITHUB_WORKSPACE" `
       -Major 1 -Minor 2 -Patch 0 -Build 10 `
       -Commit "${{ github.sha }}" `
       # You can pass metadata fields to brand the package:
@@ -193,4 +193,5 @@ Passing these metadata fields ensures the final `.vip` clearly identifies **whic
    - Use VIPM to install the `.vip` and confirm final functionality.
 
 All scripts are fully open-source—**collaborators** can debug or extend them locally with minimal friction. By passing organization/repo data in either local builds or GitHub Actions, you ensure your **unique** version of the Icon Editor is **clearly labeled** and **easily traced** to its source.
+
 

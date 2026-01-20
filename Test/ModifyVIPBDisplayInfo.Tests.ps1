@@ -41,7 +41,7 @@ Describe "ModifyVIPBDisplayInfo.ps1" {
 
         & $scriptPath `
             -SupportedBitness 64 `
-            -RelativePath $repoRoot `
+            -RepoRoot $repoRoot `
             -VIPBPath $relativeVipbPath `
             -MinimumSupportedLVVersion 2023 `
             -LabVIEWMinorRevision 3 `
@@ -68,3 +68,4 @@ Describe "ModifyVIPBDisplayInfo.ps1" {
         $licenseSetting | Should -Be "LICENSE"
     }
 }
+
