@@ -80,36 +80,6 @@ jobs:
       - run: echo "No .vipc changes detected; skipping dependency application."
         if: needs.changes.outputs.vipc != 'true'
 
-  apply-deps-2023-x64:
-    name: Apply VIPC (2023 x64)
-    needs: [close-lv-2021-before-2023, changes]
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/apply-vipc
-        if: needs.changes.outputs.vipc == 'true'
-        with:
-          minimum_supported_lv_version: 2023
-          vip_lv_version:               2023
-          supported_bitness:            64
-          relative_path:                ${{ github.workspace }}
-          vipc_path:                    ".github/actions/apply-vipc/runner_dependencies.vipc"
-      - run: echo "No .vipc changes detected; skipping dependency application."
-        if: needs.changes.outputs.vipc != 'true'
-
-  close-lv-2021-before-2023:
-    name: Close LabVIEW 2021 before 2023 tasks
-    needs: apply-deps-2021-x86
-    runs-on: self-hosted-windows-lv
-    steps:
-      - uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 64
-      - uses: ./.github/actions/close-labview
-        with:
-          minimum_supported_lv_version: 2021
-          supported_bitness: 32
-
   version:
     name: Compute Version
     runs-on: self-hosted-windows-lv
@@ -131,7 +101,7 @@ jobs:
 
   missing-in-project:
     name: Test Missing-In-Project (2021)
-    needs: apply-deps-2023-x64
+    needs: apply-deps-2021-x86
     uses: ./.github/workflows/test-missing-in-project-windows.yml
 
   test-2021:
@@ -333,7 +303,7 @@ jobs:
           supported_bitness: 64
           relative_path: ${{ github.workspace }}
           vipb_path: Tooling/deployment/NI Icon editor.vipb
-          minimum_supported_lv_version: 2023
+          minimum_supported_lv_version: 2021
           labview_minor_revision: 3
           major: ${{ needs.version.outputs.MAJOR }}
           minor: ${{ needs.version.outputs.MINOR }}
@@ -347,7 +317,7 @@ jobs:
           supported_bitness: 64
           relative_path: ${{ github.workspace }}
           vipb_path: Tooling/deployment/NI Icon editor.vipb
-          minimum_supported_lv_version: 2023
+          minimum_supported_lv_version: 2021
           labview_minor_revision: 3
           major: ${{ needs.version.outputs.MAJOR }}
           minor: ${{ needs.version.outputs.MINOR }}
@@ -359,7 +329,7 @@ jobs:
       - if: always()
         uses: ./.github/actions/close-labview
         with:
-          minimum_supported_lv_version: 2023
+          minimum_supported_lv_version: 2021
           supported_bitness: 64
       - name: Validate tag matches computed version (if provided)
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.dispatch_tag != ''
