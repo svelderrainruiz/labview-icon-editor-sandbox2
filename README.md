@@ -30,10 +30,10 @@
 
 The **LabVIEW Icon Editor** is an open-source, MIT-licensed tool for creating and editing VI icons, delivered as a VI Package. Each official **LabVIEW** release automatically includes the latest Icon Editor from this repository’s `main` branch (the next integration is targeting **LabVIEW 2026 Q1**).
 
-In practice, **your contributions** – whether new features, fixes, or improvements – can become part of the Icon Editor shipped with LabVIEW itself. The source code is maintained in **LabVIEW 2021 SP1** format for broad compatibility (allowing contributors using LabVIEW 2021–2025 to build the editor), while the released VI Package requires **LabVIEW 2023 SP1 or newer** to run.
+In practice, **your contributions** – whether new features, fixes, or improvements – can become part of the Icon Editor shipped with LabVIEW itself. The source code is maintained in **LabVIEW 2021 SP1** format for broad compatibility (allowing contributors using LabVIEW 2021–2025 to build the editor), while the released VI Package requires **LabVIEW 2021 SP1 or newer** to run.
 
 - 🛠 **Built in LabVIEW (“G” code)** – All editor functionality is implemented as LabVIEW VIs (graphical code).
-- 📁 **Broad Compatibility** – Source is stored in LabVIEW 2021 SP1 format for development, but the distributed packages target LabVIEW 2023 SP1 through 2025.
+- 📁 **Broad Compatibility** – Source is stored in LabVIEW 2021 SP1 format for development, but the distributed packages target LabVIEW 2021 SP1 through 2025.
 - ⚙️ **CI Pipeline** – **GitHub Actions** orchestrate PowerShell-based workflows for testing, building, and publishing the `.vip` package.
 - 🔄 **Modern Development Practices** – This project helped pioneer NI’s open-source CI/CD patterns, and its infrastructure will migrate to a centralized toolkit for future LabVIEW projects.
 
@@ -44,7 +44,7 @@ NI’s open-source initiative encourages **community collaboration** on this pro
 ## 📦 Installation
 
 > **Prerequisites:**
-> • LabVIEW 2023 SP1 (or newer)
+> • LabVIEW 2021 SP1 (or newer)
 > • VI Package Manager (VIPM) installed
 > • *(Development note: Source code is saved in LabVIEW 2021 SP1 for building and backward compatibility.)*
 
@@ -136,4 +136,4 @@ This project is distributed under the **MIT License** – see the [LICENSE](LICE
 
 ### 🙏 Thanks for Contributing!
 
-Your ideas, testing, and code contributions directly shape the Icon Editor experience across **LabVIEW 2023–2026** and beyond. Thank you for helping improve this tool for the entire LabVIEW community!
+Your ideas, testing, and code contributions directly shape the Icon Editor experience across **LabVIEW 2021–2026** and beyond. Thank you for helping improve this tool for the entire LabVIEW community!
