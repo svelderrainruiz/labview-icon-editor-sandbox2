@@ -42,9 +42,52 @@ jobs:
             vipc:
               - '**/*.vipc'
 
+  vipb-version:
+    name: Read LabVIEW version from VIPB
+    runs-on: ubuntu-latest
+    outputs:
+      labview_version_numeric: ${{ steps.vipb.outputs.labview_version_numeric }}
+      labview_version_year: ${{ steps.vipb.outputs.labview_version_year }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract LabVIEW version from VIPB
+        id: vipb
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import sys
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          vipb_path = Path("Tooling/deployment/NI Icon editor.vipb")
+          if not vipb_path.exists():
+              sys.exit(f"VIPB not found: {vipb_path}")
+
+          text = vipb_path.read_text(encoding="utf-8", errors="replace")
+          root = ET.fromstring(text)
+          value = root.findtext("./Library_General_Settings/Package_LabVIEW_Version", default="")
+          if not value:
+              sys.exit("Package_LabVIEW_Version not found in VIPB")
+
+          match = re.search(r"(\d+)(?:\.(\d+))?", value)
+          if not match:
+              sys.exit(f"Could not parse LabVIEW version from '{value}'")
+
+          major = int(match.group(1))
+          minor = match.group(2) or "0"
+          numeric = f"{major}.{minor}"
+          year = str(2000 + major)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"labview_version_numeric={numeric}\\n")
+              fh.write(f"labview_version_year={year}\\n")
+          PY
+
   apply-deps-2021-x64:
-    name: Apply VIPC (2021 x64)
-    needs: changes
+    name: Apply VIPC (${{ needs.vipb-version.outputs.labview_version_year }} x64)
+    needs: [changes, vipb-version]
     runs-on: self-hosted-windows-lv
     steps:
       - uses: ./.github/actions/apply-vipc
@@ -59,8 +102,8 @@ jobs:
         if: needs.changes.outputs.vipc != 'true'
 
   apply-deps-2021-x86:
-    name: Apply VIPC (2021 x86)
-    needs: [apply-deps-2021-x64, changes]
+    name: Apply VIPC (${{ needs.vipb-version.outputs.labview_version_year }} x86)
+    needs: [apply-deps-2021-x64, changes, vipb-version]
     runs-on: self-hosted-windows-lv
     steps:
       - uses: ./.github/actions/apply-vipc
@@ -94,13 +137,13 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   missing-in-project:
-    name: Test Missing-In-Project (2021)
-    needs: apply-deps-2021-x86
+    name: Test Missing-In-Project (${{ needs.vipb-version.outputs.labview_version_year }})
+    needs: [apply-deps-2021-x86, vipb-version]
     uses: ./.github/workflows/test-missing-in-project-windows.yml
 
   test-2021:
-    name: Run Unit Tests (2021 ${{ matrix.bitness }}-bit)
-    needs: missing-in-project
+    name: Run Unit Tests (${{ needs.vipb-version.outputs.labview_version_year }} ${{ matrix.bitness }}-bit)
+    needs: [missing-in-project, vipb-version]
     runs-on: self-hosted-windows-lv
     strategy:
       fail-fast: false
