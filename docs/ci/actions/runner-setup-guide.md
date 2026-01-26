@@ -71,7 +71,7 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 ### 1. Development vs. Testing
 
 **Development Mode**  
-- Temporarily reconfigures `labview.ini` and `vi.lib` so LabVIEW loads your Icon Editor source directly, renaming `lv_icon.lvlibp` to `lv_icon.ship` and packaging the LabVIEW Icon API.  
+- Temporarily reconfigures `labview.ini` and `vi.lib` so LabVIEW loads your Icon Editor source directly, it also removes `lv_icon.lvlibp`.  
 - Enable/disable via the **Development Mode Toggle** workflow.
 
 **Testing / Distributable Builds**  
@@ -85,7 +85,6 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 1. **Development Mode Toggle**  
    - `mode: enable` → calls `Set_Development_Mode.ps1`.  
    - `mode: disable` → calls `RevertDevelopmentMode.ps1`.  
-   - Optional `minimum_supported_lv_version` (default `2021`, supports `2020`-`2025`).
    - Great for reconfiguring LabVIEW for local dev vs. distribution builds.
 
 2. **CI Pipeline (Composite)**
@@ -118,18 +117,6 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 4. **Labels** (optional)
    - The workflow uses the `self-hosted-windows-lv` label. Its `runs-on` expression also references `self-hosted-linux-lv` for potential Linux jobs, though the default matrix runs only on Windows. Label your runner accordingly, and prepare a Linux runner with `self-hosted-linux-lv` if you expand the matrix.
 
-5. **Runner diagnostics cleanup (recommended)**
-   - Some runner failures can occur before checkout if old diagnostics logs accumulate under the runner's `_diag\pages` folder.
-   - Use the job-started hook to clean that folder before each job.
-   - Copy the scripts from the repo to the runner:
-     - `.github\scripts\cleanup-runner-diag-pages.ps1`
-     - `.github\scripts\runner-job-started-clean-diag.ps1`
-   - Place them under `<runner-root>\scripts\` and set the hook in `<runner-root>\.env`:
-     - `ACTIONS_RUNNER_HOOK_JOB_STARTED=C:\path\to\runner\scripts\runner-job-started-clean-diag.ps1`
-   - Restart the runner service after updating `.env`.
-   - Optional: set `RUNNER_DIAG_RETENTION_DAYS=7` in `.env` if you want to keep recent logs.
-   - The cleanup skips any diagnostics file that is still in use, so the job does not fail.
-
 
 <a name="running-the-actions-locally"></a>
 ### 4. Running the Actions Locally
@@ -138,7 +125,6 @@ With your runner online:
 
 1. **Enable Dev Mode** (if needed)
    - **Actions → Development Mode Toggle**, set `mode: enable`.
-   - Optionally set `minimum_supported_lv_version` (default `2021`).
 
 2. **Run Tests via CI Pipeline (Composite)**
    - Execute the workflow and review the **test** job logs to confirm all unit tests pass.
@@ -150,7 +136,6 @@ With your runner online:
 
 4. **Disable Dev Mode** (if used)  
    - `mode: disable` reverts your LabVIEW environment.
-   - Optionally set `minimum_supported_lv_version` to match the version you toggled.
 
 5. **Review the `.vip`**
    - Download from **Artifacts**. Publishing to a GitHub release requires a separate workflow.
@@ -180,5 +165,3 @@ With your runner online:
 - **Troubleshoot**: If manual environment edits are needed, consult `ManualSetup.md` or the original documentation for advanced configuration steps.  
 
 **Happy Building!** By integrating these workflows, you’ll maintain a **robust, automated CI/CD** pipeline for the LabVIEW Icon Editor—complete with **semantic versioning**, **build artifact uploads**, and **metadata branding** (company/repo).
-
-

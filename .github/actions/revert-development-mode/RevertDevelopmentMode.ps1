@@ -4,84 +4,79 @@
 
 .DESCRIPTION
     Restores the packaged LabVIEW sources for both 32-bit and 64-bit
-    environments using RestoreSetupLVSource.vi. LabVIEW is closed after
-    each run so downstream steps load the changes.
-
-.PARAMETER MinimumSupportedLVVersion
-    LabVIEW major version to target with g-cli (default: 2021).
-
-.PARAMETER SupportedBitness
-    One or more bitness values ("32", "64") to run (default: both).
+    environments and closes any running LabVIEW instances.
 
 .PARAMETER RelativePath
-    Optional path to the repository root.
+    Path to the repository root.
 
 .EXAMPLE
-    .\RevertDevelopmentMode.ps1 -MinimumSupportedLVVersion 2021
+    .\RevertDevelopmentMode.ps1 -RelativePath "C:\labview-icon-editor"
 #>
 
 param(
-    [Parameter(Mandatory = $false)]
-    [ValidateSet('2020', '2021', '2022', '2023', '2024', '2025')]
-    [string]$MinimumSupportedLVVersion = '2021',
-
-    [Parameter(Mandatory = $false)]
-    [ValidateSet('32', '64', IgnoreCase = $true)]
-    [string[]]$SupportedBitness = @('32', '64'),
-
-    [Parameter(Mandatory = $false)]
+    [Parameter(Mandatory = $true)]
     [string]$RelativePath
 )
+
+# Define LabVIEW project name
+$LabVIEW_Project = 'lv_icon_editor'
 
 # Determine the directory where this script is located
 $ScriptDirectory = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
 Write-Host "Script Directory: $ScriptDirectory"
 
-$RestoreScript = Join-Path -Path $ScriptDirectory -ChildPath '..\restore-setup-lv-source\RestoreSetupLVSource.ps1'
-$CloseScript = Join-Path -Path $ScriptDirectory -ChildPath '..\close-labview\Close_LabVIEW.ps1'
-Write-Host "RestoreSetupLVSource script: $RestoreScript"
-Write-Host "Close_LabVIEW script: $CloseScript"
-
-$ErrorActionPreference = 'Stop'
-
-function Invoke-RestoreLabviewSource {
+# Helper function to execute scripts and stop on error
+function Execute-Script {
     param(
-        [string]$Bitness
+        [string]$ScriptCommand
     )
+    Write-Host "Executing: $ScriptCommand"
+    try {
+        # Execute the command
+        Invoke-Expression $ScriptCommand -ErrorAction Stop
 
-    if (-not (Test-Path -Path $CloseScript)) {
-        throw "Close_LabVIEW.ps1 not found at $CloseScript"
-    }
-
-    & $CloseScript -MinimumSupportedLVVersion $MinimumSupportedLVVersion -SupportedBitness $Bitness
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
-        throw "Close_LabVIEW.ps1 failed for $Bitness-bit with exit code $LASTEXITCODE."
-    }
-
-    Write-Host "Restoring LabVIEW sources for $Bitness-bit."
-    $scriptArgs = @{
-        MinimumSupportedLVVersion = $MinimumSupportedLVVersion
-        SupportedBitness          = $Bitness
-    }
-
-    if ($RelativePath) {
-        $scriptArgs.RelativePath = $RelativePath
-    }
-
-    & $RestoreScript @scriptArgs
-
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
-        throw "RestoreSetupLVSource.ps1 failed for $Bitness-bit with exit code $LASTEXITCODE."
+        # Check for errors in the script execution
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Error occurred while executing: $ScriptCommand. Exit code: $LASTEXITCODE"
+            exit $LASTEXITCODE
+        }
+    } catch {
+        Write-Error "Error occurred while executing: $ScriptCommand. Exiting."
+        Write-Error $_.Exception.Message
+        exit 1
     }
 }
 
+# Sequential script execution with error handling
 try {
-    $bitnesses = $SupportedBitness | Select-Object -Unique
-    foreach ($bitness in $bitnesses) {
-        Invoke-RestoreLabviewSource -Bitness $bitness
-    }
+    # Build the script paths
+    $RestoreScript = Join-Path -Path $ScriptDirectory -ChildPath 'RestoreSetupLVSource.ps1'
+    $CloseScript = Join-Path -Path $ScriptDirectory -ChildPath 'Close_LabVIEW.ps1'
+
+    # Restore setup for LabVIEW 2021 (32-bit)
+    $Command1 = "& `"$RestoreScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32 -RelativePath `"$RelativePath`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec `'Editor Packed Library`'"
+
+    Execute-Script $Command1
+
+    # Close LabVIEW 2021 (32-bit)
+    $Command2 = "& `"$CloseScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 32"
+
+    Execute-Script $Command2
+
+    # Restore setup for LabVIEW 2021 (64-bit)
+    $Command3 = "& `"$RestoreScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64 -RelativePath `"$RelativePath`" -LabVIEW_Project `"$LabVIEW_Project`" -Build_Spec `'Editor Packed Library`'"
+
+    Execute-Script $Command3
+
+    # Close LabVIEW 2021 (64-bit)
+    $Command4 = "& `"$CloseScript`" -MinimumSupportedLVVersion 2021 -SupportedBitness 64"
+
+    Execute-Script $Command4
+
 } catch {
     Write-Error "An unexpected error occurred during script execution: $($_.Exception.Message)"
     exit 1
 }
+
+Write-Host "All scripts executed successfully." -ForegroundColor Green
 

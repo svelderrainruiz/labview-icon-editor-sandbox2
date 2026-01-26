@@ -11,27 +11,9 @@ runs:
     - name: Run Set_Development_Mode.ps1
       shell: pwsh
       run: |
-        $scriptArgs = @{
-          MinimumSupportedLVVersion = "${{ inputs.minimum_supported_lv_version }}"
-        }
-
-        if ("${{ inputs.relative_path }}" -ne "") {
-          $scriptArgs.RelativePath = "${{ inputs.relative_path }}"
-        }
-
-        if ("${{ inputs.supported_bitness }}" -ne "") {
-          $scriptArgs.SupportedBitness = "${{ inputs.supported_bitness }}"
-        }
-
-        & "${{ github.action_path }}/Set_Development_Mode.ps1" @scriptArgs
+        & "${{ github.action_path }}/Set_Development_Mode.ps1" \
+          -RelativePath "${{ inputs.relative_path }}"
 inputs:
-  minimum_supported_lv_version:
-    description: 'LabVIEW major version (2020-2025)'
-    required: false
-    default: '2021'
-  supported_bitness:
-    description: 'LabVIEW bitness (32 or 64). Defaults to both when omitted.'
-    required: false
   relative_path:
     description: 'Workspace root path'
-    required: false
+    required: true
