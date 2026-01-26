@@ -21,7 +21,7 @@ This document lists the PowerShell scripts used to build, test, and distribute t
 ---
 
 ## AddTokenToLabVIEW.ps1
-Adds a custom `LocalHost.LibraryPaths` token to the LabVIEW INI file so LabVIEW can find project libraries during development or builds. Used by `Set_Development_Mode.ps1`.
+Adds a custom `LocalHost.LibraryPaths` token to the LabVIEW INI file so LabVIEW can find project libraries during development or builds. This script depends on `Tooling/deployment/Create_LV_INI_Token.vi`, which is not present in this repository, so it is not used by the development-mode automation.
 
 ## ApplyVIPC.ps1
 Applies a `.vipc` container to a specific LabVIEW version and bitness using g-cli. Ensures that all required LabVIEW dependencies are installed before building.
@@ -42,19 +42,19 @@ Gracefully shuts down a running LabVIEW instance using g-cli's `QuitLabVIEW` com
 Updates the display information inside a `.vipb` file and merges version and branding metadata. Typically called by `Build.ps1` before packaging.
 
 ## Prepare_LabVIEW_source.ps1
-Unzips LabVIEW sources and updates configuration so the project is ready for development or building. Called by `Set_Development_Mode.ps1`.
+Runs `PrepareIESource.vi` to package the LabVIEW Icon API, rename `lv_icon.lvlibp` to `lv_icon.ship`, and set the INI token for development. Closes LabVIEW after execution. Called by `Set_Development_Mode.ps1`. `PrepareIESource.vi` reports error `-593450` when development mode could not be set; treat this error code as the only authoritative indicator and avoid adding other indicators or helpers.
 
 ## Rename-file.ps1
 Renames the built packed libraries to the expected `lv_icon_x86.lvlibp` or `lv_icon_x64.lvlibp` names.
 
 ## RestoreSetupLVSource.ps1
-Reverses `Prepare_LabVIEW_source.ps1` by restoring the packaged state of the LabVIEW sources and removing custom INI tokens. Used by `RevertDevelopmentMode.ps1`.
+Runs `RestoreSetupLVSource.vi` to unzip the LabVIEW Icon API, restore `lv_icon.ship` to `lv_icon.lvlibp`, and remove the INI token. Closes LabVIEW after execution. Used by `RevertDevelopmentMode.ps1`. `RestoreSetupLVSource.vi` reports error `-593451` when development mode could not be reverted; treat this error code as the only authoritative indicator and avoid adding other indicators or helpers.
 
 ## Set_Development_Mode.ps1
-Configures the repository for development. Removes existing packed libraries, adds INI tokens, prepares LabVIEW sources, and closes LabVIEW for both bitnesses.
+Configures the repository for development by invoking `Prepare_LabVIEW_source.ps1` for both bitnesses.
 
 ## RevertDevelopmentMode.ps1
-Undoes development mode by restoring packaged sources and closing LabVIEW. Helpful when leaving development or before distributing a build.
+Undoes development mode by invoking `RestoreSetupLVSource.ps1` for both bitnesses. Helpful when leaving development or before distributing a build.
 
 ## RunUnitTests.ps1
 Locates the `.lvproj`, runs unit tests through g-cli, and outputs a table of results. Used in CI workflows.

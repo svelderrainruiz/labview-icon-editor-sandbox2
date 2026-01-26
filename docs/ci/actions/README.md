@@ -4,7 +4,7 @@ This repository defines several reusable [composite actions](https://docs.github
 
 | Action | Description |
 |---|---|
-| [add-token-to-labview](../../../.github/actions/add-token-to-labview) | Adds a `LocalHost.LibraryPaths` token to the LabVIEW INI. |
+| [add-token-to-labview](../../../.github/actions/add-token-to-labview) | Legacy; requires `Tooling/deployment/Create_LV_INI_Token.vi` (not in repo). Dev-mode automation uses `PrepareIESource.vi` and `RestoreSetupLVSource.vi` only. |
 | [apply-vipc](../../../.github/actions/apply-vipc) | Installs runner dependencies for a given LabVIEW version and bitness. |
 | [auto-issue-branch](../../../.github/actions/auto-issue-branch) | Automatically creates branches for issues with required metadata; used by [auto-issue-branch workflow](../../../.github/workflows/auto-issue-branch.yml). |
 | [build](../../../.github/actions/build) | **Deprecated**: previously orchestrated the full build and packaging process. |

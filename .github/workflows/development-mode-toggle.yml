@@ -9,6 +9,16 @@ on:
         type: string
         required: true
         default: "enable"
+      minimum_supported_lv_version:
+        description: "LabVIEW major version (2020-2025)."
+        type: string
+        required: false
+        default: "2021"
+      bitness:
+        description: "LabVIEW bitness to target (32 or 64)."
+        type: string
+        required: false
+        default: "64"
 
   # 2) Triggered manually from the Actions tab
   workflow_dispatch:
@@ -21,22 +31,50 @@ on:
         options:
           - enable
           - disable
+      minimum_supported_lv_version:
+        description: "LabVIEW major version."
+        required: false
+        default: "2021"
+        type: choice
+        options:
+          - "2020"
+          - "2021"
+          - "2022"
+          - "2023"
+          - "2024"
+          - "2025"
+      bitness:
+        description: "LabVIEW bitness."
+        required: false
+        default: "64"
+        type: choice
+        options:
+          - "64"
+          - "32"
 
 jobs:
   toggle-dev-mode:
     #
     # -- FULLY DYNAMIC JOB NAME --
     #
-    # If triggered by 'workflow_dispatch', read `github.event.inputs.mode`.
-    # Otherwise (workflow_call), read `inputs.mode`.
-    # Then display "Enable Dev Mode" or "Disable Dev Mode."
+    # If triggered by 'workflow_dispatch', read `github.event.inputs.*`.
+    # Otherwise (workflow_call), read `inputs.*`.
+    # Then display "Enable 32-bit Dev Mode LV2021" (or the equivalent values).
     #
     name: ${{ 
       github.event_name == 'workflow_dispatch' && 
-        (github.event.inputs.mode == 'enable' && 'Enable Dev Mode' || 'Disable Dev Mode') || 
-        (inputs.mode == 'enable' && 'Enable Dev Mode' || 'Disable Dev Mode') }}
+        format('{0} {1}-bit Dev Mode LV{2}', 
+          github.event.inputs.mode == 'enable' && 'Enable' || 'Disable',
+          github.event.inputs.bitness || '64',
+          github.event.inputs.minimum_supported_lv_version || '2021') || 
+        format('{0} {1}-bit Dev Mode LV{2}', 
+          inputs.mode == 'enable' && 'Enable' || 'Disable',
+          inputs.bitness || '64',
+          inputs.minimum_supported_lv_version || '2021') }}
 
     runs-on: [self-hosted-windows-lv]
+    env:
+      selected_bitness: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.bitness || inputs.bitness }}
 
     steps:
       - name: Checkout repository
@@ -52,69 +90,73 @@ jobs:
           } else {
             Write-Host "Not triggered by a pull request."
           }
-            
-      - name: ${{
-          github.event_name == 'workflow_dispatch' &&
-            (github.event.inputs.mode == 'enable' && 'Running Set_Development_Mode.ps1' || 'Running RevertDevelopmentMode.ps1') ||
-            (inputs.mode == 'enable' && 'Running Set_Development_Mode.ps1' || 'Running RevertDevelopmentMode.ps1') }}
-        id: toggle_dev_mode
+
+      - name: Toggle dev mode (64-bit)
+        if: ${{ env.selected_bitness == '64' && success() }}
         shell: pwsh
         run: |
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ('${{ github.event.inputs.mode }}' -eq 'enable') {
-              ./.github/actions/set-development-mode/Set_Development_Mode.ps1 -RelativePath $env:GITHUB_WORKSPACE
-            } else {
-              ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 -RelativePath $env:GITHUB_WORKSPACE
-            }
-          }
-          else {
-            if ('${{ inputs.mode }}' -eq 'enable') {
-              ./.github/actions/set-development-mode/Set_Development_Mode.ps1 -RelativePath $env:GITHUB_WORKSPACE
-            } else {
-              ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 -RelativePath $env:GITHUB_WORKSPACE
-            }
-          }
-      #
-      # -- SET OUTPUT (JSON) IF SUCCESS --
-      # Using multiline syntax to handle multi-line JSON safely
-      #
-      - name: Set environment_details output
-        if: ${{ success() }}
-        id: set_output
-        shell: pwsh
-        run: |
-          # Determine final mode for the JSON output
-          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
             $mode = '${{ github.event.inputs.mode }}'
+            $lvVersion = '${{ github.event.inputs.minimum_supported_lv_version }}'
           } else {
             $mode = '${{ inputs.mode }}'
+            $lvVersion = '${{ inputs.minimum_supported_lv_version }}'
           }
 
-          $actor     = '${{ github.actor }}'
-          $timestamp = (Get-Date -Format o)  # ISO8601 UTC
-          $osInfo    = [System.Environment]::OSVersion.VersionString
+          if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+            $lvVersion = '2021'
+          }
 
-          if ('${{ github.event_name }}' -eq 'pull_request') {
-            $prNumber = '${{ github.event.pull_request.number }}'
+          $scriptArgs = @{
+            MinimumSupportedLVVersion = $lvVersion
+            SupportedBitness          = '64'
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
+            $scriptArgs.RelativePath = $env:GITHUB_WORKSPACE
+          }
+
+          if ($mode -eq 'enable') {
+            & ./.github/actions/set-development-mode/Set_Development_Mode.ps1 @scriptArgs
           } else {
-            $prNumber = 'N/A'
+            & ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 @scriptArgs
           }
 
-          # Pretty-printed JSON (multi-line)
-          $jsonObject = [ordered]@{
-            mode      = $mode
-            timestamp = $timestamp
-            actor     = $actor
-            pr_number = $prNumber
-            os        = $osInfo
-          } | ConvertTo-Json
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+            exit $LASTEXITCODE
+          }
 
-          Write-Host "JSON Output: $jsonObject"
+      - name: Toggle dev mode (32-bit)
+        if: ${{ env.selected_bitness == '32' && success() }}
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $mode = '${{ github.event.inputs.mode }}'
+            $lvVersion = '${{ github.event.inputs.minimum_supported_lv_version }}'
+          } else {
+            $mode = '${{ inputs.mode }}'
+            $lvVersion = '${{ inputs.minimum_supported_lv_version }}'
+          }
 
-          # Write multiline output to GITHUB_OUTPUT:
-          echo "environment_details<<EOF" >> $env:GITHUB_OUTPUT
-          echo "$jsonObject"             >> $env:GITHUB_OUTPUT
-          echo "EOF"                     >> $env:GITHUB_OUTPUT
+          if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+            $lvVersion = '2021'
+          }
 
-    outputs:
-      environment_details: ${{ steps.set_output.outputs.environment_details }}
+          $scriptArgs = @{
+            MinimumSupportedLVVersion = $lvVersion
+            SupportedBitness          = '32'
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
+            $scriptArgs.RelativePath = $env:GITHUB_WORKSPACE
+          }
+
+          if ($mode -eq 'enable') {
+            & ./.github/actions/set-development-mode/Set_Development_Mode.ps1 @scriptArgs
+          } else {
+            & ./.github/actions/revert-development-mode/RevertDevelopmentMode.ps1 @scriptArgs
+          }
+
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+            exit $LASTEXITCODE
+          }

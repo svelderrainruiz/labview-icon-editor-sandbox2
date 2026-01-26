@@ -14,9 +14,7 @@ runs:
         & "${{ github.action_path }}/RestoreSetupLVSource.ps1" \
           -MinimumSupportedLVVersion ${{ inputs.minimum_supported_lv_version }} \
           -SupportedBitness ${{ inputs.supported_bitness }} \
-          -RelativePath "${{ inputs.relative_path }}" \
-          -LabVIEW_Project "${{ inputs.labview_project }}" \
-          -Build_Spec "${{ inputs.build_spec }}"
+          -RelativePath "${{ inputs.relative_path }}"
 inputs:
   minimum_supported_lv_version:
     description: 'LabVIEW major version'
@@ -26,10 +24,4 @@ inputs:
     required: true
   relative_path:
     description: 'Workspace root path'
-    required: true
-  labview_project:
-    description: 'LabVIEW project name (without extension)'
-    required: true
-  build_spec:
-    description: 'Build specification name'
-    required: true
+    required: false

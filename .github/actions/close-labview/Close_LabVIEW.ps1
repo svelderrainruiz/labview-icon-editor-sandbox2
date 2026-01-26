@@ -56,8 +56,28 @@ function Invoke-SafeQuitLabVIEW {
     throw "g-cli QuitLabVIEW failed with exit code $exitCode."
 }
 
+function Wait-ForLabVIEWExit {
+    param(
+        [int]$TimeoutSeconds = 30
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $running = Get-Process -Name LabVIEW -ErrorAction SilentlyContinue
+        if (-not $running) {
+            return $true
+        }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+
+    return $false
+}
+
 try {
     Invoke-SafeQuitLabVIEW -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness
+    if (-not (Wait-ForLabVIEWExit -TimeoutSeconds 30)) {
+        throw "LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) did not exit within 30 seconds."
+    }
     Write-Host "LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) closed or not running."
 }
 catch {
