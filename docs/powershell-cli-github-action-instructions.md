@@ -143,7 +143,7 @@ You’ll typically name the workflow file **`development-mode-toggle.yml`**. Its
    - Go to the **Actions** tab, select the "Development Mode Toggle" workflow, click "Run workflow."  
    - Choose `enable` or `disable` to run the corresponding PowerShell script (`Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`).  
    - LabVIEW version is fixed to **2021** (`labview_version`; `minimum_supported_lv_version` is deprecated).  
-   - (Optional) Choose a bitness (`bitness`, default `64`).  
+   - Choose a bitness (`bitness`, default `64`).  
    - The workflow runs on your self-hosted runner (e.g., labeled `self-hosted-windows-lv`).  
 
 2. **Important Note for Testing**  
@@ -153,7 +153,7 @@ You’ll typically name the workflow file **`development-mode-toggle.yml`**. Its
 3. **Trigger from Another Workflow**  
    - You can call this workflow using `workflow_call`. Pass the input parameter `mode` = `enable` or `disable`.  
    - Pass `labview_version: 2021` if you include the input (other values are not supported).  
-   - Optionally pass `bitness` (`32` or `64`) to select the LabVIEW bitness.  
+   - Pass `bitness` (`32` or `64`) to select the LabVIEW bitness.  
    - The same runner used by the calling job is toggled accordingly.
 
 <a name="413-examples-calling-this-workflow"></a>

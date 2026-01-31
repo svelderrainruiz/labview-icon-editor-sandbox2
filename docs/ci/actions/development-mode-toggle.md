@@ -24,7 +24,7 @@ You do **not** need to copy/paste the entire workflow snippet here, as it’s al
    - Select the **"Toggle Development Mode"** workflow.
    - Click "Run workflow" and choose either `enable` or `disable` from the dropdown.
    - LabVIEW version is fixed to **2021** (`labview_version`; `minimum_supported_lv_version` is deprecated but still accepted).
-   - (Optional) Choose a bitness (`bitness`, default `64`).
+   - Choose a bitness (`bitness`, default `64`).
    - This will execute the PowerShell scripts ([`Set_Development_Mode.ps1`](../../../.github/actions/set-development-mode/Set_Development_Mode.ps1) or [`RevertDevelopmentMode.ps1`](../../../.github/actions/revert-development-mode/RevertDevelopmentMode.ps1)) on the **target self-hosted runner** (your personal machine or a shared machine).
 
 2. **Important Note for Testing**
@@ -36,7 +36,7 @@ You do **not** need to copy/paste the entire workflow snippet here, as it’s al
    - Pass the input parameter `mode` set to `enable` or `disable`.
    - Pass `labview_version: 2021` if you include the input (other values are not supported).
    - `minimum_supported_lv_version` is a deprecated alias.
-   - Optionally pass `bitness` (`32` or `64`) to select the LabVIEW bitness.
+   - Pass `bitness` (`32` or `64`) to select the LabVIEW bitness.
    - The runner that calls it will be the one switched into (or out of) dev mode.
 
 ## 3. Examples: Calling This Workflow

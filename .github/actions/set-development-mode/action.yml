@@ -9,8 +9,8 @@ inputs:
     required: false
     default: '2021'
   supported_bitness:
-    description: 'LabVIEW bitness (32 or 64). Defaults to both when omitted.'
-    required: false
+    description: 'LabVIEW bitness (32 or 64).'
+    required: true
   repo_root:
     description: 'Workspace root path'
     required: false
@@ -41,8 +41,6 @@ runs:
           $scriptArgs.RepoRoot = "${{ inputs.repo_root }}"
         }
 
-        if ("${{ inputs.supported_bitness }}" -ne "") {
-          $scriptArgs.SupportedBitness = "${{ inputs.supported_bitness }}"
-        }
+        $scriptArgs.SupportedBitness = "${{ inputs.supported_bitness }}"
 
         & "${{ github.action_path }}/Set_Development_Mode.ps1" @scriptArgs
