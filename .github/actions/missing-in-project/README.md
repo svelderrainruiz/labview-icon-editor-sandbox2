@@ -37,7 +37,8 @@ Results are returned as standard GitHub Action outputs so downstream jobs can d
 |------|----------|---------|-------------|
 | `lv-ver` | **Yes** | `2021` | LabVIEW *major* version number that should be used to run `MissingInProjectCLI.vi` |
 | `arch` | **Yes** | `32` or `64` | Bitness of the LabVIEW runtime to launch |
-| `project-file` | No | `source/MyPlugin.lvproj` | Path (absolute or relative to repository root) of the project to inspect. Defaults to **`lv_icon.lvproj`** |
+| `repo-root` | **Yes** | `${{ github.workspace }}` | Absolute path to the repository root. Relative paths are resolved against this. |
+| `project-file` | No | `source/MyPlugin.lvproj` | Path (absolute or relative to `repo-root`) of the project to inspect. Defaults to **`lv_icon_editor.lvproj`** |
 
 ---
 
@@ -65,6 +66,7 @@ jobs:
         with:
           lv-ver: 2021
           arch: 64
+          repo-root: ${{ github.workspace }}
 
       - name: Print report
         if: ${{ steps.mip.outputs.passed == 'false' }}
@@ -119,7 +121,7 @@ jobs:
 | Symptom | Hint |
 |---------|------|
 | *“g‑cli executable not found”* | Verify g‑cli is installed and on `PATH` |
-| *“Project file not found”* | Double‑check the value of `project-file`; relative paths are resolved against `GITHUB_WORKSPACE` |
+| *“Project file not found”* | Double‑check the value of `project-file`; relative paths are resolved against `repo-root` |
 | *Step times out* | Large projects can be slow to load; consider bumping the job’s default timeout. |
 
 ---

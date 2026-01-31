@@ -135,9 +135,11 @@ jobs:
             SupportedBitness          = '64'
           }
 
-          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-            $scriptArgs.RepoRoot = $env:GITHUB_WORKSPACE
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
+            throw "GITHUB_WORKSPACE is required to resolve RepoRoot."
           }
+
+          $scriptArgs.RepoRoot = $env:GITHUB_WORKSPACE
 
           if ($mode -eq 'enable') {
             & ./.github/actions/set-development-mode/Set_Development_Mode.ps1 @scriptArgs
@@ -170,9 +172,11 @@ jobs:
             SupportedBitness          = '32'
           }
 
-          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-            $scriptArgs.RepoRoot = $env:GITHUB_WORKSPACE
+          if ([string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
+            throw "GITHUB_WORKSPACE is required to resolve RepoRoot."
           }
+
+          $scriptArgs.RepoRoot = $env:GITHUB_WORKSPACE
 
           if ($mode -eq 'enable') {
             & ./.github/actions/set-development-mode/Set_Development_Mode.ps1 @scriptArgs

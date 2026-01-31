@@ -7,6 +7,7 @@ param(
     [Parameter(Mandatory)]
     [string]$AfterCsv,
 
+    [Parameter(Mandatory)]
     [string]$RepoRoot,
 
     [switch]$IncludeGitMetadata,
@@ -56,18 +57,15 @@ function Resolve-RepoRoot {
         [string]$PathOverride
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($PathOverride)) {
-        if (-not (Test-Path -Path $PathOverride)) {
-            return $null
-        }
-        return (Resolve-Path -Path $PathOverride).Path
+    if ([string]::IsNullOrWhiteSpace($PathOverride)) {
+        throw "RepoRoot is required."
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE) -and (Test-Path -Path $env:GITHUB_WORKSPACE)) {
-        return (Resolve-Path -Path $env:GITHUB_WORKSPACE).Path
+    if (-not (Test-Path -Path $PathOverride)) {
+        throw "RepoRoot does not exist: $PathOverride"
     }
 
-    return $null
+    return (Resolve-Path -Path $PathOverride).Path
 }
 
 function Get-RepoRelativePath {

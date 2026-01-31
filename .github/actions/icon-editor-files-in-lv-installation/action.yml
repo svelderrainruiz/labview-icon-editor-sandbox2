@@ -9,8 +9,8 @@ inputs:
     description: "Bitness (32 or 64)."
     required: true
   repo-root:
-    description: "Repository root path. Defaults to GITHUB_WORKSPACE."
-    required: false
+    description: "Repository root path (absolute)."
+    required: true
   csv-name:
     description: "CSV file name created by the VI."
     required: false

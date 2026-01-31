@@ -15,6 +15,7 @@ param(
     [ValidateSet('2021')]
     [string]$LabVIEWVersion = '2021',
 
+    [Parameter(Mandatory)]
     [string]$RepoRoot
 )
 
@@ -27,23 +28,15 @@ function Resolve-RepoRoot {
         [string]$PathOverride
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($PathOverride)) {
-        if (-not (Test-Path -Path $PathOverride)) {
-            throw "RepoRoot does not exist: $PathOverride"
-        }
-        return (Resolve-Path -Path $PathOverride).Path
+    if ([string]::IsNullOrWhiteSpace($PathOverride)) {
+        throw "RepoRoot is required."
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE) -and (Test-Path -Path $env:GITHUB_WORKSPACE)) {
-        return (Resolve-Path -Path $env:GITHUB_WORKSPACE).Path
+    if (-not (Test-Path -Path $PathOverride)) {
+        throw "RepoRoot does not exist: $PathOverride"
     }
 
-    $fallback = Split-Path -Parent $CsvPath
-    if ($fallback -and (Test-Path -Path $fallback)) {
-        return (Resolve-Path -Path $fallback).Path
-    }
-
-    throw "Unable to resolve repository root. Provide -RepoRoot."
+    return (Resolve-Path -Path $PathOverride).Path
 }
 
 function Import-IconEditorCsv {

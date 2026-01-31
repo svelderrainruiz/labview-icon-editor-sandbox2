@@ -9,6 +9,7 @@ param(
     [ValidateSet('32', '64')]
     [string]$Arch,
 
+    [Parameter(Mandatory)]
     [string]$RepoRoot,
 
     [string]$CsvFileName = 'Icon_Editor_Files_In_LV_Installation_Diagnostics.csv',
@@ -29,23 +30,15 @@ function Resolve-RepoRoot {
         [string]$PathOverride
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($PathOverride)) {
-        if (-not (Test-Path -Path $PathOverride)) {
-            throw "RepoRoot does not exist: $PathOverride"
-        }
-        return (Resolve-Path -Path $PathOverride).Path
+    if ([string]::IsNullOrWhiteSpace($PathOverride)) {
+        throw "RepoRoot is required."
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE) -and (Test-Path -Path $env:GITHUB_WORKSPACE)) {
-        return (Resolve-Path -Path $env:GITHUB_WORKSPACE).Path
+    if (-not (Test-Path -Path $PathOverride)) {
+        throw "RepoRoot does not exist: $PathOverride"
     }
 
-    $fallback = Join-Path $PSScriptRoot '..\..\..'
-    if (-not (Test-Path -Path $fallback)) {
-        throw "Unable to resolve repository root. Provide -RepoRoot."
-    }
-
-    return (Resolve-Path -Path $fallback).Path
+    return (Resolve-Path -Path $PathOverride).Path
 }
 
 function Resolve-CsvPath {
