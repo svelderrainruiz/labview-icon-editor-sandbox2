@@ -43,6 +43,17 @@ Notes:
 - Use `-Name` to label the worktree directory.
 - Use `-WorktreeRoot` (or `LVIE_WORKTREE_ROOT`) to override the default.
 
+## CI worktree naming (ci-composite.yml)
+CI jobs create short-path worktrees under `LVIE_WORKTREE_ROOT` with a deterministic name:
+- `ci-<jobhash>-<bitness>-<runid>-<attempt>`
+- `jobhash` is the first 8 chars of the SHA1 of `GITHUB_JOB` (prevents collisions across jobs).
+- `bitness` is `32` or `64`.
+Example: `C:\dev\ci-D170BDEE-64-21534416929-1`
+
+The workflow exports:
+- `REPO_ROOT` → worktree path (authoritative for all scripts)
+- `PROJECT_PATH` → `$REPO_ROOT\lv_icon_editor.lvproj`
+
 ## Local CI Parity (recommended)
 Run the local parity script that mirrors `ci-composite.yml`:
 ```

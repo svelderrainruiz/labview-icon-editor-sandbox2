@@ -155,6 +155,16 @@ With your runner online:
 5. **Review the `.vip`**
    - Download from **Artifacts**. Publishing to a GitHub release requires a separate workflow.
 
+#### Worktree naming (CI)
+CI jobs run from short-path worktrees to avoid Windows path limits. Each job creates:
+- `ci-<jobhash>-<bitness>-<runid>-<attempt>`
+- `jobhash` = first 8 chars of SHA1(`GITHUB_JOB`) to keep job names unique.
+- Example: `C:\dev\ci-D170BDEE-64-21534416929-1`
+
+The workflow exports:
+- `REPO_ROOT` → worktree path (authoritative for scripts)
+- `PROJECT_PATH` → `$REPO_ROOT\lv_icon_editor.lvproj`
+
 
 <a name="example-developer-workflow"></a>
 ### 5. Example Developer Workflow
