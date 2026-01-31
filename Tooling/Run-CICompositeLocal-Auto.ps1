@@ -148,6 +148,17 @@ if (-not (Test-Path -Path $runScript)) {
     throw "Run-CICompositeLocal.ps1 not found at $runScript"
 }
 
+$resolvedWorktreeRoot = $null
+$ensureWorktreeScript = Join-Path $repoRoot 'Tooling/Ensure-WorktreeRoot.ps1'
+if ($UseWorktree) {
+    if (-not (Test-Path -Path $ensureWorktreeScript)) {
+        throw "Ensure-WorktreeRoot.ps1 not found at $ensureWorktreeScript"
+    }
+
+    $resolvedWorktreeRoot = & $ensureWorktreeScript -WorktreeRoot $WorktreeRoot
+    $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+}
+
 $runRepoRoot = $repoRoot
 if ($UseWorktree) {
     $worktreeScript = Join-Path $repoRoot 'Tooling/New-CIWorktree.ps1'
@@ -156,8 +167,24 @@ if ($UseWorktree) {
     }
 
     $suffix = if ([string]::IsNullOrWhiteSpace($WorktreeName)) { "ci-parity-auto-{0}" -f (Get-Date -Format 'yyyyMMdd-HHmmss') } else { $WorktreeName }
-    $runRepoRoot = & $worktreeScript -Ref HEAD -Name $suffix -WorktreeRoot $WorktreeRoot
+    $runRepoRoot = & $worktreeScript -Ref HEAD -Name $suffix -WorktreeRoot $resolvedWorktreeRoot
     Write-Host ("Using worktree: {0}" -f $runRepoRoot)
+}
+
+$worktreeRoot = $env:LVIE_WORKTREE_ROOT
+if ([string]::IsNullOrWhiteSpace($worktreeRoot)) {
+    $worktreeRoot = 'C:\dev'
+}
+$worktreeRootFull = [System.IO.Path]::GetFullPath($worktreeRoot)
+if (-not $worktreeRootFull.EndsWith('\')) {
+    $worktreeRootFull += '\'
+}
+$runRepoRootFull = [System.IO.Path]::GetFullPath($runRepoRoot)
+if (-not $runRepoRootFull.EndsWith('\')) {
+    $runRepoRootFull += '\'
+}
+if (-not $runRepoRootFull.StartsWith($worktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $runRepoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
 }
 
 $logRoot = Join-Path $repoRoot 'TestResults/agent-logs'

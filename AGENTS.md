@@ -22,6 +22,7 @@ Override:
 Preflight requirement:
 - If the chosen worktree root does not exist, ask the user to create it before proceeding.
 - For CI/self-hosted runners, ensure the directory is pre-created; fail fast with a clear message if missing.
+ - Local parity scripts hard-fail if `RepoRoot` is not under the worktree root; set `LVIE_WORKTREE_ROOT` or run from a worktree path.
 
 Example preflight (PowerShell):
 ```
