@@ -86,6 +86,10 @@ catch {
     exit 1
 }
 
+# 1b) Ensure VI Package output directory exists to avoid VIPM prompts
+$vipOutputDir = Join-Path -Path $ResolvedRepoRoot -ChildPath "builds/VI Package"
+New-Item -ItemType Directory -Path $vipOutputDir -Force | Out-Null
+
 # 2) Create release notes if needed and resolve the paths
 if (-not (Test-Path $ReleaseNotesFile)) {
     Write-Host "Release notes file '$ReleaseNotesFile' does not exist. Creating it..."
