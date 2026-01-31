@@ -159,6 +159,7 @@ With your runner online:
 CI jobs run from short-path worktrees to avoid Windows path limits. Each job creates:
 - `ci-<jobhash>-<bitness>-<runid>-<attempt>`
 - `jobhash` = first 8 chars of SHA1(`GITHUB_JOB`) to keep job names unique.
+- Some workflows insert an extra variant token (e.g. LabVIEW version) between `<jobhash>` and `<bitness>`.
 - Example: `C:\dev\ci-D170BDEE-64-21534416929-1`
 
 The workflow exports:

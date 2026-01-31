@@ -44,33 +44,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set worktree root (runner-scoped)
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-            $rootBase = $env:RUNNER_WORKSPACE
-            if ([string]::IsNullOrWhiteSpace($rootBase) -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-              $rootBase = Split-Path -Parent (Split-Path -Parent $env:GITHUB_WORKSPACE)
-            }
-            if ([string]::IsNullOrWhiteSpace($rootBase)) {
-              $rootBase = Split-Path -Parent $env:GITHUB_WORKSPACE
-            }
-            $root = Join-Path $rootBase 'w'
-            New-Item -Path $root -ItemType Directory -Force | Out-Null
-            "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          }
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
         run: |
-          $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GITHUB_JOB))).Replace('-','').Substring(0,8)
-          $name = "ci-$jobHash-${{ matrix.bitness }}-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $worktreeRoot = & "$env:GITHUB_WORKSPACE\Tooling\Ensure-WorktreeRoot.ps1"
-          $targetPath = Join-Path $worktreeRoot $name
-          $worktree = & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktree.ps1" -Ref $env:GITHUB_SHA -Path $targetPath
-          $projectPath = Join-Path $worktree 'lv_icon_editor.lvproj'
-          "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" -Bitness ${{ matrix.bitness }}
       - name: Initialize VerifyIEPaths archive folder
         shell: pwsh
         run: |
@@ -127,31 +105,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set worktree root (runner-scoped)
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-            $rootBase = $env:RUNNER_WORKSPACE
-            if ([string]::IsNullOrWhiteSpace($rootBase) -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-              $rootBase = Split-Path -Parent (Split-Path -Parent $env:GITHUB_WORKSPACE)
-            }
-            if ([string]::IsNullOrWhiteSpace($rootBase)) {
-              $rootBase = Split-Path -Parent $env:GITHUB_WORKSPACE
-            }
-            $root = Join-Path $rootBase 'w'
-            New-Item -Path $root -ItemType Directory -Force | Out-Null
-            "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          }
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
         run: |
-          $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GITHUB_JOB))).Replace('-','').Substring(0,8)
-          $name = "ci-$jobHash-64-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $worktreeRoot = & "$env:GITHUB_WORKSPACE\Tooling\Ensure-WorktreeRoot.ps1"
-          $targetPath = Join-Path $worktreeRoot $name
-          $worktree = & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktree.ps1" -Ref $env:GITHUB_SHA -Path $targetPath
-          "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" -Bitness 64
       - name: Apply VIPC (2021 x64)
         if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
@@ -183,31 +141,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set worktree root (runner-scoped)
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-            $rootBase = $env:RUNNER_WORKSPACE
-            if ([string]::IsNullOrWhiteSpace($rootBase) -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-              $rootBase = Split-Path -Parent (Split-Path -Parent $env:GITHUB_WORKSPACE)
-            }
-            if ([string]::IsNullOrWhiteSpace($rootBase)) {
-              $rootBase = Split-Path -Parent $env:GITHUB_WORKSPACE
-            }
-            $root = Join-Path $rootBase 'w'
-            New-Item -Path $root -ItemType Directory -Force | Out-Null
-            "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          }
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
         run: |
-          $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GITHUB_JOB))).Replace('-','').Substring(0,8)
-          $name = "ci-$jobHash-32-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $worktreeRoot = & "$env:GITHUB_WORKSPACE\Tooling\Ensure-WorktreeRoot.ps1"
-          $targetPath = Join-Path $worktreeRoot $name
-          $worktree = & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktree.ps1" -Ref $env:GITHUB_SHA -Path $targetPath
-          "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" -Bitness 32
       - name: Apply VIPC (2021 x86)
         if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
@@ -269,33 +207,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set worktree root (runner-scoped)
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-            $rootBase = $env:RUNNER_WORKSPACE
-            if ([string]::IsNullOrWhiteSpace($rootBase) -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-              $rootBase = Split-Path -Parent (Split-Path -Parent $env:GITHUB_WORKSPACE)
-            }
-            if ([string]::IsNullOrWhiteSpace($rootBase)) {
-              $rootBase = Split-Path -Parent $env:GITHUB_WORKSPACE
-            }
-            $root = Join-Path $rootBase 'w'
-            New-Item -Path $root -ItemType Directory -Force | Out-Null
-            "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          }
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
         run: |
-          $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GITHUB_JOB))).Replace('-','').Substring(0,8)
-          $name = "ci-$jobHash-${{ matrix.bitness }}-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $worktreeRoot = & "$env:GITHUB_WORKSPACE\Tooling\Ensure-WorktreeRoot.ps1"
-          $targetPath = Join-Path $worktreeRoot $name
-          $worktree = & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktree.ps1" -Ref $env:GITHUB_SHA -Path $targetPath
-          $projectPath = Join-Path $worktree 'lv_icon_editor.lvproj'
-          "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" -Bitness ${{ matrix.bitness }}
       - name: Enable Development Mode (2021 ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -353,31 +269,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set worktree root (runner-scoped)
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-            $rootBase = $env:RUNNER_WORKSPACE
-            if ([string]::IsNullOrWhiteSpace($rootBase) -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-              $rootBase = Split-Path -Parent (Split-Path -Parent $env:GITHUB_WORKSPACE)
-            }
-            if ([string]::IsNullOrWhiteSpace($rootBase)) {
-              $rootBase = Split-Path -Parent $env:GITHUB_WORKSPACE
-            }
-            $root = Join-Path $rootBase 'w'
-            New-Item -Path $root -ItemType Directory -Force | Out-Null
-            "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          }
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
         run: |
-          $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GITHUB_JOB))).Replace('-','').Substring(0,8)
-          $name = "ci-$jobHash-32-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $worktreeRoot = & "$env:GITHUB_WORKSPACE\Tooling\Ensure-WorktreeRoot.ps1"
-          $targetPath = Join-Path $worktreeRoot $name
-          $worktree = & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktree.ps1" -Ref $env:GITHUB_SHA -Path $targetPath
-          "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" -Bitness 32
       - name: Enable Development Mode (2021 32-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -444,31 +340,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set worktree root (runner-scoped)
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-            $rootBase = $env:RUNNER_WORKSPACE
-            if ([string]::IsNullOrWhiteSpace($rootBase) -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-              $rootBase = Split-Path -Parent (Split-Path -Parent $env:GITHUB_WORKSPACE)
-            }
-            if ([string]::IsNullOrWhiteSpace($rootBase)) {
-              $rootBase = Split-Path -Parent $env:GITHUB_WORKSPACE
-            }
-            $root = Join-Path $rootBase 'w'
-            New-Item -Path $root -ItemType Directory -Force | Out-Null
-            "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          }
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
         run: |
-          $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GITHUB_JOB))).Replace('-','').Substring(0,8)
-          $name = "ci-$jobHash-64-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $worktreeRoot = & "$env:GITHUB_WORKSPACE\Tooling\Ensure-WorktreeRoot.ps1"
-          $targetPath = Join-Path $worktreeRoot $name
-          $worktree = & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktree.ps1" -Ref $env:GITHUB_SHA -Path $targetPath
-          "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" -Bitness 64
       - name: Enable Development Mode (2021 64-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -535,33 +411,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set worktree root (runner-scoped)
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-            $rootBase = $env:RUNNER_WORKSPACE
-            if ([string]::IsNullOrWhiteSpace($rootBase) -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-              $rootBase = Split-Path -Parent (Split-Path -Parent $env:GITHUB_WORKSPACE)
-            }
-            if ([string]::IsNullOrWhiteSpace($rootBase)) {
-              $rootBase = Split-Path -Parent $env:GITHUB_WORKSPACE
-            }
-            $root = Join-Path $rootBase 'w'
-            New-Item -Path $root -ItemType Directory -Force | Out-Null
-            "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          }
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
         run: |
-          $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GITHUB_JOB))).Replace('-','').Substring(0,8)
-          $name = "ci-$jobHash-64-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $worktreeRoot = & "$env:GITHUB_WORKSPACE\Tooling\Ensure-WorktreeRoot.ps1"
-          $targetPath = Join-Path $worktreeRoot $name
-          $worktree = & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktree.ps1" -Ref $env:GITHUB_SHA -Path $targetPath
-          $projectPath = Join-Path $worktree 'lv_icon_editor.lvproj'
-          "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-          "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" -Bitness 64
       - name: Generate release notes
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
