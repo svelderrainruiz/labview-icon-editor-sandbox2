@@ -492,7 +492,7 @@ if (-not $repoRootFull.EndsWith('\')) {
     $repoRootFull += '\'
 }
 if (-not $repoRootFull.StartsWith($worktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-    Write-Warning ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $repoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
+    throw ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $repoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
 }
 Push-Location -Path $repoRoot
 $script:RunFailed = $false
