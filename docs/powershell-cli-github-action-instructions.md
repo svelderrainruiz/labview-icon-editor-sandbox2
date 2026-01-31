@@ -142,7 +142,7 @@ You’ll typically name the workflow file **`development-mode-toggle.yml`**. Its
 1. **Trigger Manually**  
    - Go to the **Actions** tab, select the "Development Mode Toggle" workflow, click "Run workflow."  
    - Choose `enable` or `disable` to run the corresponding PowerShell script (`Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`).  
-   - LabVIEW version is fixed to **2021** (`minimum_supported_lv_version` remains for compatibility; keep it set to `2021`).  
+   - LabVIEW version is fixed to **2021** (`labview_version`; `minimum_supported_lv_version` is deprecated).  
    - (Optional) Choose a bitness (`bitness`, default `64`).  
    - The workflow runs on your self-hosted runner (e.g., labeled `self-hosted-windows-lv`).  
 
@@ -152,7 +152,7 @@ You’ll typically name the workflow file **`development-mode-toggle.yml`**. Its
 
 3. **Trigger from Another Workflow**  
    - You can call this workflow using `workflow_call`. Pass the input parameter `mode` = `enable` or `disable`.  
-   - Pass `minimum_supported_lv_version: 2021` if you include the input (other values are not supported).  
+   - Pass `labview_version: 2021` if you include the input (other values are not supported).  
    - Optionally pass `bitness` (`32` or `64`) to select the LabVIEW bitness.  
    - The same runner used by the calling job is toggled accordingly.
 
@@ -173,7 +173,7 @@ jobs:
         uses: ./.github/workflows/development-mode-toggle.yml
         with:
           mode: enable
-          minimum_supported_lv_version: 2021
+          labview_version: 2021
           bitness: 64
 ```
 
@@ -191,7 +191,7 @@ jobs:
         uses: <owner>/<repo>/.github/workflows/development-mode-toggle.yml@main
         with:
           mode: disable
-          minimum_supported_lv_version: 2021
+          labview_version: 2021
           bitness: 64
 ```
 
@@ -209,7 +209,7 @@ jobs:
         uses: <your-fork>/<repo>/.github/workflows/development-mode-toggle.yml@my-feature-branch
         with:
           mode: enable
-          minimum_supported_lv_version: 2021
+          labview_version: 2021
           bitness: 64
 ```
 

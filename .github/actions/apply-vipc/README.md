@@ -27,7 +27,8 @@ Ensure a runner has all required LabVIEW packages installed before building or t
 ## Inputs
 | Name | Required | Example | Description |
 |------|----------|---------|-------------|
-| `minimum_supported_lv_version` | **Yes** | `2021` | LabVIEW *major* version that the repo supports. |
+| `labview_version` | **Yes** | `2021` | LabVIEW *major* version that the repo supports. |
+| `minimum_supported_lv_version` | No | `2021` | Deprecated. Use `labview_version`. |
 | `vip_lv_version` | **Yes** | `2021` | LabVIEW version used to apply the `.vipc` file. Usually the same as `minimum_supported_lv_version`. |
 | `supported_bitness` | **Yes** | `32` or `64` | LabVIEW bitness to target. |
 | `repo_root` | **Yes** | `${{ github.workspace }}` | Root path of the repository on disk. |
@@ -43,7 +44,7 @@ steps:
   - name: Install LabVIEW dependencies
     uses: ./.github/actions/apply-vipc
     with:
-      minimum_supported_lv_version: 2021
+      labview_version: 2021
       vip_lv_version: 2021
       supported_bitness: 64
       repo_root: ${{ github.workspace }}

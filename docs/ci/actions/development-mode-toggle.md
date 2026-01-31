@@ -23,7 +23,7 @@ You do **not** need to copy/paste the entire workflow snippet here, as it’s al
    - Go to the "Actions" tab on your (or your fork's) GitHub repository.
    - Select the **"Toggle Development Mode"** workflow.
    - Click "Run workflow" and choose either `enable` or `disable` from the dropdown.
-   - LabVIEW version is fixed to **2021** (`minimum_supported_lv_version` remains for compatibility; keep it set to `2021`).
+   - LabVIEW version is fixed to **2021** (`labview_version`; `minimum_supported_lv_version` is deprecated but still accepted).
    - (Optional) Choose a bitness (`bitness`, default `64`).
    - This will execute the PowerShell scripts ([`Set_Development_Mode.ps1`](../../../.github/actions/set-development-mode/Set_Development_Mode.ps1) or [`RevertDevelopmentMode.ps1`](../../../.github/actions/revert-development-mode/RevertDevelopmentMode.ps1)) on the **target self-hosted runner** (your personal machine or a shared machine).
 
@@ -34,7 +34,8 @@ You do **not** need to copy/paste the entire workflow snippet here, as it’s al
 3. **Triggering from Another Workflow**
    - Use a `workflow_call` reference (detailed examples below).
    - Pass the input parameter `mode` set to `enable` or `disable`.
-   - Pass `minimum_supported_lv_version: 2021` if you include the input (other values are not supported).
+   - Pass `labview_version: 2021` if you include the input (other values are not supported).
+   - `minimum_supported_lv_version` is a deprecated alias.
    - Optionally pass `bitness` (`32` or `64`) to select the LabVIEW bitness.
    - The runner that calls it will be the one switched into (or out of) dev mode.
 
@@ -60,7 +61,7 @@ If you have another workflow file (e.g., `my-other-workflow.yml`) in the same re
             uses: ./.github/workflows/development-mode-toggle.yml
             with:
               mode: enable
-              minimum_supported_lv_version: 2021
+              labview_version: 2021
               bitness: 64
 
 1. `uses: ./.github/workflows/development-mode-toggle.yml` – Tells GitHub to run a local reusable workflow found in your repo.
@@ -83,7 +84,7 @@ If you store “Development mode toggle” in a separate public repo, you can re
             uses: <owner>/<repo>/.github/workflows/development-mode-toggle.yml@main
             with:
               mode: disable
-              minimum_supported_lv_version: 2021
+              labview_version: 2021
               bitness: 64
 
 1. Replace `<owner>/<repo>` with the actual GitHub account and repository name (for example, `ni/my-shared-workflows`).
@@ -107,7 +108,7 @@ If a collaborator forked your original repo, they might keep the workflow in the
             uses: <your-fork>/<repo>/.github/workflows/development-mode-toggle.yml@my-feature-branch
             with:
               mode: enable
-              minimum_supported_lv_version: 2021
+              labview_version: 2021
               bitness: 64
 
 Here, you might see something like `githubuser/labview-icon-editor-fork/.github/workflows/development-mode-toggle.yml@feature-xyz`. Again, you pass the `mode` input as needed. Whenever upstream changes are made to the scripts, the fork owner can **pull** to update their local `.github/workflows/development-mode-toggle.yml` file.

@@ -13,12 +13,19 @@ runs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
+        $lvVersion = "${{ inputs.labview_version }}"
+        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+          $lvVersion = "${{ inputs.minimum_supported_lv_version }}"
+        }
+        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+          throw "labview_version is required."
+        }
         $logDir = Join-Path -Path "${{ inputs.repo_root }}" -ChildPath "builds/logs"
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         $logFile = Join-Path -Path $logDir -ChildPath "gcli-preflight.log"
 
         $gcliArgs = @(
-          "--lv-ver", "${{ inputs.minimum_supported_lv_version }}",
+          "--lv-ver", $lvVersion,
           "--arch", "${{ inputs.supported_bitness }}",
           "--connect-timeout", "60000",
           "--kill",
@@ -96,13 +103,20 @@ runs:
         DISPLAY_INFORMATION_JSON: |
           ${{ inputs.display_information_json }}
       run: |
+        $lvVersion = "${{ inputs.labview_version }}"
+        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+          $lvVersion = "${{ inputs.minimum_supported_lv_version }}"
+        }
+        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+          throw "labview_version is required."
+        }
         $displayInformationJson = $Env:DISPLAY_INFORMATION_JSON
 
         & "${{ github.action_path }}/build_vip.ps1" `
           -SupportedBitness ${{ inputs.supported_bitness }} `
           -RepoRoot "${{ inputs.repo_root }}" `
           -VIPBPath "${{ inputs.vipb_path }}" `
-          -MinimumSupportedLVVersion ${{ inputs.minimum_supported_lv_version }} `
+          -MinimumSupportedLVVersion $lvVersion `
           -LabVIEWMinorRevision ${{ inputs.labview_minor_revision }} `
           -Major ${{ inputs.major }} `
           -Minor ${{ inputs.minor }} `
@@ -225,6 +239,9 @@ runs:
         Get-Content -Path $path | ForEach-Object { Write-Host $_ }
         Write-Host "---- end release notes ----"
 inputs:
+  labview_version:
+    description: 'LabVIEW version to target (2021/21.0 only).'
+    required: false
   supported_bitness:
     description: '32 or 64'
     required: true
@@ -235,8 +252,8 @@ inputs:
     description: 'Path to the VIPB file (relative to workspace)'
     required: true
   minimum_supported_lv_version:
-    description: 'LabVIEW 2021 (21.0)'
-    required: true
+    description: 'Deprecated. Use labview_version.'
+    required: false
   labview_minor_revision:
     description: 'LabVIEW minor revision (0 for 21.0)'
     required: false

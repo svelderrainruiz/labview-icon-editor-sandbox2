@@ -85,7 +85,7 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 1. **Development Mode Toggle**  
    - `mode: enable` → calls `Set_Development_Mode.ps1`.  
    - `mode: disable` → calls `RevertDevelopmentMode.ps1`.  
-   - Optional `minimum_supported_lv_version` (default `2021`, only `2021` is supported).
+   - Optional `labview_version` (default `2021`, only `2021` is supported; `minimum_supported_lv_version` is deprecated).
    - Great for reconfiguring LabVIEW for local dev vs. distribution builds.
 
 2. **CI Pipeline (Composite)**
@@ -138,7 +138,7 @@ With your runner online:
 
 1. **Enable Dev Mode** (if needed)
    - **Actions → Development Mode Toggle**, set `mode: enable`.
-   - `minimum_supported_lv_version` is fixed to `2021` if provided.
+   - `labview_version` is fixed to `2021` if provided.
 
 2. **Run Tests via CI Pipeline (Composite)**
    - Execute the workflow and review the **test** job logs to confirm all unit tests pass.
@@ -150,7 +150,7 @@ With your runner online:
 
 4. **Disable Dev Mode** (if used)  
    - `mode: disable` reverts your LabVIEW environment.
-   - Keep `minimum_supported_lv_version` set to `2021` if you include it.
+   - Keep `labview_version` set to `2021` if you include it.
 
 5. **Review the `.vip`**
    - Download from **Artifacts**. Publishing to a GitHub release requires a separate workflow.

@@ -34,7 +34,7 @@ function Start-DevModeRun {
         '--repo', $Repo,
         '--ref', $Ref,
         '-f', "mode=$Mode",
-        '-f', "minimum_supported_lv_version=$LabVIEWVersion",
+        '-f', "labview_version=$LabVIEWVersion",
         '-f', "sequence_id=$SequenceId"
     )
 

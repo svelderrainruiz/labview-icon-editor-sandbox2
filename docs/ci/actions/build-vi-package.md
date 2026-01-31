@@ -104,7 +104,8 @@ That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Th
 | Input | Description |
 | --- | --- |
 | `supported_bitness` | `32` or `64`; selects the VI Package bitness. |
-| `minimum_supported_lv_version` | LabVIEW 2021 (21.0). |
+| `labview_version` | LabVIEW 2021 (21.0). |
+| `minimum_supported_lv_version` | Deprecated. Use `labview_version`. |
 | `labview_minor_revision` | LabVIEW minor revision (defaults to `0`). |
 | `major` | Major version component. |
 | `minor` | Minor version component. |
@@ -272,7 +273,7 @@ components remain unchanged and only the build number increases.
   ```yaml
   - uses: ./.github/actions/run-unit-tests
     with:
-      minimum_supported_lv_version: ${{ matrix['lv-version'] }}
+      labview_version: ${{ matrix['lv-version'] }}
       supported_bitness:            ${{ matrix.bitness }}
   ```
 - Ensure they pass before building the `.vip`. If they fail, the script can exit with a non-zero code, stopping the workflow run.

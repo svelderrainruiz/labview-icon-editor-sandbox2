@@ -1,8 +1,11 @@
 name: "Set Development Mode"
 description: "Runs Set_Development_Mode.ps1 to configure the repo for development."
 inputs:
+  labview_version:
+    description: 'LabVIEW version to target (2021/21.0 only).'
+    required: false
   minimum_supported_lv_version:
-    description: 'LabVIEW 2021 (21.0) only'
+    description: 'Deprecated. Use labview_version.'
     required: false
     default: '2021'
   supported_bitness:
@@ -22,8 +25,16 @@ runs:
     - name: Run Set_Development_Mode.ps1
       shell: pwsh
       run: |
+        $lvVersion = "${{ inputs.labview_version }}"
+        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+          $lvVersion = "${{ inputs.minimum_supported_lv_version }}"
+        }
+        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+          throw "labview_version is required."
+        }
+
         $scriptArgs = @{
-          MinimumSupportedLVVersion = "${{ inputs.minimum_supported_lv_version }}"
+          MinimumSupportedLVVersion = $lvVersion
         }
 
         if ("${{ inputs.repo_root }}" -ne "") {
