@@ -166,6 +166,16 @@ The workflow exports:
 - `REPO_ROOT` → worktree path (authoritative for scripts)
 - `PROJECT_PATH` → `$REPO_ROOT\lv_icon_editor.lvproj`
 
+#### Run CI for a specific commit (workflow_dispatch)
+If you need deterministic runs for a specific commit, use the helper script:
+```
+pwsh -NoProfile -File .\Tooling\Run-CICompositeForCommit.ps1 -Sha <commit>
+```
+
+Notes:
+- The script creates a temporary `ci-run/<shortsha>` branch and dispatches the workflow on it.
+- Use `-CleanupRemote` to delete the temporary branch after dispatch.
+
 
 <a name="example-developer-workflow"></a>
 ### 5. Example Developer Workflow
