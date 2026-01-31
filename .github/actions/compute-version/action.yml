@@ -100,3 +100,5 @@ runs:
         "MINOR=$min"            | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
         "PATCH=$pat"            | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
         "IS_PRERELEASE=$isPre"  | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+
+

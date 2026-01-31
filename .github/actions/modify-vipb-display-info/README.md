@@ -9,7 +9,6 @@ Execute **`ModifyVIPBDisplayInfo.ps1`** to merge metadata into a `.vipb` file be
 | `repo_root` | **Yes** | `${{ github.workspace }}` | Repository root path. |
 | `vipb_path` | **Yes** | `Tooling/deployment/NI Icon editor.vipb` | Path to the VIPB file. |
 | `labview_version` | **Yes** | `2021` | LabVIEW 2021 (21.0). |
-| `minimum_supported_lv_version` | No | `2021` | Deprecated. Use `labview_version`. |
 | `labview_minor_revision` | No (defaults to `0`) | `0` | LabVIEW minor revision. |
 | `major` | **Yes** | `1` | Major version component. |
 | `minor` | **Yes** | `0` | Minor version component. |

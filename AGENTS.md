@@ -54,6 +54,9 @@ Example: `C:\dev\ci-D170BDEE-64-21534416929-1`
 The workflow exports:
 - `REPO_ROOT` → worktree path (authoritative for all scripts)
 - `PROJECT_PATH` → `$REPO_ROOT\lv_icon_editor.lvproj`
+- `LABVIEW_VERSION_YEAR` / `LABVIEW_MINOR_REVISION` → derived from `.lvversion` (e.g., `21.0` → `2021` and minor `0`)
+
+Note: CI reads `.lvversion` from `REPO_ROOT` as the canonical LabVIEW version for runs.
 
 Helper used by CI:
 ```

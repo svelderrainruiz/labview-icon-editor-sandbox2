@@ -105,7 +105,6 @@ That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Th
 | --- | --- |
 | `supported_bitness` | `32` or `64`; selects the VI Package bitness. |
 | `labview_version` | LabVIEW 2021 (21.0). |
-| `minimum_supported_lv_version` | Deprecated. Use `labview_version`. |
 | `labview_minor_revision` | LabVIEW minor revision (defaults to `0`). |
 | `major` | Major version component. |
 | `minor` | Minor version component. |

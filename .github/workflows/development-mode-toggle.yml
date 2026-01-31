@@ -12,12 +12,7 @@ on:
       labview_version:
         description: "LabVIEW version to target (2021/21.0 only)."
         type: string
-        required: false
-      minimum_supported_lv_version:
-        description: "Deprecated. Use labview_version."
-        type: string
-        required: false
-        default: "2021"
+        required: true
       bitness:
         description: "LabVIEW bitness to target (32 or 64)."
         type: string
@@ -41,14 +36,7 @@ on:
           - disable
       labview_version:
         description: "LabVIEW version."
-        required: false
-        default: "2021"
-        type: choice
-        options:
-          - "2021"
-      minimum_supported_lv_version:
-        description: "Deprecated. Use labview_version."
-        required: false
+        required: true
         default: "2021"
         type: choice
         options:
@@ -72,12 +60,12 @@ run-name: ${{
     format('DevMode {0} {1}-bit LV{2} seq={3}', 
       github.event.inputs.mode == 'enable' && 'enable' || 'disable',
       github.event.inputs.bitness || '64',
-      github.event.inputs.labview_version || github.event.inputs.minimum_supported_lv_version || '2021',
+      github.event.inputs.labview_version || '2021',
       github.event.inputs.sequence_id || 'none') || 
     format('DevMode {0} {1}-bit LV{2} seq={3}', 
       inputs.mode == 'enable' && 'enable' || 'disable',
       inputs.bitness || '64',
-      inputs.labview_version || inputs.minimum_supported_lv_version || '2021',
+      inputs.labview_version || '2021',
       inputs.sequence_id || 'none') }}
 
 jobs:
@@ -94,11 +82,11 @@ jobs:
         format('{0} {1}-bit Dev Mode LV{2}', 
           github.event.inputs.mode == 'enable' && 'Enable' || 'Disable',
           github.event.inputs.bitness || '64',
-          github.event.inputs.labview_version || github.event.inputs.minimum_supported_lv_version || '2021') || 
+          github.event.inputs.labview_version || '2021') || 
         format('{0} {1}-bit Dev Mode LV{2}', 
           inputs.mode == 'enable' && 'Enable' || 'Disable',
           inputs.bitness || '64',
-          inputs.labview_version || inputs.minimum_supported_lv_version || '2021') }}
+          inputs.labview_version || '2021') }}
 
     runs-on: [self-hosted-windows-lv]
     env:
@@ -131,15 +119,9 @@ jobs:
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $mode = '${{ github.event.inputs.mode }}'
             $lvVersion = '${{ github.event.inputs.labview_version }}'
-            if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-              $lvVersion = '${{ github.event.inputs.minimum_supported_lv_version }}'
-            }
           } else {
             $mode = '${{ inputs.mode }}'
             $lvVersion = '${{ inputs.labview_version }}'
-            if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-              $lvVersion = '${{ inputs.minimum_supported_lv_version }}'
-            }
           }
 
           if ([string]::IsNullOrWhiteSpace($lvVersion)) {
@@ -174,15 +156,9 @@ jobs:
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $mode = '${{ github.event.inputs.mode }}'
             $lvVersion = '${{ github.event.inputs.labview_version }}'
-            if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-              $lvVersion = '${{ github.event.inputs.minimum_supported_lv_version }}'
-            }
           } else {
             $mode = '${{ inputs.mode }}'
             $lvVersion = '${{ inputs.labview_version }}'
-            if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-              $lvVersion = '${{ inputs.minimum_supported_lv_version }}'
-            }
           }
 
           if ([string]::IsNullOrWhiteSpace($lvVersion)) {

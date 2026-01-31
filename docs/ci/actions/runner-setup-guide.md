@@ -85,7 +85,7 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 1. **Development Mode Toggle**  
    - `mode: enable` → calls `Set_Development_Mode.ps1`.  
    - `mode: disable` → calls `RevertDevelopmentMode.ps1`.  
-   - Optional `labview_version` (default `2021`, only `2021` is supported; `minimum_supported_lv_version` is deprecated).
+   - `labview_version` (default `2021`, only `2021` is supported).
    - Great for reconfiguring LabVIEW for local dev vs. distribution builds.
 
 2. **CI Pipeline (Composite)**
@@ -165,6 +165,9 @@ CI jobs run from short-path worktrees to avoid Windows path limits. Each job cre
 The workflow exports:
 - `REPO_ROOT` → worktree path (authoritative for scripts)
 - `PROJECT_PATH` → `$REPO_ROOT\lv_icon_editor.lvproj`
+- `LABVIEW_VERSION_YEAR` / `LABVIEW_MINOR_REVISION` → derived from `.lvversion` (e.g., `21.0` → `2021` and minor `0`)
+
+CI treats `.lvversion` in `REPO_ROOT` as the canonical LabVIEW version for the run.
 
 #### Run CI for a specific commit (workflow_dispatch)
 If you need deterministic runs for a specific commit, use the helper script:

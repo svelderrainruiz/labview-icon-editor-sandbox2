@@ -13,9 +13,6 @@ runs:
       run: |
         $lvVersion = "${{ inputs.labview_version }}"
         if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-          $lvVersion = "${{ inputs.minimum_supported_lv_version }}"
-        }
-        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
           throw "labview_version is required."
         }
 
@@ -28,10 +25,7 @@ runs:
 inputs:
   labview_version:
     description: 'LabVIEW version to target (2021/21.0 only).'
-    required: false
-  minimum_supported_lv_version:
-    description: 'Deprecated. Use labview_version.'
-    required: false
+    required: true
   vip_lv_version:
     description: 'VIPC LabVIEW version (2021 / 21.0)'
     required: true
@@ -44,3 +38,5 @@ inputs:
   vipc_path:
     description: 'Path under repo for the .vipc file (relative to workspace)'
     required: true
+
+

@@ -13,9 +13,6 @@ runs:
       run: |
         $lvVersion = "${{ inputs.labview_version }}"
         if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-          $lvVersion = "${{ inputs.minimum_supported_lv_version }}"
-        }
-        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
           throw "labview_version is required."
         }
 
@@ -33,14 +30,12 @@ runs:
 inputs:
   labview_version:
     description: 'LabVIEW version to target (2021/21.0 only).'
-    required: false
-  minimum_supported_lv_version:
-    description: 'Deprecated. Use labview_version.'
-    required: false
-    default: '2021'
+    required: true
   supported_bitness:
     description: 'LabVIEW bitness (32 or 64).'
     required: true
   repo_root:
     description: 'Workspace root path'
     required: false
+
+

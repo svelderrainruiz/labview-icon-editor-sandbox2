@@ -17,3 +17,5 @@ runs:
       shell: pwsh
       run: |
         & "${{ github.action_path }}/GenerateReleaseNotes.ps1" -OutputPath "${{ inputs.output_path }}"
+
+

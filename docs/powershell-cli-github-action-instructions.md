@@ -142,7 +142,7 @@ You’ll typically name the workflow file **`development-mode-toggle.yml`**. Its
 1. **Trigger Manually**  
    - Go to the **Actions** tab, select the "Development Mode Toggle" workflow, click "Run workflow."  
    - Choose `enable` or `disable` to run the corresponding PowerShell script (`Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`).  
-   - LabVIEW version is fixed to **2021** (`labview_version`; `minimum_supported_lv_version` is deprecated).  
+   - LabVIEW version is fixed to **2021** (`labview_version`).  
    - Choose a bitness (`bitness`, default `64`).  
    - The workflow runs on your self-hosted runner (e.g., labeled `self-hosted-windows-lv`).  
 

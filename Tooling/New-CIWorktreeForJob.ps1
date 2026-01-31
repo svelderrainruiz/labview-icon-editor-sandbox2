@@ -88,6 +88,45 @@ function Resolve-RepoRoot {
     return (Resolve-Path -Path (Join-Path $PSScriptRoot '..')).Path
 }
 
+function Resolve-LabVIEWVersionInfo {
+    param([string]$VersionPath)
+
+    if (-not (Test-Path -Path $VersionPath)) {
+        throw ".lvversion not found at $VersionPath"
+    }
+
+    $raw = (Get-Content -Raw -Path $VersionPath).Trim()
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        throw ".lvversion is empty at $VersionPath"
+    }
+
+    if (-not ($raw -match '^(?<major>\d{2,4})(?:\.(?<minor>\d+))?$')) {
+        throw ".lvversion value '$raw' is invalid. Expected formats like '21.0' or '2021.0'."
+    }
+
+    $majorRaw = [int]$Matches['major']
+    $minor = if ($Matches['minor']) { [int]$Matches['minor'] } else { 0 }
+
+    if ($majorRaw -ge 2000) {
+        $year = $majorRaw
+        $numericMajor = $majorRaw - 2000
+    } else {
+        $numericMajor = $majorRaw
+        $year = 2000 + $majorRaw
+    }
+
+    if ($numericMajor -lt 0) {
+        throw ".lvversion value '$raw' produced an invalid LabVIEW numeric major."
+    }
+
+    [pscustomobject]@{
+        Raw            = $raw
+        Year           = $year
+        MinorRevision  = $minor
+        NumericVersion = "$numericMajor.$minor"
+    }
+}
+
 $repoRoot = Resolve-RepoRoot -BasePath $RepoRoot
 
 $jobName = $JobName
@@ -175,11 +214,18 @@ if (-not (Test-Path -Path $worktreeScript)) {
 $worktree = & $worktreeScript -Ref $ref -Path $targetPath -WorktreeRoot $root
 $projectPath = Join-Path $worktree $ProjectFile
 
+$lvInfo = Resolve-LabVIEWVersionInfo -VersionPath (Join-Path $worktree '.lvversion')
+
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) {
     "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+    "LABVIEW_VERSION_RAW=$($lvInfo.Raw)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+    "LABVIEW_VERSION_YEAR=$($lvInfo.Year)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+    "LABVIEW_MINOR_REVISION=$($lvInfo.MinorRevision)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+    "LABVIEW_NUMERIC_VERSION=$($lvInfo.NumericVersion)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
 }
 
 Write-Host ("Worktree created: {0}" -f $worktree)
+Write-Host ("LabVIEW version: {0} (year {1}, minor {2})" -f $lvInfo.Raw, $lvInfo.Year, $lvInfo.MinorRevision)
 Write-Output $worktree

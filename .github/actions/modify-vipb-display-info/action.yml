@@ -17,9 +17,6 @@ runs:
       run: |
         $lvVersion = "${{ inputs.labview_version }}"
         if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-          $lvVersion = "${{ inputs.minimum_supported_lv_version }}"
-        }
-        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
           throw "labview_version is required."
         }
         $displayInformationJson = $Env:DISPLAY_INFORMATION_JSON
@@ -39,7 +36,7 @@ runs:
 inputs:
   labview_version:
     description: 'LabVIEW version to target (2021/21.0 only).'
-    required: false
+    required: true
   supported_bitness:
     description: '32 or 64'
     required: true
@@ -49,9 +46,6 @@ inputs:
   vipb_path:
     description: 'Path to the VIPB file (relative to workspace)'
     required: true
-  minimum_supported_lv_version:
-    description: 'Deprecated. Use labview_version.'
-    required: false
   labview_minor_revision:
     description: 'LabVIEW minor revision (0 for 21.0)'
     required: false
@@ -77,3 +71,5 @@ inputs:
   display_information_json:
     description: 'DisplayInformation JSON string'
     required: true
+
+

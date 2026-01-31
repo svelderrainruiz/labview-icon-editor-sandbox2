@@ -6,14 +6,13 @@ Run **`Close_LabVIEW.ps1`** to terminate a running LabVIEW instance via g-cli.
 | Name | Required | Example | Description |
 |------|----------|---------|-------------|
 | `labview_version` | **Yes** | `2021` | LabVIEW 2021 (21.0) to close. |
-| `minimum_supported_lv_version` | No | `2021` | Deprecated. Use `labview_version`. |
 | `supported_bitness` | **Yes** | `32` or `64` | Target LabVIEW bitness. |
 
 ## Quick-start
 ```yaml
 - uses: ./.github/actions/close-labview
   with:
-    minimum_supported_lv_version: 2021
+    labview_version: 2021
     # preferred:
     # labview_version: 2021
     supported_bitness: 64
