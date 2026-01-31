@@ -154,6 +154,16 @@ Prune stale worktree metadata (after deleting folders manually):
 git worktree prune
 ```
 
+## Run CI for a specific commit (workflow_dispatch)
+Use the helper to target a specific commit without relying on PR pushes:
+```
+pwsh -NoProfile -File .\Tooling\Run-CICompositeForCommit.ps1 -Sha <commit>
+```
+
+Notes:
+- The script creates a temporary branch under `ci-run/<shortsha>` and dispatches the workflow.
+- Use `-CleanupRemote` if you want the temporary branch deleted after dispatch.
+
 ## Background automation safety
 Some automation may be running in the background and must not be killed. Do not terminate `g-cli` or `LabVIEW` processes unless you have explicit confirmation it is safe.
 - Before running a new step, record active processes:
