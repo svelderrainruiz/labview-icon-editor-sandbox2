@@ -48,6 +48,15 @@
 
 .PARAMETER SkipWorktreeRootCheck
     Skip enforcing that RepoRoot is under the worktree root.
+
+.PARAMETER RunId
+    Optional run identifier used for artifact isolation.
+
+.PARAMETER ArtifactRoot
+    Optional override for the artifact output root.
+
+.PARAMETER CleanRoom
+    If set, purge known output folders before and after the run.
 #>
 
 [CmdletBinding()]
@@ -100,7 +109,15 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$RepoRoot,
 
-    [switch]$SkipWorktreeRootCheck
+    [switch]$SkipWorktreeRootCheck,
+
+    [Parameter(Mandatory = $false)]
+    [string]$RunId,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ArtifactRoot,
+
+    [switch]$CleanRoom
 )
 
 $ErrorActionPreference = 'Stop'
@@ -149,9 +166,9 @@ function Write-AutoHistoryEntry {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
-$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
+$preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
 }
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewInfo = $null
@@ -190,32 +207,32 @@ if ($UseWorktree) {
     $runRepoRoot = & $worktreeScript -Ref HEAD -Name $suffix -WorktreeRoot $resolvedWorktreeRoot
     Write-Host ("Using worktree: {0}" -f $runRepoRoot)
 }
-$guardRoot = if ($resolvedWorktreeRoot) { $resolvedWorktreeRoot } else { $WorktreeRoot }
-if (Get-Command Assert-RepoRootUnderWorktreeRoot -ErrorAction SilentlyContinue) {
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $runRepoRoot -WorktreeRoot $guardRoot -Skip:$SkipWorktreeRootCheck -Context 'Run-CICompositeLocal-Auto'
-    Write-WorktreeContext -RepoRoot $runRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Run-CICompositeLocal-Auto'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+$preflight = $null
+$artifactRootResolved = $null
+if (Get-Command Invoke-Preflight -ErrorAction SilentlyContinue) {
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $runRepoRoot `
+        -WorktreeRoot $resolvedWorktreeRoot `
+        -LabVIEWVersion $LabVIEWVersion `
+        -LabVIEWBitness 'both' `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$false `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs `
+        -RunId $RunId `
+        -ArtifactRoot $ArtifactRoot `
+        -CleanRoom:$CleanRoom
+    if ($preflight.Reinvoked) {
+        return
     }
-} else {
-    $worktreeRoot = $env:LVIE_WORKTREE_ROOT
-    if ([string]::IsNullOrWhiteSpace($worktreeRoot)) {
-        $worktreeRoot = 'C:\dev'
-    }
-    $worktreeRootFull = [System.IO.Path]::GetFullPath($worktreeRoot)
-    if (-not $worktreeRootFull.EndsWith('\')) {
-        $worktreeRootFull += '\'
-    }
-    $runRepoRootFull = [System.IO.Path]::GetFullPath($runRepoRoot)
-    if (-not $runRepoRootFull.EndsWith('\')) {
-        $runRepoRootFull += '\'
-    }
-    if (-not $runRepoRootFull.StartsWith($worktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $runRepoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
-    }
+    $artifactRootResolved = $preflight.ArtifactRoot
+} elseif ($resolvedWorktreeRoot) {
+    $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
 }
 
-$logRoot = Join-Path $repoRoot 'TestResults/agent-logs'
+$logRoot = if ($artifactRootResolved) { Join-Path $artifactRootResolved 'agent-logs' } else { Join-Path $repoRoot 'TestResults/agent-logs' }
 New-Item -Path $logRoot -ItemType Directory -Force | Out-Null
 $historyPath = Join-Path $logRoot 'auto-run-history.csv'
 Ensure-CsvHeader -Path $historyPath -Header 'timestamp,attempt,status,duration_seconds,connect_timeout_ms,process_timeout_ms'
@@ -232,6 +249,7 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
     $status = 'success'
     $startTime = Get-Date
     try {
+        $attemptRunId = if ($preflight -and $preflight.RunId) { \"{0}-{1}\" -f $preflight.RunId, $attemptLabel } else { $null }
         & $runScript `
             -LabVIEWVersion $LabVIEWVersion `
             -EnsureCleanState:$EnsureCleanState `
@@ -239,7 +257,10 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
             -ProcessTimeoutMs $attemptProcessTimeout `
             -RepoRoot $runRepoRoot `
             -WorktreeRoot $resolvedWorktreeRoot `
-            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck
+            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+            -RunId $attemptRunId `
+            -ArtifactRoot $ArtifactRoot `
+            -CleanRoom:$CleanRoom
     } catch {
         $status = "error:{0}" -f $_.Exception.Message
     }
@@ -258,4 +279,8 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
 
     $attemptConnectTimeout = [Math]::Min([int]([Math]::Ceiling($attemptConnectTimeout * $ConnectTimeoutGrowth)), $MaxConnectTimeoutMs)
     $attemptProcessTimeout = [Math]::Min([int]([Math]::Ceiling($attemptProcessTimeout * $ProcessTimeoutGrowth)), $MaxProcessTimeoutMs)
+}
+
+if ($preflight -and $preflight.CleanRoomAfter) {
+    Invoke-PreflightCleanup -RepoRoot $preflight.RepoRoot -Phase 'after'
 }

@@ -4,6 +4,8 @@ This document lists the PowerShell scripts used to build, test, and distribute t
 
 Local entrypoints enforce short-path worktree usage by default. If a script fails because the repo is not under the worktree root, use `Tooling\New-CIWorktree.ps1` or `Tooling\Invoke-InWorktree.ps1`. Set `LVIE_SKIP_WORKTREE_ROOT_CHECK=1` or pass `-SkipWorktreeRootCheck` only when you intentionally want to bypass the guard.
 
+Per-run artifacts are written under `$WORKTREE_ROOT\artifacts\<runid>` when guardrails are active. Use `-RunId` or `-ArtifactRoot` to override, and `-CleanRoom` to purge known output folders before and after a run. Artifact roots are disabled by default inside GitHub Actions unless `LVIE_ENABLE_ARTIFACT_ROOT=1` (or an explicit `-ArtifactRoot`/`-RunId` is provided).
+
 ## Table of Contents
 
 - [AddTokenToLabVIEW.ps1](#addtokentolabviewps1)
@@ -23,6 +25,7 @@ Local entrypoints enforce short-path worktree usage by default. If a script fail
 - [Run-CICompositeLocal.ps1](#run-cicompositelocalps1)
 - [Invoke-InWorktree.ps1](#invoke-inworktreeps1)
 - [WorktreeGuard.ps1](#worktreeguardps1)
+- [Invoke-Preflight.ps1](#invoke-preflightps1)
 
 ---
 
@@ -76,4 +79,7 @@ Creates a short-path worktree and runs a command or script from that path. Use t
 
 ## WorktreeGuard.ps1
 Shared helper used by local entrypoints to enforce that `RepoRoot` is under the configured worktree root. Supports `-SkipWorktreeRootCheck` and `LVIE_SKIP_WORKTREE_ROOT_CHECK=1` for explicit bypass scenarios.
+
+## Invoke-Preflight.ps1
+Shared preflight used by local entrypoints. Enforces worktree root usage, creates per-run artifact roots, logs run context, and supports `-AutoWorktree` and `-CleanRoom` options.
 

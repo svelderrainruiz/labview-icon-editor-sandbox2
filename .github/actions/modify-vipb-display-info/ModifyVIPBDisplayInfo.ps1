@@ -87,15 +87,25 @@ catch {
     exit 1
 }
 
-# 1a) Worktree guard (optional for local runs)
-$worktreeGuard = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $ResolvedRepoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'ModifyVIPBDisplayInfo'
-    Write-WorktreeContext -RepoRoot $ResolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'ModifyVIPBDisplayInfo'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+# 1a) Worktree preflight (optional for local runs)
+$preflightScript = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $ResolvedRepoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $ResolvedRepoRoot `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion $MinimumSupportedLVVersion `
+        -LabVIEWBitness $SupportedBitness `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$false `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs
+    if ($preflight.Reinvoked) {
+        return
     }
+    $ResolvedRepoRoot = $preflight.RepoRoot
 }
 
 # 2) Create release notes if needed

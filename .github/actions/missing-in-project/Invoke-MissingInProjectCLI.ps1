@@ -11,14 +11,24 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..\..')).Path
-$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Invoke-MissingInProjectCLI'
-    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Invoke-MissingInProjectCLI'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+$preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $repoRoot `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion $LVVersion `
+        -LabVIEWBitness $Arch `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$false `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs
+    if ($preflight.Reinvoked) {
+        return
     }
+    $repoRoot = $preflight.RepoRoot
 }
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $LVVersion
@@ -153,6 +163,19 @@ finally {
 $passed = ($Script:HelperExitCode -eq 0) -and ($Script:MissingFileLines.Count -eq 0) -and (-not $Script:ParsingFailed)
 $passedStr   = $passed.ToString().ToLower()
 $missingCsv  = ($Script:MissingFileLines -join ',')
+
+$artifactRoot = $env:LVIE_ARTIFACT_ROOT
+if (-not [string]::IsNullOrWhiteSpace($artifactRoot) -and (Test-Path $MissingFilePath)) {
+    try {
+        $targetDir = Join-Path $artifactRoot 'missing-in-project'
+        if (-not (Test-Path -Path $targetDir)) {
+            New-Item -Path $targetDir -ItemType Directory -Force | Out-Null
+        }
+        Copy-Item -Path $MissingFilePath -Destination (Join-Path $targetDir 'missing_files.txt') -Force
+    } catch {
+        Write-Warning ("Failed to copy missing_files.txt to artifact root: {0}" -f $_.Exception.Message)
+    }
+}
 
 if ($env:GITHUB_OUTPUT) {
     Add-Content -Path $env:GITHUB_OUTPUT -Value "passed=$passedStr"

@@ -39,14 +39,24 @@ try {
     $ResolvedRepoRoot = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
     Write-Verbose "ResolvedRepoRoot: $ResolvedRepoRoot"
 
-    $worktreeGuard = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\WorktreeGuard.ps1'
-    if (Test-Path -Path $worktreeGuard) {
-        . $worktreeGuard
-        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $ResolvedRepoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'ApplyVIPC'
-        Write-WorktreeContext -RepoRoot $ResolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'ApplyVIPC'
-        if ($resolvedWorktreeRoot) {
-            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    $preflightScript = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\Invoke-Preflight.ps1'
+    if (Test-Path -Path $preflightScript) {
+        . $preflightScript
+        $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+        $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $ResolvedRepoRoot -Path $PSCommandPath } else { $null }
+        $preflight = Invoke-Preflight `
+            -RepoRoot $ResolvedRepoRoot `
+            -WorktreeRoot $WorktreeRoot `
+            -LabVIEWVersion $MinimumSupportedLVVersion `
+            -LabVIEWBitness $SupportedBitness `
+            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+            -AutoWorktree:$false `
+            -ScriptPath $relativeScript `
+            -ScriptArguments $scriptArgs
+        if ($preflight.Reinvoked) {
+            return
         }
+        $ResolvedRepoRoot = $preflight.RepoRoot
     }
 
     Write-Verbose "Building full path for the .vipc file..."

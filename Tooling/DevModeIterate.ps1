@@ -42,6 +42,18 @@
 .PARAMETER SkipWorktreeRootCheck
     Skip enforcing that RepoRoot is under the worktree root.
 
+.PARAMETER AutoWorktree
+    Auto-create a short-path worktree and re-run from there when needed.
+
+.PARAMETER RunId
+    Optional run identifier used for artifact isolation.
+
+.PARAMETER ArtifactRoot
+    Optional override for the artifact output root.
+
+.PARAMETER CleanRoom
+    If set, purge known output folders before and after the run.
+
 .EXAMPLE
     .\Tooling\DevModeIterate.ps1 -Iterations 3 -MinimumSupportedLVVersion 2021 -SupportedBitness 64
 
@@ -90,7 +102,15 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$WorktreeRoot,
 
-    [switch]$SkipWorktreeRootCheck
+    [switch]$SkipWorktreeRootCheck,
+
+    [switch]$AutoWorktree,
+
+    [string]$RunId,
+
+    [string]$ArtifactRoot,
+
+    [switch]$CleanRoom
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,14 +131,30 @@ function Resolve-RepoRoot {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
-$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'DevModeIterate'
-    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'DevModeIterate'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+$artifactRootResolved = $null
+$preflight = $null
+$preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $repoRoot `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion $MinimumSupportedLVVersion `
+        -LabVIEWBitness $SupportedBitness `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$AutoWorktree `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs `
+        -RunId $RunId `
+        -ArtifactRoot $ArtifactRoot `
+        -CleanRoom:$CleanRoom
+    if ($preflight.Reinvoked) {
+        return
     }
+    $repoRoot = $preflight.RepoRoot
+    $artifactRootResolved = $preflight.ArtifactRoot
 }
 $versionHelper = Join-Path -Path $repoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $MinimumSupportedLVVersion
@@ -132,7 +168,7 @@ if ([string]::IsNullOrWhiteSpace($labviewYear)) {
 }
 $logPathResolved = $LogPath
 if ([string]::IsNullOrWhiteSpace($logPathResolved)) {
-    $logDir = Join-Path -Path $repoRoot -ChildPath 'Tooling\logs'
+    $logDir = if ($artifactRootResolved) { Join-Path -Path $artifactRootResolved -ChildPath 'logs' } else { Join-Path -Path $repoRoot -ChildPath 'Tooling\logs' }
     $null = New-Item -Path $logDir -ItemType Directory -Force
     $logPathResolved = Join-Path -Path $logDir -ChildPath ("dev-mode-iterate-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 } else {
@@ -312,5 +348,8 @@ try {
         } catch {
             Write-IterationLog ("transcript_stop_failed message={0}" -f $($_.Exception.Message))
         }
+    }
+    if ($preflight -and $preflight.CleanRoomAfter) {
+        Invoke-PreflightCleanup -RepoRoot $preflight.RepoRoot -Phase 'after'
     }
 }

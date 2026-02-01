@@ -203,14 +203,24 @@ try {
     }
 
     $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
-    $worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
-    if (Test-Path -Path $worktreeGuard) {
-        . $worktreeGuard
-        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Invoke-GetPathsToIconEditorFilesInLVInstallationCLI'
-        Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Invoke-GetPathsToIconEditorFilesInLVInstallationCLI'
-        if ($resolvedWorktreeRoot) {
-            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    $preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
+    if (Test-Path -Path $preflightScript) {
+        . $preflightScript
+        $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+        $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRoot -Path $PSCommandPath } else { $null }
+        $preflight = Invoke-Preflight `
+            -RepoRoot $repoRoot `
+            -WorktreeRoot $WorktreeRoot `
+            -LabVIEWVersion $LVVersion `
+            -LabVIEWBitness $Arch `
+            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+            -AutoWorktree:$false `
+            -ScriptPath $relativeScript `
+            -ScriptArguments $scriptArgs
+        if ($preflight.Reinvoked) {
+            return
         }
+        $repoRoot = $preflight.RepoRoot
     }
     $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
     if (Test-Path -Path $versionHelper) {
@@ -226,7 +236,11 @@ try {
         throw "VI not found: $viPath"
     }
 
-    $csvPath = Resolve-CsvPath -Root $repoRoot -FileName $CsvFileName
+    $csvRoot = if ([string]::IsNullOrWhiteSpace($env:LVIE_ARTIFACT_ROOT)) { $repoRoot } else { $env:LVIE_ARTIFACT_ROOT }
+    if (-not (Test-Path -Path $csvRoot)) {
+        $null = New-Item -ItemType Directory -Path $csvRoot -Force
+    }
+    $csvPath = Resolve-CsvPath -Root $csvRoot -FileName $CsvFileName
     $bitnessCsvName = "{0}_{1}.csv" -f $diagnosticsBaseName, $Arch
     $bitnessCsvNameNoExt = "{0}_{1}" -f $diagnosticsBaseName, $Arch
     $defaultCsvPath = Join-Path $repoRoot $defaultCsvName

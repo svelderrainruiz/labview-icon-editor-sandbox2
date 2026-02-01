@@ -19,20 +19,44 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$WorktreeRoot,
 
-    [switch]$SkipWorktreeRootCheck
+    [switch]$SkipWorktreeRootCheck,
+
+    [switch]$AutoWorktree,
+
+    [string]$RunId,
+
+    [string]$ArtifactRoot,
+
+    [switch]$CleanRoom
 )
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Resolve-Path -Path (Join-Path $PSScriptRoot '..\..')
-$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Run-Pester'
-    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Run-Pester'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+$repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..')).Path
+$artifactRootResolved = $null
+$preflight = $null
+$preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $repoRoot `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion $LabVIEWVersion `
+        -LabVIEWBitness $LabVIEWBitness `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$AutoWorktree `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs `
+        -RunId $RunId `
+        -ArtifactRoot $ArtifactRoot `
+        -CleanRoom:$CleanRoom
+    if ($preflight.Reinvoked) {
+        return
     }
+    $repoRoot = $preflight.RepoRoot
+    $artifactRootResolved = $preflight.ArtifactRoot
 }
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 if (Test-Path -Path $versionHelper) {
@@ -65,7 +89,7 @@ $configuration.Run.PassThru = $true
 $configuration.Output.Verbosity = 'Detailed'
 
 if ($CI) {
-    $resultsDir = Join-Path $repoRoot 'TestResults'
+    $resultsDir = if ($artifactRootResolved) { Join-Path $artifactRootResolved 'TestResults' } else { Join-Path $repoRoot 'TestResults' }
     if (-not (Test-Path -Path $resultsDir)) {
         New-Item -Path $resultsDir -ItemType Directory | Out-Null
     }
@@ -75,7 +99,19 @@ if ($CI) {
     $configuration.TestResult.OutputPath = (Join-Path $resultsDir ("pester-devmode-$LabVIEWVersion-$LabVIEWBitness.xml"))
 }
 
-$results = Invoke-Pester -Configuration $configuration
-if ($results.FailedCount -gt 0) {
-    exit 1
+$exitCode = 0
+try {
+    $results = Invoke-Pester -Configuration $configuration
+    if ($results.FailedCount -gt 0) {
+        $exitCode = 1
+    }
+}
+finally {
+    if ($preflight -and $preflight.CleanRoomAfter) {
+        Invoke-PreflightCleanup -RepoRoot $preflight.RepoRoot -Phase 'after'
+    }
+}
+
+if ($exitCode -ne 0) {
+    exit $exitCode
 }

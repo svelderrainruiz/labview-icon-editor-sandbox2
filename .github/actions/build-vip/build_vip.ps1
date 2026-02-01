@@ -89,19 +89,34 @@ catch {
     exit 1
 }
 
-# 1a) Worktree guard (optional for local runs)
-$worktreeGuard = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $ResolvedRepoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'build_vip'
-    Write-WorktreeContext -RepoRoot $ResolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'build_vip'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+# 1a) Worktree preflight (optional for local runs)
+$preflightScript = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $ResolvedRepoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $ResolvedRepoRoot `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion $MinimumSupportedLVVersion `
+        -LabVIEWBitness $SupportedBitness `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$false `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs
+    if ($preflight.Reinvoked) {
+        return
     }
+    $ResolvedRepoRoot = $preflight.RepoRoot
 }
 
 # 1b) Ensure VI Package output directory exists to avoid VIPM prompts
-$vipOutputDir = Join-Path -Path $ResolvedRepoRoot -ChildPath "builds/VI Package"
+$artifactRoot = $env:LVIE_ARTIFACT_ROOT
+$vipOutputDir = if ([string]::IsNullOrWhiteSpace($artifactRoot)) {
+    Join-Path -Path $ResolvedRepoRoot -ChildPath "builds/VI Package"
+} else {
+    Join-Path -Path $artifactRoot -ChildPath "builds/VI Package"
+}
 New-Item -ItemType Directory -Path $vipOutputDir -Force | Out-Null
 
 # 2) Create release notes if needed and resolve the paths
@@ -124,7 +139,11 @@ catch {
 }
 
 # 3a) Ensure build log directory exists for troubleshooting
-$LogDirectory = Join-Path -Path $ResolvedRepoRoot -ChildPath "builds/logs"
+$LogDirectory = if ([string]::IsNullOrWhiteSpace($artifactRoot)) {
+    Join-Path -Path $ResolvedRepoRoot -ChildPath "builds/logs"
+} else {
+    Join-Path -Path $artifactRoot -ChildPath "builds/logs"
+}
 New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
 
 # 3) Calculate the LabVIEW version string
@@ -223,3 +242,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Successfully built VI package: $ResolvedVIPBPath"
+
+if (-not [string]::IsNullOrWhiteSpace($artifactRoot)) {
+    try {
+        $vipCandidates = Get-ChildItem -Path $ResolvedRepoRoot -Recurse -Filter *.vip -ErrorAction SilentlyContinue
+        $latestVip = $vipCandidates | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
+        if ($latestVip) {
+            $targetPath = Join-Path $vipOutputDir $latestVip.Name
+            Copy-Item -Path $latestVip.FullName -Destination $targetPath -Force
+            Write-Host ("Copied .vip to artifact root: {0}" -f $targetPath)
+        }
+    } catch {
+        Write-Warning ("Failed to copy .vip to artifact root: {0}" -f $_.Exception.Message)
+    }
+}

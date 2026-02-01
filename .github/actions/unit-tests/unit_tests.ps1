@@ -63,14 +63,25 @@ try {
     Assert-PathExists $RepoRoot "RepoRoot"
     $repoRootResolved = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
     $RepoRoot = $repoRootResolved
-    $worktreeGuard = Join-Path -Path $repoRootResolved -ChildPath 'Tooling\support\WorktreeGuard.ps1'
-    if (Test-Path -Path $worktreeGuard) {
-        . $worktreeGuard
-        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRootResolved -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'unit_tests'
-        Write-WorktreeContext -RepoRoot $repoRootResolved -WorktreeRoot $resolvedWorktreeRoot -Prefix 'unit_tests'
-        if ($resolvedWorktreeRoot) {
-            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    $preflightScript = Join-Path -Path $repoRootResolved -ChildPath 'Tooling\Invoke-Preflight.ps1'
+    if (Test-Path -Path $preflightScript) {
+        . $preflightScript
+        $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+        $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRootResolved -Path $PSCommandPath } else { $null }
+        $preflight = Invoke-Preflight `
+            -RepoRoot $repoRootResolved `
+            -WorktreeRoot $WorktreeRoot `
+            -LabVIEWVersion '2021' `
+            -LabVIEWBitness 'both' `
+            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+            -AutoWorktree:$false `
+            -ScriptPath $relativeScript `
+            -ScriptArguments $scriptArgs
+        if ($preflight.Reinvoked) {
+            return
         }
+        $repoRootResolved = $preflight.RepoRoot
+        $RepoRoot = $repoRootResolved
     }
     if (-not (Test-Path "$RepoRoot\resource\plugins")) {
         Write-Host "Plugins folder missing; creating $RepoRoot\resource\plugins" -ForegroundColor Yellow

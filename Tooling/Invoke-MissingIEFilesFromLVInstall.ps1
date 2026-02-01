@@ -24,6 +24,18 @@
 .PARAMETER SkipWorktreeRootCheck
     Skip enforcing that RepoRoot is under the worktree root.
 
+.PARAMETER AutoWorktree
+    Auto-create a short-path worktree and re-run from there when needed.
+
+.PARAMETER RunId
+    Optional run identifier used for artifact isolation.
+
+.PARAMETER ArtifactRoot
+    Optional override for the artifact output root.
+
+.PARAMETER CleanRoom
+    If set, purge known output folders before and after the run.
+
 .PARAMETER StatusFileName
     Optional status file name (relative to repo root) or absolute path.
 
@@ -108,7 +120,15 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$WorktreeRoot,
 
-    [switch]$SkipWorktreeRootCheck
+    [switch]$SkipWorktreeRootCheck,
+
+    [switch]$AutoWorktree,
+
+    [string]$RunId,
+
+    [string]$ArtifactRoot,
+
+    [switch]$CleanRoom
 )
 
 $ErrorActionPreference = 'Stop'
@@ -238,14 +258,31 @@ function Invoke-VerifyIEPathsStatusCleanup {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
-$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Invoke-MissingIEFilesFromLVInstall'
-    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Invoke-MissingIEFilesFromLVInstall'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+$artifactRootResolved = $null
+$preflight = $null
+$preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $repoRoot `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion $MinimumSupportedLVVersion `
+        -LabVIEWBitness $SupportedBitness `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$AutoWorktree `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs `
+        -RunId $RunId `
+        -ArtifactRoot $ArtifactRoot `
+        -CleanRoom:$CleanRoom `
+        -RequireGcli
+    if ($preflight.Reinvoked) {
+        return
     }
+    $repoRoot = $preflight.RepoRoot
+    $artifactRootResolved = $preflight.ArtifactRoot
 }
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $MinimumSupportedLVVersion
@@ -256,6 +293,9 @@ if (Test-Path -Path $versionHelper) {
 }
 if ([string]::IsNullOrWhiteSpace($labviewYear)) {
     $labviewYear = '2021'
+}
+if ([string]::IsNullOrWhiteSpace($StatusFileArchiveDirectory) -and $artifactRootResolved) {
+    $StatusFileArchiveDirectory = Join-Path $artifactRootResolved 'verify-iepaths'
 }
 $gCliRunner = Join-Path -Path $PSScriptRoot -ChildPath 'support\GcliRunner.ps1'
 if (-not (Test-Path -Path $gCliRunner)) {
@@ -361,4 +401,8 @@ finally {
     catch {
         Write-Warning ("Failed to close LabVIEW: {0}" -f $_.Exception.Message)
     }
+}
+
+if ($preflight -and $preflight.CleanRoomAfter) {
+    Invoke-PreflightCleanup -RepoRoot $preflight.RepoRoot -Phase 'after'
 }

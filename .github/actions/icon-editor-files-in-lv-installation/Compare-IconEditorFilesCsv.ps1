@@ -226,14 +226,24 @@ if (-not (Ensure-SummaryFile -SummaryPath $summaryPath)) {
 }
 
 $repoRootResolved = Resolve-RepoRoot -PathOverride $RepoRoot
-$worktreeGuard = Join-Path $repoRootResolved 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRootResolved -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Compare-IconEditorFilesCsv'
-    Write-WorktreeContext -RepoRoot $repoRootResolved -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Compare-IconEditorFilesCsv'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+$preflightScript = Join-Path $repoRootResolved 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRootResolved -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $repoRootResolved `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion '' `
+        -LabVIEWBitness '' `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$false `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs
+    if ($preflight.Reinvoked) {
+        return
     }
+    $repoRootResolved = $preflight.RepoRoot
 }
 $script:RepoRootResolved = $null
 $script:GitEnabled = $false

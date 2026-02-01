@@ -56,14 +56,25 @@ $resolvedRepoRoot = $RepoRoot
 if ($resolvedRepoRoot) {
     $resolvedRepoRoot = (Resolve-Path -Path $resolvedRepoRoot -ErrorAction Stop).Path
     $RepoRoot = $resolvedRepoRoot
-    $worktreeGuard = Join-Path -Path $resolvedRepoRoot -ChildPath 'Tooling\support\WorktreeGuard.ps1'
-    if (Test-Path -Path $worktreeGuard) {
-        . $worktreeGuard
-        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $resolvedRepoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Build_lvlibp'
-        Write-WorktreeContext -RepoRoot $resolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Build_lvlibp'
-        if ($resolvedWorktreeRoot) {
-            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    $preflightScript = Join-Path -Path $resolvedRepoRoot -ChildPath 'Tooling\Invoke-Preflight.ps1'
+    if (Test-Path -Path $preflightScript) {
+        . $preflightScript
+        $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+        $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $resolvedRepoRoot -Path $PSCommandPath } else { $null }
+        $preflight = Invoke-Preflight `
+            -RepoRoot $resolvedRepoRoot `
+            -WorktreeRoot $WorktreeRoot `
+            -LabVIEWVersion $MinimumSupportedLVVersion `
+            -LabVIEWBitness $SupportedBitness `
+            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+            -AutoWorktree:$false `
+            -ScriptPath $relativeScript `
+            -ScriptArguments $scriptArgs
+        if ($preflight.Reinvoked) {
+            return
         }
+        $resolvedRepoRoot = $preflight.RepoRoot
+        $RepoRoot = $resolvedRepoRoot
     }
 }
 

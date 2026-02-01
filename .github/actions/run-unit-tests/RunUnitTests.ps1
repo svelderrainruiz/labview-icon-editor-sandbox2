@@ -77,20 +77,34 @@ $Script:ReportMissing = $false
 $Script:ParseError = $null
 
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
-    $ReportPath = Join-Path -Path $PSScriptRoot -ChildPath "UnitTestReport.xml"
+    $reportRoot = if ([string]::IsNullOrWhiteSpace($env:LVIE_ARTIFACT_ROOT)) { $PSScriptRoot } else { Join-Path $env:LVIE_ARTIFACT_ROOT 'unit-tests' }
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_ARTIFACT_ROOT) -and -not (Test-Path -Path $reportRoot)) {
+        New-Item -Path $reportRoot -ItemType Directory -Force | Out-Null
+    }
+    $ReportPath = Join-Path -Path $reportRoot -ChildPath "UnitTestReport.xml"
 } else {
     Write-Host "Using report path override: $ReportPath"
 }
 
 $repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..\..')).Path
-$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
-if (Test-Path -Path $worktreeGuard) {
-    . $worktreeGuard
-    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'RunUnitTests'
-    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'RunUnitTests'
-    if ($resolvedWorktreeRoot) {
-        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+$preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
+if (Test-Path -Path $preflightScript) {
+    . $preflightScript
+    $scriptArgs = Convert-BoundParametersToArgs -BoundParameters $PSBoundParameters
+    $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $repoRoot -Path $PSCommandPath } else { $null }
+    $preflight = Invoke-Preflight `
+        -RepoRoot $repoRoot `
+        -WorktreeRoot $WorktreeRoot `
+        -LabVIEWVersion $MinimumSupportedLVVersion `
+        -LabVIEWBitness $SupportedBitness `
+        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+        -AutoWorktree:$false `
+        -ScriptPath $relativeScript `
+        -ScriptArguments $scriptArgs
+    if ($preflight.Reinvoked) {
+        return
     }
+    $repoRoot = $preflight.RepoRoot
 }
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $MinimumSupportedLVVersion
