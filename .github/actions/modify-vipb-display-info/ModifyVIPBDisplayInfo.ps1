@@ -309,6 +309,28 @@ else {
     Set-VipbElementValue -ParentNode $advancedSettings -ElementName "License_Agreement_Filepath" -Value ''
 }
 
+# Ensure we don't accidentally ship local build artifacts (logs, diagnostics) in the VI package.
+# The VIPB already excludes many non-shipping folders, but TestResults is intentionally used by
+# CI/local tooling and should never be included in the built VIP.
+try {
+    $sourceFiles = $advancedSettings.SelectSingleNode('Source_Files')
+    if ($null -ne $sourceFiles) {
+        $existing = $sourceFiles.SelectNodes('Exclusions/Path') | Where-Object { $_.InnerText -eq 'TestResults' }
+        if (-not $existing -or $existing.Count -eq 0) {
+            $exclusion = $vipbXml.CreateElement('Exclusions')
+            $pathNode = $vipbXml.CreateElement('Path')
+            $pathNode.InnerText = 'TestResults'
+            [void]$exclusion.AppendChild($pathNode)
+            [void]$sourceFiles.AppendChild($exclusion)
+        }
+    } else {
+        Write-Warning "VIPB does not contain an Advanced_Settings/Source_Files section; cannot enforce TestResults exclusion."
+    }
+}
+catch {
+    Write-Warning ("Failed to enforce TestResults exclusion in VIPB. {0}" -f $_.Exception.Message)
+}
+
 # Warn about any DisplayInformation JSON keys we don't yet handle
 $recognizedKeys = @(
     'Company Name',

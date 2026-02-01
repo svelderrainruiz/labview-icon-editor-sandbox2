@@ -81,6 +81,8 @@ Describe "ModifyVIPBDisplayInfo.ps1" {
         $generalSettings = $vipbXml.VI_Package_Builder_Settings.Library_General_Settings
         $descriptionSettings = $vipbXml.VI_Package_Builder_Settings.Advanced_Settings.Description
         $licenseSetting = $vipbXml.VI_Package_Builder_Settings.Advanced_Settings.License_Agreement_Filepath
+        $sourceFiles = $vipbXml.VI_Package_Builder_Settings.Advanced_Settings.Source_Files
+        $exclusionPaths = @($sourceFiles.Exclusions) | ForEach-Object { $_.Path }
 
         $generalSettings.Company_Name | Should -Be $displayInformation."Company Name"
         $generalSettings.Product_Name | Should -Be $displayInformation."Product Name"
@@ -90,5 +92,6 @@ Describe "ModifyVIPBDisplayInfo.ps1" {
         $descriptionSettings.Release_Notes | Should -Be $releaseNotesContent
         $descriptionSettings.Description | Should -Match "Commit: deadbeef"
         $licenseSetting | Should -Be ''
+        $exclusionPaths | Should -Contain 'TestResults'
     }
 }
