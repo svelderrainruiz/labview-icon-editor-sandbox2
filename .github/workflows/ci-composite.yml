@@ -834,9 +834,7 @@ jobs:
             'build-vip',
             'version'
           )
-          $needs = ConvertFrom-Json @'
-${{ toJson(needs) }}
-'@
+          $needs = ConvertFrom-Json -InputObject '${{ toJson(needs) }}'
           $failed = @()
           foreach ($job in $required) {
             if (-not $needs.ContainsKey($job)) {
