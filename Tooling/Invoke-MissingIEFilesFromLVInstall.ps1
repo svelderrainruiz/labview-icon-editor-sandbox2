@@ -18,6 +18,12 @@
     Optional path to the repository root. If omitted, resolved relative to
     this script's location.
 
+.PARAMETER WorktreeRoot
+    Optional override for the worktree root used by guardrails.
+
+.PARAMETER SkipWorktreeRootCheck
+    Skip enforcing that RepoRoot is under the worktree root.
+
 .PARAMETER StatusFileName
     Optional status file name (relative to repo root) or absolute path.
 
@@ -97,7 +103,12 @@ param(
     [switch]$FailOnUnknownStatus,
 
     [Parameter(Mandatory = $false)]
-    [string]$RepoRoot
+    [string]$RepoRoot,
+
+    [Parameter(Mandatory = $false)]
+    [string]$WorktreeRoot,
+
+    [switch]$SkipWorktreeRootCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -227,6 +238,15 @@ function Invoke-VerifyIEPathsStatusCleanup {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Invoke-MissingIEFilesFromLVInstall'
+    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Invoke-MissingIEFilesFromLVInstall'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
+}
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $MinimumSupportedLVVersion
 if (Test-Path -Path $versionHelper) {

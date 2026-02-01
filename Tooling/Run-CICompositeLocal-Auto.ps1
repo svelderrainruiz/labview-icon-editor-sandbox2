@@ -45,6 +45,9 @@
 
 .PARAMETER RepoRoot
     Optional repository root override.
+
+.PARAMETER SkipWorktreeRootCheck
+    Skip enforcing that RepoRoot is under the worktree root.
 #>
 
 [CmdletBinding()]
@@ -95,7 +98,9 @@ param(
     [string]$WorktreeName,
 
     [Parameter(Mandatory = $false)]
-    [string]$RepoRoot
+    [string]$RepoRoot,
+
+    [switch]$SkipWorktreeRootCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,6 +149,10 @@ function Write-AutoHistoryEntry {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+}
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewInfo = $null
 if (Test-Path -Path $versionHelper) {
@@ -181,21 +190,29 @@ if ($UseWorktree) {
     $runRepoRoot = & $worktreeScript -Ref HEAD -Name $suffix -WorktreeRoot $resolvedWorktreeRoot
     Write-Host ("Using worktree: {0}" -f $runRepoRoot)
 }
-
-$worktreeRoot = $env:LVIE_WORKTREE_ROOT
-if ([string]::IsNullOrWhiteSpace($worktreeRoot)) {
-    $worktreeRoot = 'C:\dev'
-}
-$worktreeRootFull = [System.IO.Path]::GetFullPath($worktreeRoot)
-if (-not $worktreeRootFull.EndsWith('\')) {
-    $worktreeRootFull += '\'
-}
-$runRepoRootFull = [System.IO.Path]::GetFullPath($runRepoRoot)
-if (-not $runRepoRootFull.EndsWith('\')) {
-    $runRepoRootFull += '\'
-}
-if (-not $runRepoRootFull.StartsWith($worktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $runRepoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
+$guardRoot = if ($resolvedWorktreeRoot) { $resolvedWorktreeRoot } else { $WorktreeRoot }
+if (Get-Command Assert-RepoRootUnderWorktreeRoot -ErrorAction SilentlyContinue) {
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $runRepoRoot -WorktreeRoot $guardRoot -Skip:$SkipWorktreeRootCheck -Context 'Run-CICompositeLocal-Auto'
+    Write-WorktreeContext -RepoRoot $runRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Run-CICompositeLocal-Auto'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
+} else {
+    $worktreeRoot = $env:LVIE_WORKTREE_ROOT
+    if ([string]::IsNullOrWhiteSpace($worktreeRoot)) {
+        $worktreeRoot = 'C:\dev'
+    }
+    $worktreeRootFull = [System.IO.Path]::GetFullPath($worktreeRoot)
+    if (-not $worktreeRootFull.EndsWith('\')) {
+        $worktreeRootFull += '\'
+    }
+    $runRepoRootFull = [System.IO.Path]::GetFullPath($runRepoRoot)
+    if (-not $runRepoRootFull.EndsWith('\')) {
+        $runRepoRootFull += '\'
+    }
+    if (-not $runRepoRootFull.StartsWith($worktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $runRepoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
+    }
 }
 
 $logRoot = Join-Path $repoRoot 'TestResults/agent-logs'
@@ -220,7 +237,9 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
             -EnsureCleanState:$EnsureCleanState `
             -ConnectTimeoutMs $attemptConnectTimeout `
             -ProcessTimeoutMs $attemptProcessTimeout `
-            -RepoRoot $runRepoRoot
+            -RepoRoot $runRepoRoot `
+            -WorktreeRoot $resolvedWorktreeRoot `
+            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck
     } catch {
         $status = "error:{0}" -f $_.Exception.Message
     }

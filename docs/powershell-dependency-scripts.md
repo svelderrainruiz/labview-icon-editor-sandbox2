@@ -2,6 +2,8 @@
 
 This document lists the PowerShell scripts used to build, test, and distribute the LabVIEW Icon Editor. Each script is a dependency in the tooling chain and can be called directly or by other scripts.
 
+Local entrypoints enforce short-path worktree usage by default. If a script fails because the repo is not under the worktree root, use `Tooling\New-CIWorktree.ps1` or `Tooling\Invoke-InWorktree.ps1`. Set `LVIE_SKIP_WORKTREE_ROOT_CHECK=1` or pass `-SkipWorktreeRootCheck` only when you intentionally want to bypass the guard.
+
 ## Table of Contents
 
 - [AddTokenToLabVIEW.ps1](#addtokentolabviewps1)
@@ -19,6 +21,8 @@ This document lists the PowerShell scripts used to build, test, and distribute t
 - [RevertDevelopmentMode.ps1](#revertdevelopmentmodeps1)
 - [RunUnitTests.ps1](#rununittestsps1)
 - [Run-CICompositeLocal.ps1](#run-cicompositelocalps1)
+- [Invoke-InWorktree.ps1](#invoke-inworktreeps1)
+- [WorktreeGuard.ps1](#worktreeguardps1)
 
 ---
 
@@ -66,4 +70,10 @@ Runs unit tests through g-cli and outputs a table of results. Requires an explic
 
 ## Run-CICompositeLocal.ps1
 Runs a local CI parity sequence based on `ci-composite.yml`. This script validates Verify IE Paths, applies VIPC dependencies, runs missing-in-project checks and unit tests for the LabVIEW version declared in `.lvversion` (defaulting to 2021/21.0), 32- and 64-bit, builds packed libraries, and produces the VI package using the 64-bit install of that version. The script always runs both 64-bit and 32-bit steps for the selected LabVIEW version, and most steps can be skipped via switches. Outputs are stored under `TestResults/ci-local`. Use `-ConnectTimeoutMs`, `-ProcessTimeoutMs`, and `-StatusFileTimeoutMs` to tune g-cli and status-file timing for your machine.
+
+## Invoke-InWorktree.ps1
+Creates a short-path worktree and runs a command or script from that path. Use this when you want to keep artifacts isolated without manually creating worktrees. Accepts either `-Command` or `-ScriptPath`/`-ScriptArguments` and will reuse the configured worktree root.
+
+## WorktreeGuard.ps1
+Shared helper used by local entrypoints to enforce that `RepoRoot` is under the configured worktree root. Supports `-SkipWorktreeRootCheck` and `LVIE_SKIP_WORKTREE_ROOT_CHECK=1` for explicit bypass scenarios.
 

@@ -62,6 +62,12 @@
 .PARAMETER RepoRoot
     Optional repository root override.
 
+.PARAMETER WorktreeRoot
+    Optional override for the worktree root used by guardrails.
+
+.PARAMETER SkipWorktreeRootCheck
+    Skip enforcing that RepoRoot is under the worktree root.
+
 .PARAMETER Major
     Override major version.
 
@@ -128,6 +134,11 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string]$RepoRoot,
+
+    [Parameter(Mandatory = $false)]
+    [string]$WorktreeRoot,
+
+    [switch]$SkipWorktreeRootCheck,
 
     [Parameter(Mandatory = $false)]
     [int]$Major,
@@ -489,20 +500,31 @@ if (Test-Path -Path $versionHelper) {
 if ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
     $LabVIEWVersion = '2021'
 }
-$worktreeRoot = $env:LVIE_WORKTREE_ROOT
-if ([string]::IsNullOrWhiteSpace($worktreeRoot)) {
-    $worktreeRoot = 'C:\dev'
-}
-$worktreeRootFull = [System.IO.Path]::GetFullPath($worktreeRoot)
-if (-not $worktreeRootFull.EndsWith('\')) {
-    $worktreeRootFull += '\'
-}
-$repoRootFull = [System.IO.Path]::GetFullPath($repoRoot)
-if (-not $repoRootFull.EndsWith('\')) {
-    $repoRootFull += '\'
-}
-if (-not $repoRootFull.StartsWith($worktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $repoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
+$resolvedWorktreeRoot = $null
+$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Run-CICompositeLocal'
+    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Run-CICompositeLocal'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
+} else {
+    $worktreeRoot = $env:LVIE_WORKTREE_ROOT
+    if ([string]::IsNullOrWhiteSpace($worktreeRoot)) {
+        $worktreeRoot = 'C:\dev'
+    }
+    $worktreeRootFull = [System.IO.Path]::GetFullPath($worktreeRoot)
+    if (-not $worktreeRootFull.EndsWith('\')) {
+        $worktreeRootFull += '\'
+    }
+    $repoRootFull = [System.IO.Path]::GetFullPath($repoRoot)
+    if (-not $repoRootFull.EndsWith('\')) {
+        $repoRootFull += '\'
+    }
+    if (-not $repoRootFull.StartsWith($worktreeRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw ("RepoRoot '{0}' is not under worktree root '{1}'. Consider using a short path or set LVIE_WORKTREE_ROOT." -f $repoRootFull.TrimEnd('\'), $worktreeRootFull.TrimEnd('\'))
+    }
 }
 Push-Location -Path $repoRoot
 $script:RunFailed = $false
@@ -517,7 +539,7 @@ Ensure-CsvHeader -Path $script:RunHistoryPath -Header 'timestamp,status,duration
 Ensure-CsvHeader -Path $script:StepHistoryPath -Header 'timestamp,step,status,duration_seconds'
 $env:LABVIEW_CLOSE_METRICS_PATH = $script:CloseHistoryPath
 $runLog = Join-Path $logRoot "ci-local-$runTimestamp.log"
-$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -EnsureCleanState:$EnsureCleanState -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode"
+$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -EnsureCleanState:$EnsureCleanState -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck"
 $script:TranscriptStarted = $false
 try {
     Start-Transcript -Path $runLog -Append | Out-Null
