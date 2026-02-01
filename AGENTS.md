@@ -64,6 +64,14 @@ Helper used by CI:
 pwsh -NoProfile -File .\Tooling\New-CIWorktreeForJob.ps1 -Bitness 64
 ```
 
+## CI concurrency (self-hosted LabVIEW runners)
+LabVIEW workflows are serialized on the shared self-hosted runner label to avoid concurrent g-cli/LabVIEW conflicts.
+
+Notes:
+- Workflows share a concurrency group keyed by repository + runner label (e.g., `labview-<repo>-self-hosted-windows-lv`).
+- The reusable missing-in-project workflow uses a unique child concurrency group when invoked via `workflow_call` to avoid parent/child deadlocks.
+- Do not add an identical concurrency group to a child workflow called by another workflow.
+
 ## Local CI Parity (recommended)
 Run the local parity script that mirrors `ci-composite.yml`:
 ```
@@ -73,7 +81,8 @@ pwsh -NoProfile -File .\Tooling\Run-CICompositeLocal.ps1 `
 ```
 
 Notes:
-- Outputs go to `TestResults\ci-local`.
+- Outputs go to `$WORKTREE_ROOT\artifacts\<runid>\ci-local` when guardrails are active (default for local runs).
+- GitHub Actions disables artifact roots by default unless `LVIE_ENABLE_ARTIFACT_ROOT=1` or an explicit `-RunId`/`-ArtifactRoot` is passed.
 - The script always runs both 64-bit and 32-bit steps for LabVIEW 2021 (21.0).
 - The script handles Verify IE Paths, VIPC, missing-in-project, unit tests, PPL builds, and VIP build.
 - If LabVIEW or g-cli is already running, the script waits for them to exit before starting.
@@ -194,3 +203,4 @@ Notes:
 - If `g-cli` cannot connect, increase `-ConnectTimeoutMs` and `-ProcessTimeoutMs`.
 - If a run hangs, close LabVIEW and re-run the step:
   - `.github\actions\close-labview\Close_LabVIEW.ps1`
+- Release note generation can log `git describe` errors in shallow or tagless repos; VIP builds may still complete, but fetch tags if you need accurate version strings.
