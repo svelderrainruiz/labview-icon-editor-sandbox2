@@ -24,7 +24,7 @@ function Convert-BoundParametersToArgs {
             if ($value.IsPresent) {
                 $args += "-$key"
             } else {
-                $args += "-$key:`$false"
+                $args += "-${key}:`$false"
             }
             continue
         }
