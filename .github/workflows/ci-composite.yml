@@ -1,5 +1,8 @@
 name: CI Pipeline (Composite)
 
+permissions:
+  actions: read
+
 concurrency:
   group: labview-${{ github.repository }}-self-hosted-windows-lv-ie
   cancel-in-progress: false
