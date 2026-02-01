@@ -14,7 +14,12 @@
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [string]$RepoRoot
+    [string]$RepoRoot,
+
+    [Parameter(Mandatory = $false)]
+    [string]$WorktreeRoot,
+
+    [switch]$SkipWorktreeRootCheck
 )
 
 # Helper function to check for file or directory existence
@@ -56,6 +61,17 @@ function Execute-Script {
 try {
     # Validate required paths
     Assert-PathExists $RepoRoot "RepoRoot"
+    $repoRootResolved = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
+    $RepoRoot = $repoRootResolved
+    $worktreeGuard = Join-Path -Path $repoRootResolved -ChildPath 'Tooling\support\WorktreeGuard.ps1'
+    if (Test-Path -Path $worktreeGuard) {
+        . $worktreeGuard
+        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRootResolved -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'unit_tests'
+        Write-WorktreeContext -RepoRoot $repoRootResolved -WorktreeRoot $resolvedWorktreeRoot -Prefix 'unit_tests'
+        if ($resolvedWorktreeRoot) {
+            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+        }
+    }
     if (-not (Test-Path "$RepoRoot\resource\plugins")) {
         Write-Host "Plugins folder missing; creating $RepoRoot\resource\plugins" -ForegroundColor Yellow
         New-Item -ItemType Directory -Path "$RepoRoot\resource\plugins" -Force | Out-Null

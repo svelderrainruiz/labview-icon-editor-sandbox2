@@ -57,7 +57,15 @@ param(
     [Parameter(Mandatory = $false, ParameterSetName = 'Run')]
     [Parameter(Mandatory = $false, ParameterSetName = 'ReportOnly')]
     [string]
-    $ReportPath
+    $ReportPath,
+
+    [Parameter(Mandatory = $false, ParameterSetName = 'Run')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'ReportOnly')]
+    [string]$WorktreeRoot,
+
+    [Parameter(Mandatory = $false, ParameterSetName = 'Run')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'ReportOnly')]
+    [switch]$SkipWorktreeRootCheck
 )
 
 # Script-level variables to track exit states and results
@@ -74,7 +82,16 @@ if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     Write-Host "Using report path override: $ReportPath"
 }
 
-$repoRoot = Resolve-Path -Path (Join-Path $PSScriptRoot '..\..\..')
+$repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'RunUnitTests'
+    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'RunUnitTests'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
+}
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $MinimumSupportedLVVersion
 if (Test-Path -Path $versionHelper) {

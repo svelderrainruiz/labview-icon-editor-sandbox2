@@ -49,7 +49,12 @@ param(
     [string]$CompanyName,
 
     [Parameter(Mandatory = $true)]
-    [string]$AuthorName
+    [string]$AuthorName,
+
+    [Parameter(Mandatory = $false)]
+    [string]$WorktreeRoot,
+
+    [switch]$SkipWorktreeRootCheck
 )
 
 # Helper function to verify a file/folder path exists
@@ -110,6 +115,17 @@ try {
 
     # Validate needed folders
     Assert-PathExists $RepoRoot "RepoRoot"
+    $repoRootResolved = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
+    $RepoRoot = $repoRootResolved
+    $worktreeGuard = Join-Path -Path $repoRootResolved -ChildPath 'Tooling\support\WorktreeGuard.ps1'
+    if (Test-Path -Path $worktreeGuard) {
+        . $worktreeGuard
+        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRootResolved -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Build'
+        Write-WorktreeContext -RepoRoot $repoRootResolved -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Build'
+        if ($resolvedWorktreeRoot) {
+            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+        }
+    }
     Assert-PathExists "$RepoRoot\resource\plugins" "Plugins folder"
 
     $ActionsPath = Split-Path -Parent $PSScriptRoot

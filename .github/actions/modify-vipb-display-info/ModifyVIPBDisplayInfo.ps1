@@ -51,6 +51,8 @@ param (
     [string]$SupportedBitness,
     [string]$RepoRoot,
     [string]$VIPBPath,
+    [string]$WorktreeRoot,
+    [switch]$SkipWorktreeRootCheck,
 
     [Alias('LabVIEWVersion')]
     [ValidateRange(2000, 2100)]
@@ -72,7 +74,7 @@ param (
 
 # 1) Resolve paths
 try {
-    $ResolvedRepoRoot = Resolve-Path -Path $RepoRoot -ErrorAction Stop
+    $ResolvedRepoRoot = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
     $ResolvedVIPBPath = Join-Path -Path $ResolvedRepoRoot -ChildPath $VIPBPath -ErrorAction Stop
 }
 catch {
@@ -83,6 +85,17 @@ catch {
     }
     $errorObject | ConvertTo-Json -Depth 10
     exit 1
+}
+
+# 1a) Worktree guard (optional for local runs)
+$worktreeGuard = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $ResolvedRepoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'ModifyVIPBDisplayInfo'
+    Write-WorktreeContext -RepoRoot $ResolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'ModifyVIPBDisplayInfo'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
 }
 
 # 2) Create release notes if needed

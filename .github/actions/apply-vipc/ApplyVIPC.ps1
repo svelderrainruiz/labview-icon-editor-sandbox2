@@ -18,7 +18,9 @@ Param (
     [ValidateSet('32', '64')]
     [string]$SupportedBitness,
     [string]$RepoRoot,
-    [string]$VIPCPath
+    [string]$VIPCPath,
+    [string]$WorktreeRoot,
+    [switch]$SkipWorktreeRootCheck
 )
 
 Write-Verbose "Script Name: $($MyInvocation.MyCommand.Definition)"
@@ -34,8 +36,18 @@ Write-Verbose " - VIPCPath:                  $VIPCPath"
 # -------------------------
 try {
     Write-Verbose "Attempting to resolve the 'RepoRoot'..."
-    $ResolvedRepoRoot = Resolve-Path -Path $RepoRoot -ErrorAction Stop
+    $ResolvedRepoRoot = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
     Write-Verbose "ResolvedRepoRoot: $ResolvedRepoRoot"
+
+    $worktreeGuard = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\WorktreeGuard.ps1'
+    if (Test-Path -Path $worktreeGuard) {
+        . $worktreeGuard
+        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $ResolvedRepoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'ApplyVIPC'
+        Write-WorktreeContext -RepoRoot $ResolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'ApplyVIPC'
+        if ($resolvedWorktreeRoot) {
+            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+        }
+    }
 
     Write-Verbose "Building full path for the .vipc file..."
     $ResolvedVIPCPath = Join-Path -Path $ResolvedRepoRoot -ChildPath $VIPCPath -ErrorAction Stop

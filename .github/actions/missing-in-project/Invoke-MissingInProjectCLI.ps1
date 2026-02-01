@@ -3,12 +3,23 @@
 param(
     [Parameter(Mandatory)][string]$LVVersion,
     [Parameter(Mandatory)][ValidateSet('32','64')][string]$Arch,
-    [Parameter(Mandatory)][string]$ProjectFile
+    [Parameter(Mandatory)][string]$ProjectFile,
+    [string]$WorktreeRoot,
+    [switch]$SkipWorktreeRootCheck
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Invoke-MissingInProjectCLI'
+    Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Invoke-MissingInProjectCLI'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
+}
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $LVVersion
 if (Test-Path -Path $versionHelper) {

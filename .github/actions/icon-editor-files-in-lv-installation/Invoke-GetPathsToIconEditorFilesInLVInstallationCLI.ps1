@@ -15,7 +15,11 @@ param(
 
     [string]$ProjectFile = '',
 
-    [string]$SummaryTitle = 'Icon Editor Files in LabVIEW Installation'
+    [string]$SummaryTitle = 'Icon Editor Files in LabVIEW Installation',
+
+    [string]$WorktreeRoot,
+
+    [switch]$SkipWorktreeRootCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -199,6 +203,15 @@ try {
     }
 
     $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+    $worktreeGuard = Join-Path $repoRoot 'Tooling\support\WorktreeGuard.ps1'
+    if (Test-Path -Path $worktreeGuard) {
+        . $worktreeGuard
+        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Invoke-GetPathsToIconEditorFilesInLVInstallationCLI'
+        Write-WorktreeContext -RepoRoot $repoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Invoke-GetPathsToIconEditorFilesInLVInstallationCLI'
+        if ($resolvedWorktreeRoot) {
+            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+        }
+    }
     $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
     if (Test-Path -Path $versionHelper) {
         . $versionHelper

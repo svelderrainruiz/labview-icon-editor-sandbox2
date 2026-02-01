@@ -12,7 +12,11 @@ param(
 
     [switch]$IncludeGitMetadata,
 
-    [string]$SummaryTitle = 'Icon Editor Files Diff'
+    [string]$SummaryTitle = 'Icon Editor Files Diff',
+
+    [string]$WorktreeRoot,
+
+    [switch]$SkipWorktreeRootCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -221,14 +225,22 @@ if (-not (Ensure-SummaryFile -SummaryPath $summaryPath)) {
     return
 }
 
-$repoRootResolved = $null
+$repoRootResolved = Resolve-RepoRoot -PathOverride $RepoRoot
+$worktreeGuard = Join-Path $repoRootResolved 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRootResolved -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Compare-IconEditorFilesCsv'
+    Write-WorktreeContext -RepoRoot $repoRootResolved -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Compare-IconEditorFilesCsv'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
+}
 $script:RepoRootResolved = $null
 $script:GitEnabled = $false
 $script:GitMetadataCache = @{}
 $gitColumns = @()
 
 if ($IncludeGitMetadata) {
-    $repoRootResolved = Resolve-RepoRoot -PathOverride $RepoRoot
     if ($repoRootResolved -and (Get-Command git -ErrorAction SilentlyContinue)) {
         $insideRepo = & git -C $repoRootResolved rev-parse --is-inside-work-tree 2>$null
         if ($LASTEXITCODE -eq 0 -and $insideRepo -eq 'true') {

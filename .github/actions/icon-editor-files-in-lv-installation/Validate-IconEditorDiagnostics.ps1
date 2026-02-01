@@ -17,7 +17,11 @@ param(
     [string]$LabVIEWVersion = '2021',
 
     [Parameter(Mandatory)]
-    [string]$RepoRoot
+    [string]$RepoRoot,
+
+    [string]$WorktreeRoot,
+
+    [switch]$SkipWorktreeRootCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -185,6 +189,15 @@ if (-not (Test-Path -Path $CsvPath)) {
 }
 
 $repoRootResolved = Resolve-RepoRoot -PathOverride $RepoRoot
+$worktreeGuard = Join-Path $repoRootResolved 'Tooling\support\WorktreeGuard.ps1'
+if (Test-Path -Path $worktreeGuard) {
+    . $worktreeGuard
+    $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $repoRootResolved -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Validate-IconEditorDiagnostics'
+    Write-WorktreeContext -RepoRoot $repoRootResolved -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Validate-IconEditorDiagnostics'
+    if ($resolvedWorktreeRoot) {
+        $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+    }
+}
 $repoRootNormalized = Normalize-Path -Path $repoRootResolved
 if (-not $repoRootNormalized) {
     throw "Unable to normalize RepoRoot: $repoRootResolved"

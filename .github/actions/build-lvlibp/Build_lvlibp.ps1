@@ -40,6 +40,8 @@ param(
     [string]$MinimumSupportedLVVersion = '2021',
     [string]$SupportedBitness,
     [string]$RepoRoot,
+    [string]$WorktreeRoot,
+    [switch]$SkipWorktreeRootCheck,
     [Int32]$Major,
     [Int32]$Minor,
     [Int32]$Patch,
@@ -49,6 +51,21 @@ param(
 
 Write-Output "PPL Version: $Major.$Minor.$Patch.$Build"
 Write-Output "Commit: $Commit"
+
+$resolvedRepoRoot = $RepoRoot
+if ($resolvedRepoRoot) {
+    $resolvedRepoRoot = (Resolve-Path -Path $resolvedRepoRoot -ErrorAction Stop).Path
+    $RepoRoot = $resolvedRepoRoot
+    $worktreeGuard = Join-Path -Path $resolvedRepoRoot -ChildPath 'Tooling\support\WorktreeGuard.ps1'
+    if (Test-Path -Path $worktreeGuard) {
+        . $worktreeGuard
+        $resolvedWorktreeRoot = Assert-RepoRootUnderWorktreeRoot -RepoRoot $resolvedRepoRoot -WorktreeRoot $WorktreeRoot -Skip:$SkipWorktreeRootCheck -Context 'Build_lvlibp'
+        Write-WorktreeContext -RepoRoot $resolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -Prefix 'Build_lvlibp'
+        if ($resolvedWorktreeRoot) {
+            $env:LVIE_WORKTREE_ROOT = $resolvedWorktreeRoot
+        }
+    }
+}
 
 $labviewYear = $MinimumSupportedLVVersion
 if ($RepoRoot) {
