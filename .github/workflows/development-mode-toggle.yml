@@ -1,7 +1,7 @@
 name: "Toggle Development Mode"
 
 concurrency:
-  group: labview-${{ github.repository }}
+  group: labview-${{ github.repository }}-self-hosted-windows-lv
   cancel-in-progress: false
 
 on:
