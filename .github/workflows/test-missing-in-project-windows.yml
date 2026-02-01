@@ -1,7 +1,7 @@
 name: Test Missing‑In‑Project Action on Windows
 
 concurrency:
-  group: labview-${{ github.repository }}-self-hosted-windows-lv
+  group: ${{ github.event_name == 'workflow_call' && format('labview-{0}-self-hosted-windows-lv-child-{1}', github.repository, github.run_id) || format('labview-{0}-self-hosted-windows-lv', github.repository) }}
   cancel-in-progress: false
 
 on:
