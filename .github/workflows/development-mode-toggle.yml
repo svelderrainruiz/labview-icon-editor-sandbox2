@@ -97,6 +97,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
 
       - name: Log context
         shell: pwsh
@@ -150,6 +154,12 @@ jobs:
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
             exit $LASTEXITCODE
           }
+
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
       - name: Toggle dev mode (32-bit)
         if: ${{ env.selected_bitness == '32' && success() }}

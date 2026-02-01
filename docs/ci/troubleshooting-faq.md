@@ -157,7 +157,7 @@ Below are 14 possible issues you might encounter, along with suggested steps to 
    - [`issue-status`](../../.github/workflows/ci-composite.yml#issue-status) – verifies branch naming and issue status. If it fails or is skipped, downstream jobs won’t run.
    - [`changes`](../../.github/workflows/ci-composite.yml#changes) – detects `.vipc` file changes.
    - [`apply-deps`](../../.github/workflows/ci-composite.yml#apply-deps) – applies VIPC dependencies when needed.
-   - [`missing-in-project-check`](../../.github/workflows/ci-composite.yml#missing-in-project-check) – validates project file membership.
+   - [`missing-in-project`](../../.github/workflows/ci-composite.yml#missing-in-project) – validates project file membership.
    - [`Run Unit Tests`](../../.github/workflows/ci-composite.yml#test) – executes unit tests.
    - [`Build VI Package`](../../.github/workflows/ci-composite.yml#build-vi-package) – produces the `.vip` artifact.
 3. Update your `CONTRIBUTING.md` to specify the merging rules so contributors know what’s needed.

@@ -69,8 +69,8 @@ LabVIEW workflows are serialized on the shared self-hosted runner label to avoid
 
 Notes:
 - Workflows share a concurrency group keyed by repository + runner label (e.g., `labview-<repo>-self-hosted-windows-lv-ie`).
-- The reusable missing-in-project workflow uses a unique child concurrency group when invoked via `workflow_call` to avoid parent/child deadlocks.
-- Do not add an identical concurrency group to a child workflow called by another workflow.
+- Missing-in-project is inlined in `ci-composite.yml` to avoid reusable workflow skips; the standalone workflow is manual only.
+- Self-hosted LabVIEW jobs acquire a runner lock at `<worktree_root>\locks\labview-runner.lock` via `Tooling\RunnerLock.ps1`. Remove the lock directory if it is stale.
 
 ## Local CI Parity (recommended)
 Run the local parity script that mirrors `ci-composite.yml`:

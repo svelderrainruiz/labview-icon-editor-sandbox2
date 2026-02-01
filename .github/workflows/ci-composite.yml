@@ -44,6 +44,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -78,6 +82,11 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   changes:
     name: Detect VIPC changes
@@ -105,6 +114,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -131,6 +144,11 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   apply-deps-2021-x86:
     name: Apply VIPC (LV x86)
@@ -141,6 +159,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -167,6 +189,11 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   version:
     name: Compute Version
@@ -183,15 +210,126 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - id: compute
         uses: ./.github/actions/compute-version
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   missing-in-project:
-    name: Test Missing-In-Project (LV)
+    name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
     needs: apply-deps-2021-x86
-    uses: ./.github/workflows/test-missing-in-project-windows.yml
+    runs-on: self-hosted-windows-lv-ie
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        bitness: ["64", "32"]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
+      - name: Create short-path worktree
+        id: worktree
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" `
+            -Bitness ${{ matrix.bitness }}
+      - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & ".github\\actions\\set-development-mode\\Set_Development_Mode.ps1" `
+            -MinimumSupportedLVVersion $env:LABVIEW_VERSION_YEAR `
+            -SupportedBitness ${{ matrix.bitness }} `
+            -RepoRoot "$env:REPO_ROOT"
+      - name: Resolve LabVIEW project path
+        id: proj
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PROJECT_PATH)) {
+            throw "PROJECT_PATH was not set."
+          }
+          if (-not (Test-Path -Path $env:PROJECT_PATH)) {
+            throw "Project file not found: $env:PROJECT_PATH"
+          }
+          Write-Host "Using project file: $env:PROJECT_PATH"
+          "project_file=$env:PROJECT_PATH" >> $env:GITHUB_OUTPUT
+      - name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
+        id: mip
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & ".github\\actions\\missing-in-project\\Invoke-MissingInProjectCLI.ps1" `
+            -LVVersion   "$env:LABVIEW_VERSION_YEAR" `
+            -Arch        "${{ matrix.bitness }}" `
+            -ProjectFile "${{ steps.proj.outputs.project_file }}"
+
+          $missingFile = Join-Path $env:REPO_ROOT '.github\\actions\\missing-in-project\\missing_files.txt'
+          $missingCsv = ''
+          if (Test-Path $missingFile) {
+            $missingCsv = Get-Content -Path $missingFile -Raw
+          }
+          $passed = [string]::IsNullOrWhiteSpace($missingCsv)
+          "passed=$($passed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          "missing-files=$missingCsv" >> $env:GITHUB_OUTPUT
+      - name: Summarize to run Summary tab
+        if: always()
+        shell: pwsh
+        env:
+          PROJ_FILE: ${{ steps.proj.outputs.project_file }}
+          MISSING_CSV: ${{ steps.mip.outputs.missing-files }}
+        run: |
+          echo "INFO: Using project file: $env:PROJ_FILE" >> $GITHUB_STEP_SUMMARY
+          if ("${{ steps.mip.outputs.passed }}" -eq "true") {
+            echo "OK: Nothing missing for $env:LABVIEW_VERSION_YEAR-${{ matrix.bitness }}" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          echo "ERROR: Missing files for $env:LABVIEW_VERSION_YEAR-${{ matrix.bitness }}" >> $GITHUB_STEP_SUMMARY
+          echo "$env:MISSING_CSV" >> $GITHUB_STEP_SUMMARY
+          exit 1
+      - name: Revert Development Mode (LV ${{ matrix.bitness }}-bit)
+        if: always()
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & ".github\\actions\\revert-development-mode\\RevertDevelopmentMode.ps1" `
+            -MinimumSupportedLVVersion $env:LABVIEW_VERSION_YEAR `
+            -SupportedBitness ${{ matrix.bitness }} `
+            -RepoRoot "$env:REPO_ROOT"
+      - name: Close LabVIEW (LV ${{ matrix.bitness }}-bit)
+        if: always()
+        shell: pwsh
+        run: |
+          & "$env:REPO_ROOT\\.github\\actions\\close-labview\\Close_LabVIEW.ps1" `
+            -MinimumSupportedLVVersion $env:LABVIEW_VERSION_YEAR `
+            -SupportedBitness ${{ matrix.bitness }}
+      - name: Cleanup worktree
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:REPO_ROOT)) {
+            git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
+            git -C "$env:GITHUB_WORKSPACE" worktree prune
+          }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   test-2021:
     name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
@@ -207,6 +345,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -259,6 +401,11 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   build-ppl-x86:
     name: Build 32-bit Packed Library
@@ -269,6 +416,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -330,6 +481,11 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   build-ppl-x64:
     name: Build 64-bit Packed Library
@@ -340,6 +496,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -401,6 +561,11 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
   build-vip:
     name: Build VI Package
@@ -411,6 +576,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -627,6 +796,62 @@ jobs:
           if (-not [string]::IsNullOrWhiteSpace($env:REPO_ROOT)) {
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
+          }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
+
+  pipeline-contract:
+    name: Pipeline Contract
+    if: always()
+    needs:
+      - dev-mode-gate
+      - changes
+      - apply-deps-2021-x64
+      - apply-deps-2021-x86
+      - missing-in-project
+      - test-2021
+      - build-ppl-x64
+      - build-ppl-x86
+      - build-vip
+      - version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required jobs
+        shell: pwsh
+        run: |
+          $required = @(
+            'dev-mode-gate',
+            'changes',
+            'apply-deps-2021-x64',
+            'apply-deps-2021-x86',
+            'missing-in-project',
+            'test-2021',
+            'build-ppl-x64',
+            'build-ppl-x86',
+            'build-vip',
+            'version'
+          )
+          $needs = ConvertFrom-Json @'
+${{ toJson(needs) }}
+'@
+          $failed = @()
+          foreach ($job in $required) {
+            if (-not $needs.ContainsKey($job)) {
+              $failed += "$job:missing"
+              continue
+            }
+            $result = $needs[$job].result
+            if ($result -ne 'success') {
+              $failed += "$job:$result"
+            }
+          }
+          if ($failed.Count -gt 0) {
+            Write-Error ("Pipeline contract failed: {0}" -f ($failed -join ', '))
+          } else {
+            Write-Host 'Pipeline contract satisfied.'
           }
 
 

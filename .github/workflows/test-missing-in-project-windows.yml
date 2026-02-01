@@ -1,14 +1,11 @@
 name: Test Missing‑In‑Project Action on Windows
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_call' && format('labview-{0}-self-hosted-windows-lv-ie-child-{1}', github.repository, github.run_id) || format('labview-{0}-self-hosted-windows-lv-ie', github.repository) }}
+  group: labview-${{ github.repository }}-self-hosted-windows-lv-ie
   cancel-in-progress: false
 
 on:
-  workflow_call:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
 
 jobs:
   missing-in-project-check:
@@ -24,6 +21,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Acquire LabVIEW runner lock
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
       - name: Create short-path worktree
         id: worktree
         shell: pwsh
@@ -150,6 +151,11 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+      - name: Release LabVIEW runner lock
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
 
 
 
