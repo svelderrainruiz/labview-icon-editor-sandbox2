@@ -116,7 +116,7 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - Follow GitHub’s CLI instructions.
 
 4. **Labels** (optional)
-   - The workflow uses the `self-hosted-windows-lv` label. Its `runs-on` expression also references `self-hosted-linux-lv` for potential Linux jobs, though the default matrix runs only on Windows. Label your runner accordingly, and prepare a Linux runner with `self-hosted-linux-lv` if you expand the matrix.
+   - The workflow uses the `self-hosted-windows-lv-ie` label. Its `runs-on` expression also references `self-hosted-linux-lv` for potential Linux jobs, though the default matrix runs only on Windows. Label your runner accordingly, and prepare a Linux runner with `self-hosted-linux-lv` if you expand the matrix.
 
 5. **Runner diagnostics cleanup (recommended)**
    - Some runner failures can occur before checkout if old diagnostics logs accumulate under the runner's `_diag\pages` folder.
@@ -204,5 +204,6 @@ Notes:
 - **Troubleshoot**: If manual environment edits are needed, consult `ManualSetup.md` or the original documentation for advanced configuration steps.  
 
 **Happy Building!** By integrating these workflows, you’ll maintain a **robust, automated CI/CD** pipeline for the LabVIEW Icon Editor—complete with **semantic versioning**, **build artifact uploads**, and **metadata branding** (company/repo).
+
 
 

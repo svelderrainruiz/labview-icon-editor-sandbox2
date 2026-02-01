@@ -94,7 +94,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 
 ### 3.1 How the Action Is Triggered
 The `build-vi-package` directory defines a **composite action**. It does not listen for events on its own; instead, the CI workflow in [`ci-composite.yml`](../../../.github/workflows/ci-composite.yml) invokes it.
-That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. The `issue-status` and `changes` jobs run on GitHub-hosted `ubuntu-latest`. Subsequent jobs that require LabVIEW—`apply-deps`, `version`, `test`, `build-ppl`, and `build-vi-package`—execute on a self-hosted Windows runner (`self-hosted-windows-lv`). Only Windows-specific jobs (e.g., `test`, `build-ppl`, `build-vi-package`) require the self-hosted runner. Linux support is considered a future or custom expansion: you would need to extend the matrix and provide a corresponding runner label (for example, `self-hosted-linux-lv`). Pushes are limited to `main`, `develop`, `release-alpha/*`, `release-beta/*`, `release-rc/*`, `feature/*`, `hotfix/*`, and `issue-*` branches, and pull requests must target one of those branches. However, `build-vi-package` executes only if the `issue-status` job allows the pipeline to continue: the source branch name must contain `issue-<number>` (for example, `issue-123` or `feature/issue-123`) and the linked issue's Status must be **In Progress**. For pull requests, the `issue-status` gate evaluates the PR’s head branch before running the `version` and `build-ppl` jobs, which depend on this gate.
+That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. The `issue-status` and `changes` jobs run on GitHub-hosted `ubuntu-latest`. Subsequent jobs that require LabVIEW—`apply-deps`, `version`, `test`, `build-ppl`, and `build-vi-package`—execute on a self-hosted Windows runner (`self-hosted-windows-lv-ie`). Only Windows-specific jobs (e.g., `test`, `build-ppl`, `build-vi-package`) require the self-hosted runner. Linux support is considered a future or custom expansion: you would need to extend the matrix and provide a corresponding runner label (for example, `self-hosted-linux-lv`). Pushes are limited to `main`, `develop`, `release-alpha/*`, `release-beta/*`, `release-rc/*`, `feature/*`, `hotfix/*`, and `issue-*` branches, and pull requests must target one of those branches. However, `build-vi-package` executes only if the `issue-status` job allows the pipeline to continue: the source branch name must contain `issue-<number>` (for example, `issue-123` or `feature/issue-123`) and the linked issue's Status must be **In Progress**. For pull requests, the `issue-status` gate evaluates the PR’s head branch before running the `version` and `build-ppl` jobs, which depend on this gate.
 
 ### 3.2 Configurable Inputs / Parameters
 `ci-composite.yml` calls this action and provides all required inputs automatically. When invoking
@@ -126,7 +126,7 @@ components remain unchanged and only the build number increases.
 - **Fork Setup**:
   1. **Copy** the workflow file (`.github/workflows/ci-composite.yml`) into your fork.
   2. **Update** any references to the official repo name (`ni/labview-icon-editor`) if your fork is named differently.
- 3. **Self-Hosted Runner**: Confirm your runner uses the `self-hosted-windows-lv` label (or `self-hosted-linux-lv` for Linux jobs) or update `runs-on` to match your runner’s labels.
+ 3. **Self-Hosted Runner**: Confirm your runner uses the `self-hosted-windows-lv-ie` label (or `self-hosted-linux-lv` for Linux jobs) or update `runs-on` to match your runner’s labels.
   4. **Write Permissions**: In fork settings → Actions → General, ensure “Workflow Permissions” = “Read and write.”
 
 ### 3.4 Artifact Publication
@@ -208,7 +208,7 @@ components remain unchanged and only the build number increases.
    - Ensure your self-hosted runner OS is patched and has any new LabVIEW versions if your project updates.
 
 ### 6.2 Runner Management
-- **Labels**: The workflow uses `runs-on: self-hosted-windows-lv` (and `self-hosted-linux-lv` where applicable). Confirm your runner has the required label.
+- **Labels**: The workflow uses `runs-on: self-hosted-windows-lv-ie` (and `self-hosted-linux-lv` where applicable). Confirm your runner has the required label.
 - **Resource Monitoring**: If the build is large or slow, upgrade the machine specs or add more runners to handle parallel tasks.
 
 ### 6.3 Adding New Features
@@ -320,5 +320,6 @@ components remain unchanged and only the build number increases.
 ## 11. **Conclusion**
 
 By properly setting up environment variables, referencing your LabVIEW environment on a self-hosted runner, and using label-based version increments plus a commit-based build number, this GitHub Action automates your `.vip` build and artifact upload process. Maintainers can extend the pipeline with tagging or release steps if desired. Follow the troubleshooting steps if anything goes awry, and enjoy streamlined LabVIEW CI/CD!
+
 
 

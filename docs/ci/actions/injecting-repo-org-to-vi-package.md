@@ -49,7 +49,7 @@ An abbreviated **GitHub Actions** example below mirrors the [`ci-composite.yml`]
 ```yaml
 jobs:
   version:
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +62,7 @@ jobs:
       PATCH: ${{ steps.compute-version.outputs.PATCH }}
       BUILD: ${{ steps.compute-version.outputs.BUILD }}
   build-ppl:
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     needs: version
     strategy:
       matrix:
@@ -81,7 +81,7 @@ jobs:
           commit: ${{ github.sha }}
 
   build-vi-package:
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     needs: [build-ppl, version]
     steps:
       - uses: actions/checkout@v4
@@ -176,3 +176,4 @@ This legacy script produces a `.vip` file that, when inspected in VIPM or LabVIE
 - Each fork or organization can **uniquely** brand its builds.
 - CI/CD with **GitHub Actions** automatically **populates** build metadata, removing manual steps.  
 - You have a **clear**, **traceable** record of each build’s origin—particularly useful in multi-team or open-source projects.
+

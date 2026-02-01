@@ -68,7 +68,7 @@ pwsh -NoProfile -File .\Tooling\New-CIWorktreeForJob.ps1 -Bitness 64
 LabVIEW workflows are serialized on the shared self-hosted runner label to avoid concurrent g-cli/LabVIEW conflicts.
 
 Notes:
-- Workflows share a concurrency group keyed by repository + runner label (e.g., `labview-<repo>-self-hosted-windows-lv`).
+- Workflows share a concurrency group keyed by repository + runner label (e.g., `labview-<repo>-self-hosted-windows-lv-ie`).
 - The reusable missing-in-project workflow uses a unique child concurrency group when invoked via `workflow_call` to avoid parent/child deadlocks.
 - Do not add an identical concurrency group to a child workflow called by another workflow.
 
@@ -204,3 +204,4 @@ Notes:
 - If a run hangs, close LabVIEW and re-run the step:
   - `.github\actions\close-labview\Close_LabVIEW.ps1`
 - Release note generation can log `git describe` errors in shallow or tagless repos; VIP builds may still complete, but fetch tags if you need accurate version strings.
+

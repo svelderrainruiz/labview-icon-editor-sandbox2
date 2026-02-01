@@ -1,7 +1,7 @@
 name: CI Pipeline (Composite)
 
 concurrency:
-  group: labview-${{ github.repository }}-self-hosted-windows-lv
+  group: labview-${{ github.repository }}-self-hosted-windows-lv-ie
   cancel-in-progress: false
 
 on:
@@ -34,7 +34,7 @@ on:
 jobs:
   dev-mode-gate:
     name: Verify IE Paths Gate (LV ${{ matrix.bitness }}-bit)
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +99,7 @@ jobs:
   apply-deps-2021-x64:
     name: Apply VIPC (LV x64)
     needs: changes
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -135,7 +135,7 @@ jobs:
   apply-deps-2021-x86:
     name: Apply VIPC (LV x86)
     needs: [apply-deps-2021-x64, changes]
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -171,7 +171,7 @@ jobs:
   version:
     name: Compute Version
     needs: dev-mode-gate
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     outputs:
       VERSION:       ${{ steps.compute.outputs.VERSION }}
       MAJOR:         ${{ steps.compute.outputs.MAJOR }}
@@ -196,7 +196,7 @@ jobs:
   test-2021:
     name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
     needs: missing-in-project
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -263,7 +263,7 @@ jobs:
   build-ppl-x86:
     name: Build 32-bit Packed Library
     needs: [build-ppl-x64, version]
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -334,7 +334,7 @@ jobs:
   build-ppl-x64:
     name: Build 64-bit Packed Library
     needs: [test-2021, version]
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -406,7 +406,7 @@ jobs:
     name: Build VI Package
     # Chain after 32-bit PPL build (which depends on 64-bit PPL build).
     needs: [build-ppl-x86, version]
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - uses: actions/checkout@v4
         with:
@@ -628,6 +628,7 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+
 
 
 

@@ -54,7 +54,7 @@ If you have another workflow file (e.g., `my-other-workflow.yml`) in the same re
 
     jobs:
       call-dev-mode:
-        runs-on: [self-hosted-windows-lv]
+        runs-on: [self-hosted-windows-lv-ie]
         steps:
           - name: Invoke Dev Mode Toggle (enable)
             uses: ./.github/workflows/development-mode-toggle.yml
@@ -77,7 +77,7 @@ If you store “Development mode toggle” in a separate public repo, you can re
 
     jobs:
       remote-dev-mode:
-        runs-on: [self-hosted-windows-lv]
+        runs-on: [self-hosted-windows-lv-ie]
         steps:
           - name: Use remote Dev Mode Toggle
             uses: <owner>/<repo>/.github/workflows/development-mode-toggle.yml@main
@@ -101,7 +101,7 @@ If a collaborator forked your original repo, they might keep the workflow in the
 
     jobs:
       forked-workflow-call:
-        runs-on: [self-hosted-windows-lv]
+        runs-on: [self-hosted-windows-lv-ie]
         steps:
           - name: Call Dev Mode Toggle from My Fork
             uses: <your-fork>/<repo>/.github/workflows/development-mode-toggle.yml@my-feature-branch
@@ -168,3 +168,4 @@ Collaborators are free to:
 - GitHub Docs: https://docs.github.com/en/actions/using-workflows/reusing-workflows#calling-a-reusable-workflow
 
 ---
+

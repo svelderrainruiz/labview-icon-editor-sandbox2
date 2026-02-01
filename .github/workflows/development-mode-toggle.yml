@@ -1,7 +1,7 @@
 name: "Toggle Development Mode"
 
 concurrency:
-  group: labview-${{ github.repository }}-self-hosted-windows-lv
+  group: labview-${{ github.repository }}-self-hosted-windows-lv-ie
   cancel-in-progress: false
 
 on:
@@ -90,7 +90,7 @@ jobs:
           inputs.bitness || '64',
           inputs.labview_version || '2021') }}
 
-    runs-on: [self-hosted-windows-lv]
+    runs-on: [self-hosted-windows-lv-ie]
     env:
       selected_bitness: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.bitness || inputs.bitness }}
 
@@ -187,3 +187,4 @@ jobs:
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
             exit $LASTEXITCODE
           }
+

@@ -1,7 +1,7 @@
 name: Test Missing‑In‑Project Action on Windows
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_call' && format('labview-{0}-self-hosted-windows-lv-child-{1}', github.repository, github.run_id) || format('labview-{0}-self-hosted-windows-lv', github.repository) }}
+  group: ${{ github.event_name == 'workflow_call' && format('labview-{0}-self-hosted-windows-lv-ie-child-{1}', github.repository, github.run_id) || format('labview-{0}-self-hosted-windows-lv-ie', github.repository) }}
   cancel-in-progress: false
 
 on:
@@ -12,7 +12,7 @@ on:
 
 jobs:
   missing-in-project-check:
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -150,6 +150,7 @@ jobs:
             git -C "$env:GITHUB_WORKSPACE" worktree remove --force "$env:REPO_ROOT" 2>$null
             git -C "$env:GITHUB_WORKSPACE" worktree prune
           }
+
 
 
 

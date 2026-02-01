@@ -137,7 +137,7 @@ The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct
    Go to **Settings → Actions → Runners** in your GitHub repository (or organization) and follow the steps to register a runner on your machine that has LabVIEW installed.
 
 3. **Label the Runner** (optional):
-   - Use labels such as `self-hosted-windows-lv` for the default jobs. The default CI matrix currently runs only on this Windows label.
+   - Use labels such as `self-hosted-windows-lv-ie` for the default jobs. The default CI matrix currently runs only on this Windows label.
    - `self-hosted-linux-lv` is included for potential future expansion but isn't used by the default jobs yet.
    - Adjust the workflow’s `runs-on` lines to match your runner labels. This helps ensure the correct environment is used for building the Icon Editor.
 
@@ -204,3 +204,4 @@ This runs Verify IE Paths, applies VIPC dependencies, runs missing-in-project ch
 - **Branding**: To highlight the **organization** or **repository** behind a particular build, simply pass `-CompanyName` and `-AuthorName` (or similar parameters) into the `Build.ps1` script. This metadata flows into the final **Display Information** of the Icon Editor’s VI Package.
 
 By adopting these workflows—**Development Mode Toggle** and **Build VI Package**—you can maintain a **streamlined, consistent** CI/CD process for the Icon Editor while customizing the VI Package with your own **unique** or **fork-specific** branding.
+

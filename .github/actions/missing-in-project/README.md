@@ -55,7 +55,7 @@ Results are returned as standard GitHub Action outputs so downstream jobs can d
 # .github/workflows/ci-composite.yml  (excerpt)
 jobs:
   prepare:
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -81,7 +81,7 @@ If you want **any** missing file to abort the pipeline immediately, place the st
 ```yaml
 jobs:
   missing-check:
-    runs-on: self-hosted-windows-lv
+    runs-on: self-hosted-windows-lv-ie
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/missing-in-project
@@ -141,3 +141,4 @@ type .github/actions/missing-in-project/missing_files.txt
 
 ## License
 This directory inherits the root repository’s license (MIT, unless otherwise noted).
+

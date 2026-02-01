@@ -110,7 +110,7 @@ For **detailed runner configuration**, see **`runner-setup-guide.md`**. Below is
 2. **Add a Self-Hosted Runner**  
    - Go to **Settings → Actions → Runners**. Follow GitHub’s steps to register a Windows runner on your machine with LabVIEW installed.  
 3. **Label Your Runner**  
-   - For example, use `self-hosted-windows-lv` (or `self-hosted-linux-lv` for Linux). Ensure your workflow’s `runs-on` references these labels.
+   - For example, use `self-hosted-windows-lv-ie` (or `self-hosted-linux-lv` for Linux). Ensure your workflow’s `runs-on` references these labels.
 
 ---
 
@@ -144,7 +144,7 @@ You’ll typically name the workflow file **`development-mode-toggle.yml`**. Its
    - Choose `enable` or `disable` to run the corresponding PowerShell script (`Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`).  
    - LabVIEW version is fixed to **2021** (`labview_version`).  
    - Choose a bitness (`bitness`, default `64`).  
-   - The workflow runs on your self-hosted runner (e.g., labeled `self-hosted-windows-lv`).  
+   - The workflow runs on your self-hosted runner (e.g., labeled `self-hosted-windows-lv-ie`).  
 
 2. **Important Note for Testing**  
    - With dev mode **enabled**, LabVIEW references local code, so installing the `.vip` may fail or cause conflicts.  
@@ -167,7 +167,7 @@ on:
 
 jobs:
   call-dev-mode:
-  runs-on: self-hosted-windows-lv
+  runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Invoke Dev Mode Toggle (enable)
         uses: ./.github/workflows/development-mode-toggle.yml
@@ -185,7 +185,7 @@ on:
 
 jobs:
   remote-dev-mode:
-  runs-on: self-hosted-windows-lv
+  runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Use remote Dev Mode Toggle
         uses: <owner>/<repo>/.github/workflows/development-mode-toggle.yml@main
@@ -203,7 +203,7 @@ on:
 
 jobs:
   forked-workflow-call:
-  runs-on: self-hosted-windows-lv
+  runs-on: self-hosted-windows-lv-ie
     steps:
       - name: Call Dev Mode Toggle from My Fork
         uses: <your-fork>/<repo>/.github/workflows/development-mode-toggle.yml@my-feature-branch
@@ -323,4 +323,5 @@ In order to **enforce** the Gitflow approach “hands-off”:
 - **Gitflow Diagram**: [Atlassian Gitflow Workflow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow) or any other standard resource to visualize the overall branching approach (extended with alpha/beta/rc branches).
 
 ---
+
 
