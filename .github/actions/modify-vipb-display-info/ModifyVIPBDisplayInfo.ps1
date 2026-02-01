@@ -273,11 +273,9 @@ Set-VipbElementValue -ParentNode $descriptionSettings -ElementName "Description"
 
 # Update optional license reference (resolve to an actual file path when possible)
 $licenseAgreementInput = $jsonObj.'License Agreement Name'
+$resolvedLicensePath = $null
 if (-not [string]::IsNullOrWhiteSpace($licenseAgreementInput)) {
     $candidatePath = $licenseAgreementInput
-    $relativePath  = $licenseAgreementInput
-    $resolvedLicensePath = $null
-
     if (-not [System.IO.Path]::IsPathRooted($candidatePath)) {
         $candidatePath = Join-Path -Path $ResolvedRepoRoot -ChildPath $licenseAgreementInput
     }
@@ -287,24 +285,28 @@ if (-not [string]::IsNullOrWhiteSpace($licenseAgreementInput)) {
             $resolvedLicensePath = (Resolve-Path -Path $candidatePath -ErrorAction Stop).Path
         }
         catch {
-            Write-Warning "Unable to resolve license file path '$candidatePath'. Using literal value instead."
+            Write-Warning "Unable to resolve license file path '$candidatePath'."
         }
     }
     else {
-        Write-Warning "License agreement path '$licenseAgreementInput' does not exist relative to the repository. Skipping license assignment."
+        Write-Warning "License agreement path '$licenseAgreementInput' does not exist relative to the repository."
     }
+}
 
-    if ($resolvedLicensePath) {
-        try {
-            $vipbDirectory = Split-Path -Parent $ResolvedVIPBPath
-            $relativePath = [System.IO.Path]::GetRelativePath($vipbDirectory, $resolvedLicensePath)
-        }
-        catch {
-            Write-Warning "Unable to compute a relative license path from '$ResolvedVIPBPath'. Using absolute path instead."
-            $relativePath = $resolvedLicensePath
-        }
-        Set-VipbElementValue -ParentNode $advancedSettings -ElementName "License_Agreement_Filepath" -Value $relativePath
+if ($resolvedLicensePath) {
+    $relativePath = $resolvedLicensePath
+    try {
+        $vipbDirectory = Split-Path -Parent $ResolvedVIPBPath
+        $relativePath = [System.IO.Path]::GetRelativePath($vipbDirectory, $resolvedLicensePath)
     }
+    catch {
+        Write-Warning "Unable to compute a relative license path from '$ResolvedVIPBPath'. Using absolute path instead."
+    }
+    Set-VipbElementValue -ParentNode $advancedSettings -ElementName "License_Agreement_Filepath" -Value $relativePath
+}
+else {
+    # Ensure VIP builds don't depend on any local license file by default.
+    Set-VipbElementValue -ParentNode $advancedSettings -ElementName "License_Agreement_Filepath" -Value ''
 }
 
 # Warn about any DisplayInformation JSON keys we don't yet handle

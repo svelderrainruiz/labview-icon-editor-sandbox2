@@ -57,12 +57,6 @@ param(
     [string]$JobName,
 
     [Parameter(Mandatory = $false)]
-    [string]$RunId,
-
-    [Parameter(Mandatory = $false)]
-    [string]$RunAttempt,
-
-    [Parameter(Mandatory = $false)]
     [string]$ProjectFile = 'lv_icon_editor.lvproj',
 
     [Parameter(Mandatory = $false)]
@@ -137,22 +131,6 @@ if ([string]::IsNullOrWhiteSpace($jobName)) {
     throw "JobName is required to compute the worktree name."
 }
 
-$runId = $RunId
-if ([string]::IsNullOrWhiteSpace($runId)) {
-    $runId = $env:GITHUB_RUN_ID
-}
-if ([string]::IsNullOrWhiteSpace($runId)) {
-    $runId = 'local'
-}
-
-$runAttempt = $RunAttempt
-if ([string]::IsNullOrWhiteSpace($runAttempt)) {
-    $runAttempt = $env:GITHUB_RUN_ATTEMPT
-}
-if ([string]::IsNullOrWhiteSpace($runAttempt)) {
-    $runAttempt = '1'
-}
-
 $ref = $Ref
 if ([string]::IsNullOrWhiteSpace($ref)) {
     $ref = $env:GITHUB_SHA
@@ -194,9 +172,9 @@ $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::
 
 $variantToken = if ([string]::IsNullOrWhiteSpace($Variant)) { $null } else { $Variant }
 $name = if ($variantToken) {
-    "ci-$jobHash-$variantToken-$Bitness-$runId-$runAttempt"
+    "ci-$jobHash-$variantToken-$Bitness"
 } else {
-    "ci-$jobHash-$Bitness-$runId-$runAttempt"
+    "ci-$jobHash-$Bitness"
 }
 
 $targetPath = Join-Path $root $name
@@ -209,6 +187,31 @@ if (-not (Test-Path -Path $ensureScript)) {
 $worktreeScript = Join-Path $repoRoot 'Tooling/New-CIWorktree.ps1'
 if (-not (Test-Path -Path $worktreeScript)) {
     throw "New-CIWorktree.ps1 not found at $worktreeScript"
+}
+
+# If a previous run was cancelled, the worktree folder may still exist.
+# Reuse the *same* short path across runs for deterministic paths and to
+# avoid accumulating stale worktree folders under the root.
+if (Test-Path -Path $targetPath) {
+    Write-Host ("Cleaning existing worktree at {0}" -f $targetPath)
+
+    try {
+        git -C $repoRoot worktree remove --force $targetPath 2>$null | Out-Null
+    }
+    catch {
+        # Ignore; directory may not be registered as a worktree.
+    }
+
+    try {
+        git -C $repoRoot worktree prune 2>$null | Out-Null
+    }
+    catch {
+        # Ignore; prune can fail if the main worktree is busy.
+    }
+
+    if (Test-Path -Path $targetPath) {
+        Remove-Item -Path $targetPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 $worktree = & $worktreeScript -Ref $ref -Path $targetPath -WorktreeRoot $root

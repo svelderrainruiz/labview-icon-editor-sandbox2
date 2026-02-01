@@ -1,27 +1,52 @@
-$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$scriptPath = Join-Path $repoRoot ".github/actions/modify-vipb-display-info/ModifyVIPBDisplayInfo.ps1"
-$fixtureSource = Join-Path $repoRoot "Test/fixtures/modify-vipb/fixture.vipb"
-$tempRoot = Join-Path $repoRoot "Test/tmp"
-
 Describe "ModifyVIPBDisplayInfo.ps1" {
     BeforeAll {
-        New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+        # Pester runs discovery and execution in separate scopes; compute paths at execution time.
+        function Find-RepoRoot {
+            param([string]$StartPath)
+
+            $dir = $StartPath
+            while ($dir -and (Test-Path -Path $dir)) {
+                if ((Test-Path (Join-Path $dir ".git")) -or (Test-Path (Join-Path $dir ".lvversion"))) {
+                    return (Resolve-Path -Path $dir).Path
+                }
+
+                $parent = Split-Path -Parent $dir
+                if ($parent -eq $dir) {
+                    break
+                }
+                $dir = $parent
+            }
+
+            throw "Unable to locate repository root from '$StartPath'."
+        }
+
+        $startPath = $PSScriptRoot
+        if ([string]::IsNullOrWhiteSpace($startPath)) {
+            $startPath = (Get-Location).Path
+        }
+
+        $script:repoRoot = Find-RepoRoot -StartPath $startPath
+        $script:scriptPath = Join-Path $script:repoRoot ".github/actions/modify-vipb-display-info/ModifyVIPBDisplayInfo.ps1"
+        # Use the repository VIPB as the fixture source; copy into a temp file per test.
+        $script:fixtureSource = Join-Path $script:repoRoot "Tooling/deployment/NI Icon editor.vipb"
+        $script:tempRoot = Join-Path $script:repoRoot "Test/tmp"
+
+        New-Item -ItemType Directory -Path $script:tempRoot -Force | Out-Null
     }
 
     AfterAll {
-        if (Test-Path $tempRoot) {
-            Remove-Item -Path $tempRoot -Recurse -Force
+        if ($script:tempRoot -and (Test-Path $script:tempRoot)) {
+            Remove-Item -Path $script:tempRoot -Recurse -Force
         }
     }
 
     It "updates VIPB metadata according to DisplayInformation JSON" {
-        $vipbPath = Join-Path $tempRoot ("fixture_{0}.vipb" -f ([guid]::NewGuid().ToString("N")))
-        Copy-Item -Path $fixtureSource -Destination $vipbPath
+        $vipbPath = Join-Path $script:tempRoot ("fixture_{0}.vipb" -f ([guid]::NewGuid().ToString("N")))
+        Copy-Item -Path $script:fixtureSource -Destination $vipbPath
 
-        $releaseNotesPath = Join-Path $tempRoot ("release_notes_{0}.md" -f ([guid]::NewGuid().ToString("N")))
+        $releaseNotesPath = Join-Path $script:tempRoot ("release_notes_{0}.md" -f ([guid]::NewGuid().ToString("N")))
         $releaseNotesContent = "Release notes content from file"
-        Set-Content -Path $releaseNotesPath -Value $releaseNotesContent
+        Set-Content -Path $releaseNotesPath -Value $releaseNotesContent -NoNewline
 
         $displayInformation = [ordered]@{
             "Company Name"                 = "svelderrainruiz"
@@ -31,17 +56,16 @@ Describe "ModifyVIPBDisplayInfo.ps1" {
             "Author Name (Person or Company)" = "svelderrainruiz/labview-icon-editor"
             "Product Homepage (URL)"       = "https://github.com/svelderrainruiz/labview-icon-editor"
             "Legal Copyright"              = "© 2025 svelderrainruiz"
-            "License Agreement Name"       = "LICENSE"
             "Release Notes - Change Log"   = $releaseNotesContent
             "Package Version"              = @{ major = 1; minor = 4; patch = 1; build = 1194 }
         }
 
         $displayInformationJson = $displayInformation | ConvertTo-Json -Depth 5
-        $relativeVipbPath = [System.IO.Path]::GetRepoRoot($repoRoot, $vipbPath)
+        $relativeVipbPath = [System.IO.Path]::GetRelativePath($script:repoRoot, $vipbPath)
 
-        & $scriptPath `
+        & $script:scriptPath `
             -SupportedBitness 64 `
-            -RepoRoot $repoRoot `
+            -RepoRoot $script:repoRoot `
             -VIPBPath $relativeVipbPath `
             -MinimumSupportedLVVersion 2021 `
             -LabVIEWMinorRevision 0 `
@@ -57,7 +81,6 @@ Describe "ModifyVIPBDisplayInfo.ps1" {
         $generalSettings = $vipbXml.VI_Package_Builder_Settings.Library_General_Settings
         $descriptionSettings = $vipbXml.VI_Package_Builder_Settings.Advanced_Settings.Description
         $licenseSetting = $vipbXml.VI_Package_Builder_Settings.Advanced_Settings.License_Agreement_Filepath
-        $expectedLicensePath = [System.IO.Path]::GetRelativePath((Split-Path -Parent $vipbPath), (Join-Path $repoRoot "LICENSE"))
 
         $generalSettings.Company_Name | Should -Be $displayInformation."Company Name"
         $generalSettings.Product_Name | Should -Be $displayInformation."Product Name"
@@ -66,6 +89,6 @@ Describe "ModifyVIPBDisplayInfo.ps1" {
         $descriptionSettings.URL | Should -Be $displayInformation."Product Homepage (URL)"
         $descriptionSettings.Release_Notes | Should -Be $releaseNotesContent
         $descriptionSettings.Description | Should -Match "Commit: deadbeef"
-        $licenseSetting | Should -Be $expectedLicensePath
+        $licenseSetting | Should -Be ''
     }
 }

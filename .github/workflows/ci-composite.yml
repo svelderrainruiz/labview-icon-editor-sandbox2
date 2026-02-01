@@ -474,7 +474,6 @@ jobs:
               $Env:REPO_URL
             }
             "Legal Copyright" = "© $(Get-Date -Format yyyy) $($Env:COMPANY)"
-            "License Agreement Name" = "LICENSE"
             "Product Description Summary" = $description
             "Product Description" = $description
             "Release Notes - Change Log" = $releaseNotes
@@ -570,6 +569,12 @@ jobs:
           "vip_path=$($vip.FullName)" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
           "vip_name=$($vip.Name)" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
           "vip_artifact=$([System.IO.Path]::GetFileNameWithoutExtension($vip.Name))" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+      - name: Inspect VI Package contents (zip paths)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:REPO_ROOT\\Tooling\\Inspect-VipPackage.ps1" `
+            -VipPath "${{ steps.locate-vip.outputs.vip_path }}" `
+            -WriteSummary
       - name: Upload release notes
         uses: actions/upload-artifact@v4
         with:

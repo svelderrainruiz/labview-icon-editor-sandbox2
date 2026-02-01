@@ -419,7 +419,6 @@ function Get-DisplayInformationJson {
         "Author Name (Person or Company)" = $meta.FullName
         "Product Homepage (URL)" = if ([string]::IsNullOrWhiteSpace($meta.Url)) { "" } else { $meta.Url }
         "Legal Copyright" = "(c) $(Get-Date -Format yyyy) $($meta.Owner)"
-        "License Agreement Name" = "LICENSE"
         "Product Description Summary" = $description
         "Product Description" = $description
         "Release Notes - Change Log" = $releaseNotes
