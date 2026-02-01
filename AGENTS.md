@@ -70,7 +70,7 @@ LabVIEW workflows are serialized on the shared self-hosted runner label to avoid
 Notes:
 - Workflows share a concurrency group keyed by repository + runner label (e.g., `labview-<repo>-self-hosted-windows-lv-ie`).
 - Missing-in-project is inlined in `ci-composite.yml` to avoid reusable workflow skips; the standalone workflow is manual only.
-- Self-hosted LabVIEW jobs acquire a runner lock at `<worktree_root>\locks\labview-runner.lock` via `Tooling\RunnerLock.ps1`. Remove the lock directory if it is stale.
+- Self-hosted LabVIEW jobs acquire a runner lock at `<worktree_root>\locks\labview-runner.lock` via `Tooling\RunnerLock.ps1`. The lock auto-expires stale entries (lease + optional GitHub run status check) and logs owner metadata. Env overrides: `LVIE_RUNNER_LOCK_TIMEOUT_SECONDS`, `LVIE_RUNNER_LOCK_LEASE_SECONDS`, `LVIE_RUNNER_LOCK_STALE_SECONDS`, `LVIE_RUNNER_LOCK_GITHUB_CHECK`, `LVIE_RUNNER_LOCK_GITHUB_MIN_AGE_SECONDS`, `LVIE_RUNNER_LOCK_GITHUB_CHECK_INTERVAL_SECONDS`.
 
 ## Local CI Parity (recommended)
 Run the local parity script that mirrors `ci-composite.yml`:
