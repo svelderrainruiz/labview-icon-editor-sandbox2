@@ -82,6 +82,78 @@ function Resolve-RepoRoot {
     return (Resolve-Path -Path (Join-Path $PSScriptRoot '..')).Path
 }
 
+function Normalize-PathString {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $Path
+    }
+
+    $full = [System.IO.Path]::GetFullPath($Path)
+    if ($full.Length -gt 3 -and $full.EndsWith('\')) {
+        $full = $full.TrimEnd('\')
+    }
+
+    return $full
+}
+
+function Get-RegisteredWorktreePaths {
+    param([string]$RepoRoot)
+
+    $paths = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    try {
+        $lines = & git -C $RepoRoot worktree list --porcelain 2>$null
+        foreach ($line in $lines) {
+            if ($line -like 'worktree *') {
+                $path = $line.Substring(9).Trim()
+                if (-not [string]::IsNullOrWhiteSpace($path)) {
+                    $paths.Add($path) | Out-Null
+                }
+            }
+        }
+    }
+    catch {
+        # If git fails, leave the set empty and allow cleanup to be conservative.
+    }
+
+    return $paths
+}
+
+function Invoke-WorktreeRetentionCleanup {
+    param(
+        [string]$Root,
+        [string]$RepoRoot,
+        [string]$TargetPath,
+        [int]$RetentionDays
+    )
+
+    if ($RetentionDays -le 0) {
+        return
+    }
+
+    if (-not (Test-Path -Path $Root -PathType Container)) {
+        return
+    }
+
+    $cutoff = (Get-Date).AddDays(-$RetentionDays)
+    $registered = Get-RegisteredWorktreePaths -RepoRoot $RepoRoot
+
+    Get-ChildItem -Path $Root -Directory -Force | Where-Object {
+        $_.Name -like 'ci-*' -and
+        $_.LastWriteTime -lt $cutoff -and
+        (-not $registered.Contains($_.FullName)) -and
+        ($_.FullName -ne $TargetPath)
+    } | ForEach-Object {
+        try {
+            Write-Host ("Removing stale worktree folder: {0}" -f $_.FullName)
+            Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            Write-Warning ("Failed to remove stale worktree folder: {0}. {1}" -f $_.FullName, $_.Exception.Message)
+        }
+    }
+}
+
 function Resolve-LabVIEWVersionInfo {
     param([string]$VersionPath)
 
@@ -166,6 +238,7 @@ $root = [System.IO.Path]::GetFullPath($root)
 if (-not $rootIsExplicit) {
     New-Item -Path $root -ItemType Directory -Force | Out-Null
 }
+$root = Normalize-PathString -Path $root
 
 $hashBytes = [System.Text.Encoding]::UTF8.GetBytes($jobName)
 $jobHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA1]::Create().ComputeHash($hashBytes)).Replace('-', '').Substring(0, 8)
@@ -178,6 +251,7 @@ $name = if ($variantToken) {
 }
 
 $targetPath = Join-Path $root $name
+$targetPath = Normalize-PathString -Path $targetPath
 
 $ensureScript = Join-Path $repoRoot 'Tooling/Ensure-WorktreeRoot.ps1'
 if (-not (Test-Path -Path $ensureScript)) {
@@ -187,6 +261,19 @@ if (-not (Test-Path -Path $ensureScript)) {
 $worktreeScript = Join-Path $repoRoot 'Tooling/New-CIWorktree.ps1'
 if (-not (Test-Path -Path $worktreeScript)) {
     throw "New-CIWorktree.ps1 not found at $worktreeScript"
+}
+
+$retentionDays = $null
+if (-not [string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_RETENTION_DAYS)) {
+    if (-not [int]::TryParse($env:LVIE_WORKTREE_RETENTION_DAYS, [ref]$retentionDays)) {
+        throw "LVIE_WORKTREE_RETENTION_DAYS must be an integer (got '$env:LVIE_WORKTREE_RETENTION_DAYS')."
+    }
+} elseif ($env:GITHUB_ACTIONS -eq 'true') {
+    $retentionDays = 7
+}
+
+if ($null -ne $retentionDays) {
+    Invoke-WorktreeRetentionCleanup -Root $root -RepoRoot $repoRoot -TargetPath $targetPath -RetentionDays $retentionDays
 }
 
 # If a previous run was cancelled, the worktree folder may still exist.
@@ -215,7 +302,18 @@ if (Test-Path -Path $targetPath) {
 }
 
 $worktree = & $worktreeScript -Ref $ref -Path $targetPath -WorktreeRoot $root
+$worktree = Normalize-PathString -Path $worktree
+
+if (-not (Test-Path -Path $worktree)) {
+    throw "Worktree path does not exist after creation: $worktree"
+}
+
 $projectPath = Join-Path $worktree $ProjectFile
+$projectPath = Normalize-PathString -Path $projectPath
+
+if (-not (Test-Path -Path $projectPath)) {
+    throw "Project file not found at $projectPath"
+}
 
 $lvInfo = Resolve-LabVIEWVersionInfo -VersionPath (Join-Path $worktree '.lvversion')
 
