@@ -3,7 +3,7 @@ param(
     [string]$Ref = 'experimental/447-Sergio-Change-Number-1',
     [string[]]$ModeSequence = @('disable', 'enable'),
     [string[]]$AllowFailureModes = @(),
-    [ValidateSet('2021')]
+    [ValidatePattern('^\d{2,4}(\.\d+)?$')]
     [string]$LabVIEWVersion = '2021',
     [int]$PollSeconds = 2,
     [int]$TimeoutMinutes = 3,

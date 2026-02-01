@@ -22,7 +22,7 @@ runs:
           -ProjectPath "${{ inputs.project_path }}"
 inputs:
   labview_version:
-    description: 'LabVIEW version to run (2021/21.0 only).'
+    description: 'LabVIEW version to run (year or numeric).'
     required: true
   supported_bitness:
     description: '32 or 64'

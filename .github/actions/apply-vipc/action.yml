@@ -24,10 +24,10 @@ runs:
           -VIPCPath "${{ inputs.vipc_path }}"
 inputs:
   labview_version:
-    description: 'LabVIEW version to target (2021/21.0 only).'
+    description: 'LabVIEW version to target (year or numeric).'
     required: true
   vip_lv_version:
-    description: 'VIPC LabVIEW version (2021 / 21.0)'
+    description: 'VIPC LabVIEW version (year or numeric).'
     required: true
   supported_bitness:
     description: '32 or 64'

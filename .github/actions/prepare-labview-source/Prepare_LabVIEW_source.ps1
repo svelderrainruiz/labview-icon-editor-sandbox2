@@ -9,7 +9,7 @@
     VI executes so subsequent steps load the changes.
 
 .PARAMETER MinimumSupportedLVVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER SupportedBitness
     Target bitness of the LabVIEW environment ("32" or "64").
@@ -30,7 +30,8 @@
 
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('2021')]
+    [AllowNull()]
+    [AllowEmptyString()]
     [string]$MinimumSupportedLVVersion,
 
     [Parameter(Mandatory = $true)]
@@ -106,6 +107,16 @@ function Get-LabVIEWInstallRoot {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$versionHelper = Join-Path -Path $repoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
+$labviewYear = $MinimumSupportedLVVersion
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $versionInfo = Get-LabVIEWVersionInfo -VersionInput $MinimumSupportedLVVersion -RepoRoot $repoRoot
+    $labviewYear = $versionInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
 $gCliRunner = Join-Path -Path $repoRoot -ChildPath 'Tooling\support\GcliRunner.ps1'
 if (-not (Test-Path -Path $gCliRunner)) {
     throw "g-cli helper not found at $gCliRunner"
@@ -125,8 +136,8 @@ if (-not (Test-Path -Path $viPath)) {
     throw "PrepareIESource.vi not found at $viPath"
 }
 
-if (-not (Get-LabVIEWInstallRoot -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness)) {
-    throw "LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) install not found."
+if (-not (Get-LabVIEWInstallRoot -Version $labviewYear -Bitness $SupportedBitness)) {
+    throw "LabVIEW $labviewYear ($SupportedBitness-bit) install not found."
 }
 
 if (-not (Get-Command g-cli -ErrorAction SilentlyContinue)) {
@@ -136,7 +147,7 @@ if (-not (Get-Command g-cli -ErrorAction SilentlyContinue)) {
 $gCliPath = (Get-Command g-cli -ErrorAction SilentlyContinue).Source
 
 $gCliArgs = @(
-    '--lv-ver', $MinimumSupportedLVVersion,
+    '--lv-ver', $labviewYear,
     '--arch', $SupportedBitness,
     '-v', $viPath
 )
@@ -184,8 +195,8 @@ try {
         $closeFailure = "Close_LabVIEW.ps1 not found at $closeScript"
     } else {
         try {
-            Write-Host "Closing LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit)..."
-            & $closeScript -MinimumSupportedLVVersion $MinimumSupportedLVVersion -SupportedBitness $SupportedBitness
+            Write-Host "Closing LabVIEW $labviewYear ($SupportedBitness-bit)..."
+            & $closeScript -MinimumSupportedLVVersion $labviewYear -SupportedBitness $SupportedBitness
             if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
                 $closeFailure = "Close_LabVIEW.ps1 failed with exit code $LASTEXITCODE."
             }

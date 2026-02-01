@@ -35,7 +35,7 @@ runs:
           -DisplayInformationJSON $displayInformationJson
 inputs:
   labview_version:
-    description: 'LabVIEW version to target (2021/21.0 only).'
+    description: 'LabVIEW version to target (year or numeric).'
     required: true
   supported_bitness:
     description: '32 or 64'
@@ -47,7 +47,7 @@ inputs:
     description: 'Path to the VIPB file (relative to workspace)'
     required: true
   labview_minor_revision:
-    description: 'LabVIEW minor revision (0 for 21.0)'
+    description: 'LabVIEW minor revision (e.g., 0 for 21.0)'
     required: false
     default: '0'
   major:

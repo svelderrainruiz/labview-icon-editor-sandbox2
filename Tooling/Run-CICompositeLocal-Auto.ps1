@@ -8,7 +8,7 @@
     Uses the existing parity script for all work and logging.
 
 .PARAMETER LabVIEWVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER MaxAttempts
     Maximum number of attempts.
@@ -50,8 +50,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet('2021')]
-    [string]$LabVIEWVersion = '2021',
+    [AllowNull()]
+    [AllowEmptyString()]
+    [string]$LabVIEWVersion = '',
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(1, 100)]
@@ -143,6 +144,16 @@ function Write-AutoHistoryEntry {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
+$labviewInfo = $null
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $labviewInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $repoRoot
+    $LabVIEWVersion = $labviewInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
+    $LabVIEWVersion = '2021'
+}
 $runScript = Join-Path $repoRoot 'Tooling/Run-CICompositeLocal.ps1'
 if (-not (Test-Path -Path $runScript)) {
     throw "Run-CICompositeLocal.ps1 not found at $runScript"

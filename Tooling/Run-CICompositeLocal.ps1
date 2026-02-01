@@ -5,17 +5,17 @@
 
 .DESCRIPTION
     Executes the key LabVIEW steps from ci-composite.yml locally:
-    - Verify IE Paths gate (2021 32/64)
-    - Apply VIPC dependencies (2021 32/64)
-    - Missing-in-project checks (2021 32/64)
-    - Unit tests (2021 32/64)
-    - Build PPLs (2021 32/64) + rename
-    - Build VIP (2021 64)
+    - Verify IE Paths gate (version 32/64)
+    - Apply VIPC dependencies (version 32/64)
+    - Missing-in-project checks (version 32/64)
+    - Unit tests (version 32/64)
+    - Build PPLs (version 32/64) + rename
+    - Build VIP (version 64)
 
     GitHub-only gates (issue-status, labels, artifact upload) are not included.
 
 .PARAMETER LabVIEWVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER SkipVerifyIEPaths
     Skip the Verify IE Paths gate.
@@ -81,8 +81,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet('2021')]
-    [string]$LabVIEWVersion = '2021',
+    [AllowNull()]
+    [AllowEmptyString()]
+    [string]$LabVIEWVersion = '',
 
     [switch]$SkipVerifyIEPaths,
     [switch]$EnsureCleanState,
@@ -478,6 +479,16 @@ function Write-GCliBuildLogTail {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
+$labviewInfo = $null
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $labviewInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $repoRoot
+    $LabVIEWVersion = $labviewInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
+    $LabVIEWVersion = '2021'
+}
 $worktreeRoot = $env:LVIE_WORKTREE_ROOT
 if ([string]::IsNullOrWhiteSpace($worktreeRoot)) {
     $worktreeRoot = 'C:\dev'
@@ -523,11 +534,11 @@ try {
 
     Wait-ForIdle -RunHistoryPath $script:RunHistoryPath
 
-    $bitnessList = @('64', '32')
+$bitnessList = @('64', '32')
     foreach ($bitness in $bitnessList) {
         Assert-LabVIEWInstalled -Version $LabVIEWVersion -Bitness $bitness
     }
-    $vipLabVIEWMinorRevision = "0"
+    $vipLabVIEWMinorRevision = if ($labviewInfo) { [int]$labviewInfo.MinorRevision } else { 0 }
 
     $versionInfo = Get-LocalVersionInfo -RepoRoot $repoRoot -BumpType $BumpType
     if ($PSBoundParameters.ContainsKey('Major')) { $versionInfo.Major = $Major }

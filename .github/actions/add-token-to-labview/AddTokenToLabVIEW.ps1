@@ -8,7 +8,7 @@
     LabVIEW to locate local project libraries during development or builds.
 
 .PARAMETER MinimumSupportedLVVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER SupportedBitness
     Target bitness of the LabVIEW environment ("32" or "64").
@@ -21,15 +21,30 @@
 #>
 
 param(
-    [ValidateSet('2021')]
+    [Alias('LabVIEWVersion')]
+    [AllowNull()]
+    [AllowEmptyString()]
     [string]$MinimumSupportedLVVersion = '2021',
     [string]$SupportedBitness,
     [string]$RepoRoot
 )
 
+$labviewYear = $MinimumSupportedLVVersion
+if ($RepoRoot) {
+    $versionHelper = Join-Path -Path $RepoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
+    if (Test-Path -Path $versionHelper) {
+        . $versionHelper
+        $versionInfo = Get-LabVIEWVersionInfo -VersionInput $MinimumSupportedLVVersion -RepoRoot $RepoRoot
+        $labviewYear = $versionInfo.Year
+    }
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
+
 # Construct the command
 $script = @"
-g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness -v "$RepoRoot\Tooling\deployment\Create_LV_INI_Token.vi" -- "LabVIEW" "Localhost.LibraryPaths" "$RepoRoot"
+g-cli --lv-ver $labviewYear --arch $SupportedBitness -v "$RepoRoot\Tooling\deployment\Create_LV_INI_Token.vi" -- "LabVIEW" "Localhost.LibraryPaths" "$RepoRoot"
 "@
 
 Write-Output "Executing the following command:"

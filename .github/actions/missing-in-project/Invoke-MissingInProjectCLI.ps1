@@ -1,12 +1,24 @@
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('2021')][string]$LVVersion,
+    [Parameter(Mandatory)][string]$LVVersion,
     [Parameter(Mandatory)][ValidateSet('32','64')][string]$Arch,
     [Parameter(Mandatory)][string]$ProjectFile
 )
 
 $ErrorActionPreference = 'Stop'
+
+$repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
+$labviewYear = $LVVersion
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LVVersion -RepoRoot $repoRoot
+    $labviewYear = $versionInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
 
 # ---------- GLOBAL STATE ----------
 $Script:HelperExitCode   = 0
@@ -24,7 +36,7 @@ if (-not (Test-Path $HelperPath)) {
 # =========================  SETUP  =========================
 function Setup {
     Write-Host "=== Setup ==="
-    Write-Host "LVVersion  : $LVVersion"
+    Write-Host "LVVersion  : $labviewYear"
     Write-Host "Arch       : $Arch-bit"
     Write-Host "ProjectFile: $ProjectFile"
 
@@ -42,7 +54,7 @@ function MainSequence {
     Write-Host "Invoking missing‑file check via helper script …`n"
 
     # call helper & capture any stdout (not strictly needed now)
-    & $HelperPath -LVVersion $LVVersion -Arch $Arch -ProjectFile $ProjectFile
+    & $HelperPath -LVVersion $labviewYear -Arch $Arch -ProjectFile $ProjectFile
     $Script:HelperExitCode = $LASTEXITCODE
 
     if ($Script:HelperExitCode -ne 0) {
@@ -100,7 +112,7 @@ function Cleanup {
 # Close LabVIEW but do not fail the job if it is already closed/missing
 function SafeQuitLabVIEW {
     try {
-        & g-cli --lv-ver $LVVersion --arch $Arch QuitLabVIEW | Out-Null
+        & g-cli --lv-ver $labviewYear --arch $Arch QuitLabVIEW | Out-Null
     }
     catch {
         Write-Warning ("Failed to close LabVIEW: {0}" -f $_.Exception.Message)

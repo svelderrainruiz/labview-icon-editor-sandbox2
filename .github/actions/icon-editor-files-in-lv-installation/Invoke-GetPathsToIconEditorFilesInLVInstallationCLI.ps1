@@ -2,7 +2,6 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('2021')]
     [string]$LVVersion,
 
     [Parameter(Mandatory)]
@@ -24,6 +23,7 @@ $ErrorActionPreference = 'Stop'
 $headers = @('File Path', 'Bytes', 'Last modified')
 $diagnosticsBaseName = 'Icon_Editor_Files_In_LV_Installation_Diagnostics'
 $defaultCsvName = "$diagnosticsBaseName.csv"
+$labviewYear = $LVVersion
 
 function Resolve-RepoRoot {
     param(
@@ -104,7 +104,7 @@ function Invoke-IconEditorDiagnostics {
     }
 
     $gCliArgs = @(
-        '--lv-ver', $LVVersion,
+        '--lv-ver', $labviewYear,
         '--arch', $Arch
     )
 
@@ -183,7 +183,7 @@ function Write-GitHubOutputs {
 
 function Safe-QuitLabVIEW {
     try {
-        & g-cli --lv-ver $LVVersion --arch $Arch QuitLabVIEW | Out-Null
+        & g-cli --lv-ver $labviewYear --arch $Arch QuitLabVIEW | Out-Null
     }
     catch {
         Write-Warning ("Failed to close LabVIEW: {0}" -f $_.Exception.Message)
@@ -199,6 +199,15 @@ try {
     }
 
     $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+    $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
+    if (Test-Path -Path $versionHelper) {
+        . $versionHelper
+        $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LVVersion -RepoRoot $repoRoot
+        $labviewYear = $versionInfo.Year
+    }
+    if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+        $labviewYear = '2021'
+    }
     $viPath = Join-Path $repoRoot 'Tooling\GetPathsToIconEditorFilesInLVInstallationCLI.vi'
     if (-not (Test-Path -Path $viPath)) {
         throw "VI not found: $viPath"

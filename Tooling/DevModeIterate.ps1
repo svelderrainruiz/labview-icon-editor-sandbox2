@@ -8,7 +8,7 @@
     scripts parse g-cli output for dev-mode error codes.
 
 .PARAMETER MinimumSupportedLVVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER SupportedBitness
     LabVIEW bitness to target ("32" or "64"). Defaults to "64".
@@ -45,8 +45,9 @@
 
 param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet('2021')]
-    [string]$MinimumSupportedLVVersion = '2021',
+    [AllowNull()]
+    [AllowEmptyString()]
+    [string]$MinimumSupportedLVVersion = '',
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('32', '64', IgnoreCase = $true)]
@@ -99,6 +100,16 @@ function Resolve-RepoRoot {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$versionHelper = Join-Path -Path $repoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
+$labviewYear = $MinimumSupportedLVVersion
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $versionInfo = Get-LabVIEWVersionInfo -VersionInput $MinimumSupportedLVVersion -RepoRoot $repoRoot
+    $labviewYear = $versionInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
 $logPathResolved = $LogPath
 if ([string]::IsNullOrWhiteSpace($logPathResolved)) {
     $logDir = Join-Path -Path $repoRoot -ChildPath 'Tooling\logs'
@@ -123,7 +134,7 @@ if (-not (Test-Path -Path $revertScript)) {
 }
 
 $scriptArgs = @{
-    MinimumSupportedLVVersion = $MinimumSupportedLVVersion
+    MinimumSupportedLVVersion = $labviewYear
     SupportedBitness          = $SupportedBitness
     RepoRoot              = $repoRoot
 }
@@ -208,7 +219,7 @@ function Invoke-DevModeScript {
 }
 
 Write-IterationLog ("start version={0} bitness={1} iterations={2} sequence={3} log={4}" -f `
-    $MinimumSupportedLVVersion, $SupportedBitness, $Iterations, ($ModeSequence -join ','), $logPathResolved)
+    $labviewYear, $SupportedBitness, $Iterations, ($ModeSequence -join ','), $logPathResolved)
 
 $transcriptActive = $false
 $transcriptPathResolved = $null

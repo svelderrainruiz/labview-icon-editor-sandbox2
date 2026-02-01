@@ -1,6 +1,7 @@
 param(
-    [ValidateSet('2021')]
-    [string]$LabVIEWVersion = '2021',
+    [AllowNull()]
+    [AllowEmptyString()]
+    [string]$LabVIEWVersion = '',
 
     [ValidateSet('32', '64', 'both', 'all', 'auto')]
     [string]$LabVIEWBitness = '64',
@@ -19,6 +20,19 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Resolve-Path -Path (Join-Path $PSScriptRoot '..\..')
+$versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $repoRoot
+    $LabVIEWVersion = $versionInfo.Year
+    $env:LABVIEW_VERSION_RAW = $versionInfo.Raw
+    $env:LABVIEW_VERSION_YEAR = $versionInfo.Year
+    $env:LABVIEW_MINOR_REVISION = $versionInfo.MinorRevision.ToString()
+    $env:LABVIEW_NUMERIC_VERSION = $versionInfo.NumericVersion
+} elseif ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
+    $LabVIEWVersion = '2021'
+}
+
 $env:LABVIEW_VERSION = $LabVIEWVersion
 $env:LABVIEW_BITNESS = $LabVIEWBitness
 $env:LABVIEW_CONNECT_TIMEOUT_MS = $ConnectTimeoutMs.ToString()

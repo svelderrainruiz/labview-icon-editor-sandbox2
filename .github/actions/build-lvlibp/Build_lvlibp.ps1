@@ -7,7 +7,7 @@
     g-cli, embedding the provided version information and commit identifier.
 
 .PARAMETER MinimumSupportedLVVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER SupportedBitness
     Bitness of the LabVIEW environment ("32" or "64").
@@ -34,7 +34,9 @@
     .\Build_lvlibp.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64" -RepoRoot "C:\labview-icon-editor" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "Placeholder"
 #>
 param(
-    [ValidateSet('2021')]
+    [Alias('LabVIEWVersion')]
+    [AllowNull()]
+    [AllowEmptyString()]
     [string]$MinimumSupportedLVVersion = '2021',
     [string]$SupportedBitness,
     [string]$RepoRoot,
@@ -48,9 +50,22 @@ param(
 Write-Output "PPL Version: $Major.$Minor.$Patch.$Build"
 Write-Output "Commit: $Commit"
 
+$labviewYear = $MinimumSupportedLVVersion
+if ($RepoRoot) {
+    $versionHelper = Join-Path -Path $RepoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
+    if (Test-Path -Path $versionHelper) {
+        . $versionHelper
+        $versionInfo = Get-LabVIEWVersionInfo -VersionInput $MinimumSupportedLVVersion -RepoRoot $RepoRoot
+        $labviewYear = $versionInfo.Year
+    }
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
+
 # Construct the command
 $script = @"
-g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness lvbuildspec -- -v "$Major.$Minor.$Patch.$Build" -p "$RepoRoot\lv_icon_editor.lvproj" -b "Editor Packed Library"
+g-cli --lv-ver $labviewYear --arch $SupportedBitness lvbuildspec -- -v "$Major.$Minor.$Patch.$Build" -p "$RepoRoot\lv_icon_editor.lvproj" -b "Editor Packed Library"
 "@
 Write-Output "Executing the following command:"
 Write-Output $script
@@ -60,7 +75,7 @@ Invoke-Expression $script
 
 # Check the exit code
 if ($LASTEXITCODE -ne 0) {
-    g-cli --lv-ver $MinimumSupportedLVVersion --arch $SupportedBitness QuitLabVIEW
+    g-cli --lv-ver $labviewYear --arch $SupportedBitness QuitLabVIEW
     Write-Host "Build failed with exit code $LASTEXITCODE."
     exit 1
 } else {

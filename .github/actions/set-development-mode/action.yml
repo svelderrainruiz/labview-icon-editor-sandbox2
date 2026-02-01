@@ -2,7 +2,7 @@ name: "Set Development Mode"
 description: "Runs Set_Development_Mode.ps1 to configure the repo for development."
 inputs:
   labview_version:
-    description: 'LabVIEW version to target (2021/21.0 only).'
+    description: 'LabVIEW version to target (year or numeric).'
     required: true
   supported_bitness:
     description: 'LabVIEW bitness (32 or 64).'

@@ -27,7 +27,7 @@ runs:
           -Commit "${{ inputs.commit }}"
 inputs:
   labview_version:
-    description: 'LabVIEW version to target (2021/21.0 only).'
+    description: 'LabVIEW version to target (year or numeric).'
     required: true
   supported_bitness:
     description: '32 or 64'

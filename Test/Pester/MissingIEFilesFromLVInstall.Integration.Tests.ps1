@@ -4,7 +4,7 @@ Describe 'Verify IE Paths integration' {
     BeforeAll {
         $script:skipAll = $false
         $script:skipReason = ''
-        $script:labviewVersion = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_VERSION)) { '2021' } else { $env:LABVIEW_VERSION }
+        $script:labviewVersion = $null
         $script:labviewBitness = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_BITNESS)) { '64' } else { $env:LABVIEW_BITNESS }
         $script:connectTimeoutMs = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_CONNECT_TIMEOUT_MS)) { '120000' } else { $env:LABVIEW_CONNECT_TIMEOUT_MS }
         $script:processTimeoutMs = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_PROCESS_TIMEOUT_MS)) { '300000' } else { $env:LABVIEW_PROCESS_TIMEOUT_MS }
@@ -112,21 +112,27 @@ Describe 'Verify IE Paths integration' {
         $script:scriptPath = Join-Path $script:repoRoot 'Tooling\Invoke-MissingIEFilesFromLVInstall.ps1'
         $script:revertScript = Join-Path $script:repoRoot '.github\actions\revert-development-mode\RevertDevelopmentMode.ps1'
         $script:missingPathsHelper = Join-Path $script:repoRoot 'Tooling\support\DevModeMissingPaths.ps1'
+        $script:versionHelper = Join-Path $script:repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 
         if (Test-Path -Path $script:missingPathsHelper) {
             . $script:missingPathsHelper
             $script:missingPathsHelperLoaded = $true
         }
 
+        if (Test-Path -Path $script:versionHelper) {
+            . $script:versionHelper
+            $versionInput = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_VERSION)) { '' } else { $env:LABVIEW_VERSION }
+            $versionInfo = Get-LabVIEWVersionInfo -VersionInput $versionInput -RepoRoot $script:repoRoot
+            $script:labviewVersion = $versionInfo.Year
+        }
+
+        if ([string]::IsNullOrWhiteSpace($script:labviewVersion)) {
+            $script:labviewVersion = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_VERSION)) { '2021' } else { $env:LABVIEW_VERSION }
+        }
+
         if (-not (Test-Path -Path $script:scriptPath)) {
             $script:skipAll = $true
             $script:skipReason = "Script not found at $script:scriptPath"
-            return
-        }
-
-        if ($script:labviewVersion -ne '2021') {
-            $script:skipAll = $true
-            $script:skipReason = 'Only LabVIEW 2021 (21.0) is supported by this test suite.'
             return
         }
 

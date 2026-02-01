@@ -5,7 +5,7 @@ Invoke **`RevertDevelopmentMode.ps1`** to restore packaged sources after develop
 ## Inputs
 | Name | Required | Example | Description |
 |------|----------|---------|-------------|
-| `labview_version` | **Yes** | `2021` | LabVIEW 2021 (21.0) only. |
+| `labview_version` | **Yes** | `2021` | LabVIEW version (year or numeric). |
 | `supported_bitness` | **Yes** | `64` | LabVIEW bitness (32 or 64). |
 | `repo_root` | No | `${{ github.workspace }}` | Repository root path (optional). |
 

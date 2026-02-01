@@ -1,13 +1,13 @@
 $ErrorActionPreference = 'Stop'
 
-Describe 'Development Mode integration (LabVIEW 2021 (21.0))' {
+Describe 'Development Mode integration' {
     BeforeAll {
         $script:skipAll = $false
         $script:skipReason = ''
         $script:installRoots = @{}
         $script:bitnessesToTest = @()
         $script:missingPathsHelperLoaded = $false
-        $script:labviewVersion = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_VERSION)) { '2021' } else { $env:LABVIEW_VERSION }
+        $script:labviewVersion = $null
         $script:labviewBitness = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_BITNESS)) { '64' } else { $env:LABVIEW_BITNESS }
         $script:connectTimeoutMs = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_CONNECT_TIMEOUT_MS)) { '120000' } else { $env:LABVIEW_CONNECT_TIMEOUT_MS }
         $script:processTimeoutMs = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_PROCESS_TIMEOUT_MS)) { '300000' } else { $env:LABVIEW_PROCESS_TIMEOUT_MS }
@@ -59,6 +59,36 @@ Describe 'Development Mode integration (LabVIEW 2021 (21.0))' {
             }
 
             return $null
+        }
+
+        function script:Get-BitnessList {
+            param(
+                [string]$BitnessInput
+            )
+
+            if ([string]::IsNullOrWhiteSpace($BitnessInput)) {
+                return @('64')
+            }
+
+            $normalized = $BitnessInput.Trim().ToLowerInvariant()
+            if (@('both', 'all', 'auto') -contains $normalized) {
+                return @('64', '32')
+            }
+
+            $parts = $normalized -split '[,; ]+' | Where-Object { $_ }
+            $bitnesses = foreach ($part in $parts) {
+                switch ($part) {
+                    '32' { '32' }
+                    '64' { '64' }
+                }
+            }
+
+            $bitnesses = $bitnesses | Where-Object { $_ } | Select-Object -Unique
+            if (-not $bitnesses) {
+                return @('64')
+            }
+
+            return @($bitnesses)
         }
 
         function script:Get-LabVIEWPaths {
@@ -119,22 +149,27 @@ Describe 'Development Mode integration (LabVIEW 2021 (21.0))' {
         $script:revertScript = Join-Path $script:actionsRoot 'revert-development-mode\RevertDevelopmentMode.ps1'
         $script:closeScript = Join-Path $script:actionsRoot 'close-labview\Close_LabVIEW.ps1'
         $script:missingPathsHelper = Join-Path $script:repoRoot 'Tooling\support\DevModeMissingPaths.ps1'
+        $script:versionHelper = Join-Path $script:repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 
         if (Test-Path -Path $script:missingPathsHelper) {
             . $script:missingPathsHelper
             $script:missingPathsHelperLoaded = $true
         }
 
+        if (Test-Path -Path $script:versionHelper) {
+            . $script:versionHelper
+            $versionInput = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_VERSION)) { '' } else { $env:LABVIEW_VERSION }
+            $versionInfo = Get-LabVIEWVersionInfo -VersionInput $versionInput -RepoRoot $script:repoRoot
+            $script:labviewVersion = $versionInfo.Year
+        }
+
+        if ([string]::IsNullOrWhiteSpace($script:labviewVersion)) {
+            $script:labviewVersion = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_VERSION)) { '2021' } else { $env:LABVIEW_VERSION }
+        }
+
         if (-not $script:runDevModeTests) {
             $script:skipAll = $true
             $script:skipReason = 'Set RUN_DEV_MODE_TESTS=1 to enable dev-mode integration tests.'
-            return
-        }
-
-
-        if ($script:labviewVersion -ne '2021') {
-            $script:skipAll = $true
-            $script:skipReason = 'Only LabVIEW 2021 (21.0) is supported by this test suite.'
             return
         }
 
@@ -144,23 +179,22 @@ Describe 'Development Mode integration (LabVIEW 2021 (21.0))' {
             return
         }
 
-        if ($script:labviewBitness -ne '64') {
+        $bitnessCandidates = Get-BitnessList -BitnessInput $script:labviewBitness
+        foreach ($bitness in $bitnessCandidates) {
+            $root = Get-LabVIEWInstallRoot -Version $script:labviewVersion -Bitness $bitness
+            if ($root) {
+                $script:installRoots[$bitness] = $root
+                $script:bitnessesToTest += $bitness
+            }
+        }
+
+        if (-not $script:bitnessesToTest -or $script:bitnessesToTest.Count -eq 0) {
             $script:skipAll = $true
-            $script:skipReason = 'Only 64-bit LabVIEW is supported by this test suite.'
+            $script:skipReason = "LabVIEW $script:labviewVersion installs not found for requested bitness: $script:labviewBitness."
             return
         }
 
-        $root = Get-LabVIEWInstallRoot -Version $script:labviewVersion -Bitness $script:labviewBitness
-        if ($root) {
-            $script:installRoots[$script:labviewBitness] = $root
-            $script:bitnessesToTest = @($script:labviewBitness)
-        }
-
-        if (-not $script:bitnessesToTest) {
-            $script:skipAll = $true
-            $script:skipReason = "LabVIEW $script:labviewVersion ($script:labviewBitness-bit) install not found."
-            return
-        }
+        $script:bitnessesToTest = $script:bitnessesToTest | Select-Object -Unique
 
         $filteredBitnesses = New-Object System.Collections.Generic.List[string]
         foreach ($bitness in $script:bitnessesToTest) {

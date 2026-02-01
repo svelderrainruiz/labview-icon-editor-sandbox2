@@ -12,7 +12,8 @@ param(
     [ValidateSet('32', '64')]
     [string]$Bitness,
 
-    [ValidateSet('2021')]
+    [AllowNull()]
+    [AllowEmptyString()]
     [string]$LabVIEWVersion = '2021',
 
     [Parameter(Mandatory)]
@@ -189,6 +190,17 @@ if (-not $repoRootNormalized) {
     throw "Unable to normalize RepoRoot: $repoRootResolved"
 }
 
+$versionHelper = Join-Path $repoRootResolved 'Tooling\support\LabVIEWVersion.ps1'
+$labviewYear = $LabVIEWVersion
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $repoRootResolved
+    $labviewYear = $versionInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
+
 $separator = [System.IO.Path]::DirectorySeparatorChar
 if (-not $repoRootNormalized.EndsWith($separator)) {
     $repoRootNormalized += $separator
@@ -202,9 +214,9 @@ if (-not $rows -or $rows.Count -eq 0) {
 $repoRows = $rows | Where-Object { Test-PathUnderRoot -Path $_.'File Path' -Root $repoRootNormalized }
 $iconApiRows = $rows | Where-Object { $_.'File Path' -like "*\vi.lib\LabVIEW Icon API\*" }
 
-$installRoot = Get-LabVIEWInstallRoot -Version $LabVIEWVersion -Bitness $Bitness
+$installRoot = Get-LabVIEWInstallRoot -Version $labviewYear -Bitness $Bitness
 if (-not $installRoot) {
-    throw "LabVIEW $LabVIEWVersion ($Bitness-bit) install not found."
+    throw "LabVIEW $labviewYear ($Bitness-bit) install not found."
 }
 
 $iconApiDir = Join-Path $installRoot 'vi.lib\LabVIEW Icon API'
@@ -221,7 +233,7 @@ $iniHasRepoRoot = Test-LibraryPathContainsRepoRoot -IniPath $iniPath -RepoRoot $
 
 Write-Host "Mode: $Mode"
 Write-Host "Bitness: $Bitness"
-Write-Host "LabVIEW version: $LabVIEWVersion"
+Write-Host "LabVIEW version: $labviewYear"
 Write-Host "Repo root: $repoRootResolved"
 Write-Host "LabVIEW install root: $installRoot"
 Write-Host ("Total rows: {0}" -f $rows.Count)

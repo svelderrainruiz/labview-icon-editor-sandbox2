@@ -7,7 +7,7 @@
     to leave the system in a disabled state after iteration runs.
 
 .PARAMETER MinimumSupportedLVVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER SupportedBitness
     LabVIEW bitness to target ("32" or "64"). Defaults to "64".
@@ -22,8 +22,9 @@
 
 param(
     [Parameter(Mandatory = $false)]
-    [ValidateSet('2021')]
-    [string]$MinimumSupportedLVVersion = '2021',
+    [AllowNull()]
+    [AllowEmptyString()]
+    [string]$MinimumSupportedLVVersion = '',
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('32', '64', IgnoreCase = $true)]
@@ -65,6 +66,16 @@ function Write-Log {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$versionHelper = Join-Path -Path $repoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
+$labviewYear = $MinimumSupportedLVVersion
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $versionInfo = Get-LabVIEWVersionInfo -VersionInput $MinimumSupportedLVVersion -RepoRoot $repoRoot
+    $labviewYear = $versionInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
 $logPathResolved = $LogPath
 if ([string]::IsNullOrWhiteSpace($logPathResolved)) {
     $logDir = Join-Path -Path $repoRoot -ChildPath 'Tooling\logs'
@@ -83,12 +94,12 @@ if (-not (Test-Path -Path $revertScript)) {
 }
 
 $scriptArgs = @{
-    MinimumSupportedLVVersion = $MinimumSupportedLVVersion
+    MinimumSupportedLVVersion = $labviewYear
     SupportedBitness          = $SupportedBitness
     RepoRoot              = $repoRoot
 }
 
-Write-Log ("start version={0} bitness={1} log={2}" -f $MinimumSupportedLVVersion, $SupportedBitness, $logPathResolved)
+Write-Log ("start version={0} bitness={1} log={2}" -f $labviewYear, $SupportedBitness, $logPathResolved)
 
 try {
     & $revertScript @scriptArgs

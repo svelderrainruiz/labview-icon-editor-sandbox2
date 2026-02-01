@@ -10,7 +10,7 @@ on:
         required: true
         default: "enable"
       labview_version:
-        description: "LabVIEW version to target (2021/21.0 only)."
+        description: "LabVIEW version to target (year or numeric)."
         type: string
         required: true
       bitness:
@@ -35,12 +35,10 @@ on:
           - enable
           - disable
       labview_version:
-        description: "LabVIEW version."
+        description: "LabVIEW version (year or numeric)."
         required: true
         default: "2021"
-        type: choice
-        options:
-          - "2021"
+        type: string
       bitness:
         description: "LabVIEW bitness."
         required: true

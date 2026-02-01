@@ -7,7 +7,7 @@
     version and bitness, ensuring the application exits cleanly.
 
 .PARAMETER MinimumSupportedLVVersion
-    LabVIEW 2021 (21.0) only.
+    LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
 
 .PARAMETER SupportedBitness
     Bitness of the LabVIEW instance ("32" or "64").
@@ -16,7 +16,9 @@
     .\Close_LabVIEW.ps1 -MinimumSupportedLVVersion "2021" -SupportedBitness "64"
 #>
 param(
-    [ValidateSet('2021')]
+    [Alias('LabVIEWVersion')]
+    [AllowNull()]
+    [AllowEmptyString()]
     [string]$MinimumSupportedLVVersion = '2021',
     [string]$SupportedBitness,
     [ValidateRange(5, 600)]
@@ -27,6 +29,17 @@ param(
 $ErrorActionPreference = 'Stop'
 $scriptStart = Get-Date
 $metricsPathResolved = if ($MetricsPath) { $MetricsPath } elseif ($env:LABVIEW_CLOSE_METRICS_PATH) { $env:LABVIEW_CLOSE_METRICS_PATH } else { $null }
+$repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
+$labviewYear = $MinimumSupportedLVVersion
+if (Test-Path -Path $versionHelper) {
+    . $versionHelper
+    $versionInfo = Get-LabVIEWVersionInfo -VersionInput $MinimumSupportedLVVersion -RepoRoot $repoRoot
+    $labviewYear = $versionInfo.Year
+}
+if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+    $labviewYear = '2021'
+}
 
 function Ensure-CsvHeader {
     param(
@@ -61,7 +74,7 @@ function Write-CloseMetric {
     Ensure-CsvHeader -Path $metricsPathResolved -Header 'timestamp,version,bitness,had_process_before,outcome,duration_seconds'
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $duration = [Math]::Round(((Get-Date) - $scriptStart).TotalSeconds, 2)
-    "{0},{1},{2},{3},{4},{5}" -f $timestamp, $MinimumSupportedLVVersion, $SupportedBitness, $HadProcess, $Outcome, $duration | Add-Content -Path $metricsPathResolved
+    "{0},{1},{2},{3},{4},{5}" -f $timestamp, $labviewYear, $SupportedBitness, $HadProcess, $Outcome, $duration | Add-Content -Path $metricsPathResolved
 }
 
 function Get-LabVIEWInstallRoot {
@@ -184,15 +197,15 @@ function Wait-ForLabVIEWExit {
 }
 
 $otherInstances = Get-CimInstance Win32_Process -Filter "Name='LabVIEW.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.ExecutablePath -and $_.ExecutablePath -notmatch [regex]::Escape((Get-LabVIEWInstallRoot -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness)) }
+    Where-Object { $_.ExecutablePath -and $_.ExecutablePath -notmatch [regex]::Escape((Get-LabVIEWInstallRoot -Version $labviewYear -Bitness $SupportedBitness)) }
 
-$targetBefore = Get-TargetLabVIEWProcesses -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness
+$targetBefore = Get-TargetLabVIEWProcesses -Version $labviewYear -Bitness $SupportedBitness
 if (-not $targetBefore -or $targetBefore.Count -eq 0) {
     if ($otherInstances) {
-        Write-Host "No matching LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) instance found. Other LabVIEW instances are running; skipping QuitLabVIEW."
+        Write-Host "No matching LabVIEW $labviewYear ($SupportedBitness-bit) instance found. Other LabVIEW instances are running; skipping QuitLabVIEW."
     }
     else {
-        Write-Host "LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) closed or not running."
+        Write-Host "LabVIEW $labviewYear ($SupportedBitness-bit) closed or not running."
     }
     Write-CloseMetric -Outcome 'skipped' -HadProcess $false
     exit 0
@@ -200,17 +213,17 @@ if (-not $targetBefore -or $targetBefore.Count -eq 0) {
 
 $closeOutcome = 'quit'
 try {
-    Invoke-SafeQuitLabVIEW -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness
+    Invoke-SafeQuitLabVIEW -Version $labviewYear -Bitness $SupportedBitness
 }
 catch {
     Write-Warning ("QuitLabVIEW failed: {0}" -f $_.Exception.Message)
     $closeOutcome = 'error'
 }
 
-if (-not (Wait-ForLabVIEWExit -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness -TimeoutSeconds $TimeoutSeconds)) {
-    $targets = Get-TargetLabVIEWProcesses -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness
+if (-not (Wait-ForLabVIEWExit -Version $labviewYear -Bitness $SupportedBitness -TimeoutSeconds $TimeoutSeconds)) {
+    $targets = Get-TargetLabVIEWProcesses -Version $labviewYear -Bitness $SupportedBitness
     if ($targets -and $targets.Count -gt 0) {
-        Write-Warning "LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) did not exit in time; force closing by PID."
+        Write-Warning "LabVIEW $labviewYear ($SupportedBitness-bit) did not exit in time; force closing by PID."
         foreach ($proc in $targets) {
             try {
                 Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
@@ -220,8 +233,8 @@ if (-not (Wait-ForLabVIEWExit -Version $MinimumSupportedLVVersion -Bitness $Supp
             }
         }
 
-        if (-not (Wait-ForLabVIEWExit -Version $MinimumSupportedLVVersion -Bitness $SupportedBitness -TimeoutSeconds 15)) {
-            Write-Error "LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) did not exit after forced close."
+        if (-not (Wait-ForLabVIEWExit -Version $labviewYear -Bitness $SupportedBitness -TimeoutSeconds 15)) {
+            Write-Error "LabVIEW $labviewYear ($SupportedBitness-bit) did not exit after forced close."
             Write-CloseMetric -Outcome 'error' -HadProcess $true
             exit 1
         }
@@ -229,5 +242,5 @@ if (-not (Wait-ForLabVIEWExit -Version $MinimumSupportedLVVersion -Bitness $Supp
     }
 }
 
-Write-Host "LabVIEW $MinimumSupportedLVVersion ($SupportedBitness-bit) closed or not running."
+Write-Host "LabVIEW $labviewYear ($SupportedBitness-bit) closed or not running."
 Write-CloseMetric -Outcome $closeOutcome -HadProcess $true
