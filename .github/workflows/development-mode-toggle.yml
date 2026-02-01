@@ -1,5 +1,9 @@
 name: "Toggle Development Mode"
 
+concurrency:
+  group: labview-${{ github.repository }}
+  cancel-in-progress: false
+
 on:
   # 1) Called by other workflows
   workflow_call:
