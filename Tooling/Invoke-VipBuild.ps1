@@ -192,6 +192,7 @@ $retryDelayValue = if ($PSBoundParameters.ContainsKey('RetryDelaySeconds')) {
 
 $statusPath = Resolve-StatusPath -ExplicitPath $StatusPath -RepoRoot $resolvedRepoRoot
 $logDirectory = Resolve-LogDirectory -RepoRoot $resolvedRepoRoot
+$null = New-Item -Path $logDirectory -ItemType Directory -Force
 $gcliLog = Join-Path -Path $logDirectory -ChildPath 'gcli-build.log'
 
 $startedAt = Get-Date
