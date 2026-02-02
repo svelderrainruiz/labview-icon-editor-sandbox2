@@ -52,7 +52,10 @@ function Resolve-IntSetting {
         [int]$Fallback
     )
 
-    $raw = $env:$Name
+    $raw = $null
+    if (Test-Path "Env:$Name") {
+        $raw = (Get-Item "Env:$Name").Value
+    }
     if ([string]::IsNullOrWhiteSpace($raw)) {
         return $Fallback
     }
