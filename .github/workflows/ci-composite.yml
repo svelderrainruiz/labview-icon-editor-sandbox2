@@ -883,7 +883,7 @@ jobs:
             try {
               $vipStatus = Get-Content -Raw -Path $vipStatusPath | ConvertFrom-Json
             } catch {
-              Write-Warning "Failed to parse VIP build status file at $vipStatusPath: $($_.Exception.Message)"
+              Write-Warning "Failed to parse VIP build status file at ${vipStatusPath}: $($_.Exception.Message)"
             }
           }
 

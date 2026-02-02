@@ -48,6 +48,7 @@ function Resolve-IntSetting {
         return $Fallback
     }
 
+    $value = 0
     if ([int]::TryParse($raw, [ref]$value)) {
         return $value
     }
