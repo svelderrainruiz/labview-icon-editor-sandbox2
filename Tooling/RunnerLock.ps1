@@ -90,6 +90,10 @@ function Resolve-LockRoot {
         return $LockRootOverride
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_LOCK_ROOT)) {
+        return $env:LVIE_LOCK_ROOT
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
         return $env:LVIE_WORKTREE_ROOT
     }
@@ -261,7 +265,11 @@ if ([string]::IsNullOrWhiteSpace((Get-EnvValue -Name 'GITHUB_TOKEN'))) {
 }
 
 $root = Resolve-LockRoot -LockRootOverride $LockRoot
-$locksDir = Join-Path $root 'locks'
+$locksDir = if (-not [string]::IsNullOrWhiteSpace($env:LVIE_LOCK_ROOT) -or -not [string]::IsNullOrWhiteSpace($LockRoot)) {
+    $root
+} else {
+    Join-Path $root 'locks'
+}
 $lockPath = Join-Path $locksDir 'labview-runner.lock'
 $metadataPath = Join-Path $lockPath 'lock.json'
 

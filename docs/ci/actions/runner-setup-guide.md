@@ -133,8 +133,9 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 6. **Standardize worktree root under the runner directory (recommended)**
    - Use a short path under the runner root to avoid Windows path-length issues.
    - Recommended path: `<runner-root>\_work\lvie\w` (for example `C:\actions-runner\_work\lvie\w`).
-   - Helper script (run from repo root):
-     - `pwsh -NoProfile -File .\Tooling\Setup-RunnerWorktreeRoot.ps1 -RunnerRoot C:\actions-runner -Scope Machine`
+   - Runner contract helper (run from repo root):
+     - `pwsh -NoProfile -File .\Tooling\Setup-Runner.ps1 -RunnerRoot C:\actions-runner -Scope Machine`
+   - This writes `<runner-root>\_work\lvie\runner-contract.json` and sets `LVIE_WORKTREE_ROOT`, `LVIE_ARTIFACT_ROOT`, `LVIE_LOCK_ROOT`, and `LVIE_LOG_ROOT`.
    - Restart the runner service after setting Machine/User environment variables.
 
 

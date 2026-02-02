@@ -86,6 +86,10 @@ function Resolve-StatusPath {
 function Resolve-LogDirectory {
     param([string]$RepoRoot)
 
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_LOG_ROOT)) {
+        return (Join-Path -Path $env:LVIE_LOG_ROOT -ChildPath 'vip')
+    }
+
     $artifactRoot = $env:LVIE_ARTIFACT_ROOT
     if ([string]::IsNullOrWhiteSpace($artifactRoot)) {
         return (Join-Path -Path $RepoRoot -ChildPath 'builds/logs')

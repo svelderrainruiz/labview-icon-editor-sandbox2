@@ -177,8 +177,13 @@ function Write-PreflightContext {
         [string]$LabVIEWBitness
     )
 
-    $contextLine = "LVIE_CONTEXT repo_root={0} worktree_root={1} run_id={2} artifact_root={3} labview_version={4} labview_bitness={5}" -f `
-        $RepoRoot, $WorktreeRoot, $RunId, $ArtifactRoot, $LabVIEWVersion, $LabVIEWBitness
+    $runnerRoot = $env:LVIE_RUNNER_ROOT
+    $contractPath = $env:LVIE_RUNNER_CONTRACT_PATH
+    $lockRoot = $env:LVIE_LOCK_ROOT
+    $logRoot = $env:LVIE_LOG_ROOT
+
+    $contextLine = "LVIE_CONTEXT repo_root={0} worktree_root={1} run_id={2} artifact_root={3} labview_version={4} labview_bitness={5} runner_root={6} lock_root={7} log_root={8} contract_path={9}" -f `
+        $RepoRoot, $WorktreeRoot, $RunId, $ArtifactRoot, $LabVIEWVersion, $LabVIEWBitness, $runnerRoot, $lockRoot, $logRoot, $contractPath
     Write-Host $contextLine
 
     if (-not [string]::IsNullOrWhiteSpace($ArtifactRoot)) {
@@ -192,6 +197,10 @@ function Write-PreflightContext {
                 worktree_root   = $WorktreeRoot
                 run_id          = $RunId
                 artifact_root   = $ArtifactRoot
+                runner_root     = $runnerRoot
+                lock_root       = $lockRoot
+                log_root        = $logRoot
+                contract_path   = $contractPath
                 labview_version = $LabVIEWVersion
                 labview_bitness = $LabVIEWBitness
                 timestamp_utc   = (Get-Date).ToUniversalTime().ToString('o')
@@ -233,6 +242,18 @@ function Invoke-Preflight {
     )
 
     $resolvedRepoRoot = Resolve-RepoRoot -RepoRoot $RepoRoot
+
+    $contractScript = Join-Path $resolvedRepoRoot 'Tooling\support\RunnerContract.ps1'
+    if (Test-Path -Path $contractScript) {
+        . $contractScript
+        $contractPath = Resolve-RunnerContractPath -ContractPath $env:LVIE_RUNNER_CONTRACT_PATH -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+        $contract = Get-RunnerContract -ContractPath $contractPath -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+        if ($contract) {
+            Apply-RunnerContract -Contract $contract -ContractPath $contractPath
+        } elseif ($env:LVIE_REQUIRE_RUNNER_CONTRACT -eq '1') {
+            throw "Runner contract not found. Run Tooling\\Setup-Runner.ps1 to create $contractPath."
+        }
+    }
 
     $worktreeGuard = Join-Path $resolvedRepoRoot 'Tooling\support\WorktreeGuard.ps1'
     if (-not (Test-Path -Path $worktreeGuard)) {
