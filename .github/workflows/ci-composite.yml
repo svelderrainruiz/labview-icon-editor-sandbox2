@@ -593,6 +593,9 @@ jobs:
     runs-on: self-hosted-windows-lv-ie
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
+      LVIE_VIPM_TIMEOUT_SECONDS: 900
+      LVIE_VIPM_MAX_ATTEMPTS: 2
+      LVIE_VIPM_RETRY_DELAY_SECONDS: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -698,7 +701,7 @@ jobs:
             ${{ steps.display-info.outputs.json }}
         run: |
           $displayInformationJson = $Env:DISPLAY_INFORMATION_JSON
-          & "$env:REPO_ROOT\\.github\\actions\\build-vip\\build_vip.ps1" `
+          & "$env:REPO_ROOT\\Tooling\\Invoke-VipBuild.ps1" `
             -SupportedBitness 64 `
             -RepoRoot "$env:REPO_ROOT" `
             -VIPBPath "Tooling/deployment/NI Icon editor.vipb" `
@@ -710,7 +713,15 @@ jobs:
             -Build ${{ needs.version.outputs.BUILD }} `
             -Commit "${{ github.sha }}" `
             -ReleaseNotesFile "$env:REPO_ROOT\\Tooling\\deployment\\release_notes.md" `
-            -DisplayInformationJSON $displayInformationJson
+            -DisplayInformationJSON $displayInformationJson `
+            -VipmTimeoutSeconds $env:LVIE_VIPM_TIMEOUT_SECONDS
+      - name: Upload VIP build status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vip-build-status
+          path: ${{ env.REPO_ROOT }}/builds/status/vip-build.json
+          if-no-files-found: warn
       - name: Prepare release notes artifact
         id: release-notes
         shell: pwsh
@@ -840,6 +851,13 @@ jobs:
       - version
     runs-on: ubuntu-latest
     steps:
+      - name: Download VIP build status (if available)
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: vip-build-status
+          path: vip-build-status
+          if-no-files-found: warn
       - name: Validate required jobs
         shell: pwsh
         run: |
@@ -856,15 +874,37 @@ jobs:
             'version'
           )
           $needs = ConvertFrom-Json -InputObject '${{ toJson(needs) }}'
+          $needsProps = $needs.PSObject.Properties
           $failed = @()
+
+          $vipStatus = $null
+          $vipStatusPath = Join-Path -Path $PWD -ChildPath 'vip-build-status/vip-build.json'
+          if (Test-Path $vipStatusPath) {
+            try {
+              $vipStatus = Get-Content -Raw -Path $vipStatusPath | ConvertFrom-Json
+            } catch {
+              Write-Warning "Failed to parse VIP build status file at $vipStatusPath: $($_.Exception.Message)"
+            }
+          }
+
           foreach ($job in $required) {
-            if (-not $needs.ContainsKey($job)) {
+            $entryProp = $needsProps[$job]
+            if (-not $entryProp) {
               $failed += "$($job):missing"
               continue
             }
-            $result = $needs[$job].result
+            $result = $entryProp.Value.result
             if ($result -ne 'success') {
-              $failed += "$($job):$result"
+              if ($job -eq 'build-vip' -and $vipStatus) {
+                $label = if ($vipStatus.reason) { $vipStatus.reason } elseif ($vipStatus.status) { $vipStatus.status } else { $null }
+                if ($label) {
+                  $failed += "$($job):$result ($label)"
+                } else {
+                  $failed += "$($job):$result"
+                }
+              } else {
+                $failed += "$($job):$result"
+              }
             }
           }
           if ($failed.Count -gt 0) {

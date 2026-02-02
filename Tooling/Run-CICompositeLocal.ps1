@@ -809,7 +809,7 @@ $bitnessList = @('64', '32')
 
         try {
             Invoke-Checked -Label "Build VIP (LV$LabVIEWVersion 64-bit)" -Action {
-                & (Join-Path $repoRoot '.github/actions/build-vip/build_vip.ps1') `
+                & (Join-Path $repoRoot 'Tooling/Invoke-VipBuild.ps1') `
                     -SupportedBitness 64 `
                     -RepoRoot $repoRoot `
                     -VIPBPath $VipbPath `

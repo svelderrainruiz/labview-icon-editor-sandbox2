@@ -87,6 +87,7 @@ Notes:
 - The script handles Verify IE Paths, VIPC, missing-in-project, unit tests, PPL builds, and VIP build.
 - If LabVIEW or g-cli is already running, the script waits for them to exit before starting.
 - You can skip steps with switches like `-SkipBuildVip` or `-SkipUnitTests`.
+- VIP builds flow through `Tooling\Invoke-VipBuild.ps1`, which emits `builds\status\vip-build.json` and respects `LVIE_VIPM_TIMEOUT_SECONDS`, `LVIE_VIPM_MAX_ATTEMPTS`, and `LVIE_VIPM_RETRY_DELAY_SECONDS`.
 
 ## Adaptive timeouts and continuous troubleshooting
 Use fixed timeouts for deterministic CI runs. Use adaptive timeouts only for local/manual runs while tuning.
