@@ -131,15 +131,18 @@ function Write-Status {
 function Copy-VipmLogs {
     param([string]$LogDirectory)
 
-    $candidates = @(
-        Join-Path $env:ProgramData 'JKI\VIPM\logs',
-        Join-Path $env:ProgramData 'JKI\VIPM\Logs',
-        Join-Path $env:ProgramData 'National Instruments\VIPM\logs',
-        Join-Path $env:ProgramData 'National Instruments\VIPM\Logs',
-        Join-Path $env:ProgramData 'VIPM\logs',
-        Join-Path $env:LOCALAPPDATA 'JKI\VIPM\logs',
-        Join-Path $env:LOCALAPPDATA 'JKI\VIPM\Logs'
-    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramData)) {
+        $candidates += Join-Path $env:ProgramData 'JKI\VIPM\logs'
+        $candidates += Join-Path $env:ProgramData 'JKI\VIPM\Logs'
+        $candidates += Join-Path $env:ProgramData 'National Instruments\VIPM\logs'
+        $candidates += Join-Path $env:ProgramData 'National Instruments\VIPM\Logs'
+        $candidates += Join-Path $env:ProgramData 'VIPM\logs'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $candidates += Join-Path $env:LOCALAPPDATA 'JKI\VIPM\logs'
+        $candidates += Join-Path $env:LOCALAPPDATA 'JKI\VIPM\Logs'
+    }
 
     $destination = Join-Path -Path $LogDirectory -ChildPath 'vipm'
     $copied = $false
