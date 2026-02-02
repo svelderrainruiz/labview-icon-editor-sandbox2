@@ -39,7 +39,7 @@ jobs:
     name: Verify IE Paths Gate (LV ${{ matrix.bitness }}-bit)
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +115,7 @@ jobs:
     needs: changes
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -162,7 +162,7 @@ jobs:
     needs: [apply-deps-2021-x64, changes]
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -209,7 +209,7 @@ jobs:
     needs: dev-mode-gate
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     outputs:
       VERSION:       ${{ steps.compute.outputs.VERSION }}
       MAJOR:         ${{ steps.compute.outputs.MAJOR }}
@@ -240,7 +240,7 @@ jobs:
     needs: apply-deps-2021-x86
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -349,7 +349,7 @@ jobs:
     needs: missing-in-project
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -427,7 +427,7 @@ jobs:
     needs: [build-ppl-x64, version]
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -509,7 +509,7 @@ jobs:
     needs: [test-2021, version]
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -592,7 +592,7 @@ jobs:
     needs: [build-ppl-x86, version]
     runs-on: self-hosted-windows-lv-ie
     env:
-      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
     steps:
       - uses: actions/checkout@v4
         with:
