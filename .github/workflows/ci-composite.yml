@@ -859,12 +859,12 @@ jobs:
           $failed = @()
           foreach ($job in $required) {
             if (-not $needs.ContainsKey($job)) {
-              $failed += "$job:missing"
+              $failed += "$($job):missing"
               continue
             }
             $result = $needs[$job].result
             if ($result -ne 'success') {
-              $failed += "$job:$result"
+              $failed += "$($job):$result"
             }
           }
           if ($failed.Count -gt 0) {
