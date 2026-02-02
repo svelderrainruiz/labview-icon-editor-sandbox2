@@ -67,8 +67,8 @@ param (
     [string]$Commit,
     [string]$ReleaseNotesFile,
 
-    [Parameter(Mandatory=$true)]
     [string]$DisplayInformationJSON,
+    [string]$DisplayInformationJsonPath,
 
     [ValidateRange(60, 3600)]
     [int]$VipmTimeoutSeconds = 300
@@ -157,13 +157,35 @@ else {
 }
 Write-Output "Building VI Package for LabVIEW $VIP_LVVersion_A..."
 
-# 4) Parse and update the DisplayInformationJSON
+# 4) Resolve and parse DisplayInformation JSON
+$resolvedDisplayJson = $DisplayInformationJSON
+if ([string]::IsNullOrWhiteSpace($resolvedDisplayJson) -and -not [string]::IsNullOrWhiteSpace($DisplayInformationJsonPath)) {
+    if (-not (Test-Path -Path $DisplayInformationJsonPath)) {
+        $errorObject = [PSCustomObject]@{
+            error      = "DisplayInformationJsonPath '$DisplayInformationJsonPath' does not exist."
+        }
+        $errorObject | ConvertTo-Json -Depth 10
+        exit 1
+    }
+    $resolvedDisplayJson = Get-Content -Raw -Path $DisplayInformationJsonPath
+}
+if ([string]::IsNullOrWhiteSpace($resolvedDisplayJson) -and -not [string]::IsNullOrWhiteSpace($env:DISPLAY_INFORMATION_JSON)) {
+    $resolvedDisplayJson = $env:DISPLAY_INFORMATION_JSON
+}
+if ([string]::IsNullOrWhiteSpace($resolvedDisplayJson)) {
+    $errorObject = [PSCustomObject]@{
+        error = "DisplayInformationJSON was not provided. Pass -DisplayInformationJSON, -DisplayInformationJsonPath, or set DISPLAY_INFORMATION_JSON."
+    }
+    $errorObject | ConvertTo-Json -Depth 10
+    exit 1
+}
+
 try {
-    $jsonObj = $DisplayInformationJSON | ConvertFrom-Json
+    $jsonObj = $resolvedDisplayJson | ConvertFrom-Json
 }
 catch {
     $errorObject = [PSCustomObject]@{
-        error      = "Failed to parse DisplayInformationJSON into valid JSON."
+        error      = "Failed to parse DisplayInformation JSON."
         exception  = $_.Exception.Message
         stackTrace = $_.Exception.StackTrace
     }

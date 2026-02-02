@@ -853,11 +853,11 @@ jobs:
     steps:
       - name: Download VIP build status (if available)
         if: always()
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: vip-build-status
           path: vip-build-status
-          if-no-files-found: warn
       - name: Validate required jobs
         shell: pwsh
         run: |

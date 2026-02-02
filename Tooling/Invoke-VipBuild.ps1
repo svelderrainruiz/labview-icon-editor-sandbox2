@@ -205,6 +205,13 @@ while ($attempt -lt $maxAttemptsValue) {
     $attemptStart = Get-Date
     Write-Host ("VIP build attempt {0} of {1}" -f $attempt, $maxAttemptsValue)
 
+    $displayInfoPath = Join-Path -Path $logDirectory -ChildPath 'vipb-display-info.json'
+    try {
+        Set-Content -Path $displayInfoPath -Value $DisplayInformationJSON -Encoding utf8
+    } catch {
+        throw "Failed to write display information JSON to $displayInfoPath. $($_.Exception.Message)"
+    }
+
     $pwshArgs = @(
         '-NoProfile',
         '-File', $buildVipScript,
@@ -219,7 +226,7 @@ while ($attempt -lt $maxAttemptsValue) {
         '-Build', $Build.ToString(),
         '-Commit', $Commit,
         '-ReleaseNotesFile', $ReleaseNotesFile,
-        '-DisplayInformationJSON', $DisplayInformationJSON,
+        '-DisplayInformationJsonPath', $displayInfoPath,
         '-VipmTimeoutSeconds', $timeoutSecondsValue.ToString()
     )
 
