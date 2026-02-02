@@ -3,9 +3,6 @@ name: "Toggle Development Mode"
 permissions:
   actions: read
 
-env:
-  LVIE_WORKTREE_ROOT: ${{ runner.workspace }}/lvie/w
-
 concurrency:
   group: labview-${{ github.repository }}-self-hosted-windows-lv-ie
   cancel-in-progress: false
@@ -98,6 +95,7 @@ jobs:
 
     runs-on: [self-hosted-windows-lv-ie]
     env:
+      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
       selected_bitness: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.bitness || inputs.bitness }}
 
     steps:

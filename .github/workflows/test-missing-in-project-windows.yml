@@ -3,9 +3,6 @@ name: Test Missing‑In‑Project Action on Windows
 permissions:
   actions: read
 
-env:
-  LVIE_WORKTREE_ROOT: ${{ runner.workspace }}/lvie/w
-
 concurrency:
   group: labview-${{ github.repository }}-self-hosted-windows-lv-ie
   cancel-in-progress: false
@@ -16,6 +13,8 @@ on:
 jobs:
   missing-in-project-check:
     runs-on: self-hosted-windows-lv-ie
+    env:
+      LVIE_WORKTREE_ROOT: '${{ runner.workspace }}\lvie\w'
     strategy:
       fail-fast: false
       max-parallel: 1
