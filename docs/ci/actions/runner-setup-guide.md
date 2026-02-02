@@ -130,6 +130,13 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - Optional: set `RUNNER_DIAG_RETENTION_DAYS=7` in `.env` if you want to keep recent logs.
    - The cleanup skips any diagnostics file that is still in use, so the job does not fail.
 
+6. **Standardize worktree root under the runner directory (recommended)**
+   - Use a short path under the runner root to avoid Windows path-length issues.
+   - Recommended path: `<runner-root>\_work\lvie\w` (for example `C:\actions-runner\_work\lvie\w`).
+   - Helper script (run from repo root):
+     - `pwsh -NoProfile -File .\Tooling\Setup-RunnerWorktreeRoot.ps1 -RunnerRoot C:\actions-runner -Scope Machine`
+   - Restart the runner service after setting Machine/User environment variables.
+
 
 <a name="running-the-actions-locally"></a>
 ### 4. Running the Actions Locally

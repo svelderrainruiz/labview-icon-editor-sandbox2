@@ -14,10 +14,11 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
   - `g-cli --version`
 
 ## Worktree root (short paths)
-Use a short path for worktrees to avoid Windows path-length issues. Default to `C:\dev`.
+Use a short path for worktrees to avoid Windows path-length issues. Default to `C:\dev` for local dev; for self-hosted runners, standardize under the runner directory (example: `C:\actions-runner\_work\lvie\w`).
 
 Override:
 - Set `LVIE_WORKTREE_ROOT` to change the default worktree root.
+  - Runner setup helper: `pwsh -NoProfile -File .\Tooling\Setup-RunnerWorktreeRoot.ps1 -RunnerRoot C:\actions-runner -Scope Machine` (creates `<runner-root>\_work\lvie\w`).
 
 Preflight requirement:
 - If the chosen worktree root does not exist, ask the user to create it before proceeding.
