@@ -8,6 +8,9 @@ param(
     [string]$ArtifactRoot,
     [string]$LockRoot,
     [string]$LogRoot,
+    [string]$RunnerLabel,
+    [string[]]$RunnerLabels,
+    [string]$CanonicalRunnerLabel = 'self-hosted-windows-lv',
     [ValidateSet('Machine', 'User', 'Process')]
     [string]$Scope = 'Machine'
 )
@@ -72,6 +75,31 @@ $artifactRootResolved = Normalize-Path -Path $artifactRootResolved
 $lockRootResolved = Normalize-Path -Path $lockRootResolved
 $logRootResolved = Normalize-Path -Path $logRootResolved
 
+$canonicalRunnerLabel = if ([string]::IsNullOrWhiteSpace($CanonicalRunnerLabel)) {
+    'self-hosted-windows-lv'
+} else {
+    $CanonicalRunnerLabel.Trim()
+}
+$primaryRunnerLabel = if (-not [string]::IsNullOrWhiteSpace($RunnerLabel)) {
+    $RunnerLabel.Trim()
+} elseif (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_LABEL)) {
+    $env:LVIE_RUNNER_LABEL.Trim()
+} else {
+    $canonicalRunnerLabel
+}
+
+$runnerLabelsResolved = @()
+if ($RunnerLabels) {
+    $runnerLabelsResolved += $RunnerLabels
+}
+if (-not [string]::IsNullOrWhiteSpace($primaryRunnerLabel)) {
+    $runnerLabelsResolved += $primaryRunnerLabel
+}
+if (-not [string]::IsNullOrWhiteSpace($canonicalRunnerLabel)) {
+    $runnerLabelsResolved += $canonicalRunnerLabel
+}
+$runnerLabelsResolved = $runnerLabelsResolved | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique
+
 New-Item -Path $worktreeRootResolved -ItemType Directory -Force | Out-Null
 New-Item -Path $artifactRootResolved -ItemType Directory -Force | Out-Null
 New-Item -Path $lockRootResolved -ItemType Directory -Force | Out-Null
@@ -91,6 +119,9 @@ $contract = [pscustomobject]@{
     artifact_root  = $artifactRootResolved
     lock_root      = $lockRootResolved
     log_root       = $logRootResolved
+    runner_label   = $primaryRunnerLabel
+    runner_labels  = $runnerLabelsResolved
+    canonical_runner_label = $canonicalRunnerLabel
     updated_at_utc = $timestamp
 }
 
@@ -110,12 +141,21 @@ Set-RunnerContract -ContractPath $contractPath -Contract $contract
 [Environment]::SetEnvironmentVariable('LVIE_LOCK_ROOT', $lockRootResolved, $Scope)
 [Environment]::SetEnvironmentVariable('LVIE_LOG_ROOT', $logRootResolved, $Scope)
 [Environment]::SetEnvironmentVariable('LVIE_RUNNER_CONTRACT_PATH', $contractPath, $Scope)
+[Environment]::SetEnvironmentVariable('LVIE_RUNNER_LABEL', $primaryRunnerLabel, $Scope)
+[Environment]::SetEnvironmentVariable('LVIE_RUNNER_LABELS', ($runnerLabelsResolved -join ','), $Scope)
+[Environment]::SetEnvironmentVariable('LVIE_CANONICAL_RUNNER_LABEL', $canonicalRunnerLabel, $Scope)
 
 Write-Host ("Runner contract written: {0}" -f $contractPath)
 Write-Host ("LVIE_WORKTREE_ROOT set to {0} ({1} scope)" -f $worktreeRootResolved, $Scope)
 Write-Host ("LVIE_ARTIFACT_ROOT set to {0} ({1} scope)" -f $artifactRootResolved, $Scope)
 Write-Host ("LVIE_LOCK_ROOT set to {0} ({1} scope)" -f $lockRootResolved, $Scope)
 Write-Host ("LVIE_LOG_ROOT set to {0} ({1} scope)" -f $logRootResolved, $Scope)
+if ($primaryRunnerLabel) {
+    Write-Host ("LVIE_RUNNER_LABEL set to {0} ({1} scope)" -f $primaryRunnerLabel, $Scope)
+}
+if ($runnerLabelsResolved) {
+    Write-Host ("LVIE_RUNNER_LABELS set to {0} ({1} scope)" -f ($runnerLabelsResolved -join ','), $Scope)
+}
 Write-Host "Restart the runner service after updating Machine/User environment variables."
 
 # Configure git safe.directory scoped to the runner work root to avoid dubious ownership errors
