@@ -61,6 +61,8 @@ if (Test-Truthy -Value $env:LVIE_SKIP_RUNNER_LABEL_CHECK) {
     return
 }
 
+$strictLabelCheck = Test-Truthy -Value $env:LVIE_STRICT_RUNNER_LABEL_CHECK
+
 if ([string]::IsNullOrWhiteSpace($ExpectedLabel)) {
     $ExpectedLabel = $env:LVIE_EXPECTED_RUNNER_LABEL
 }
@@ -190,8 +192,9 @@ function Get-ContractLabelSet {
     if ($contract.canonical_runner_label) { $labels += $contract.canonical_runner_label }
     $labels = $labels | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique
     return [pscustomobject]@{
-        Labels = $labels
-        Source = $contractPath
+        Labels    = $labels
+        Source    = $contractPath
+        HasLabels = ($labels.Count -gt 0)
     }
 }
 
@@ -227,6 +230,13 @@ function Test-LabelSet {
 }
 
 $contractFallback = Get-ContractLabelSet
+if ($contractFallback -and -not $contractFallback.HasLabels) {
+    Write-Warning ("Runner label check: runner contract at {0} has no labels. Run Tooling\Setup-Runner.ps1 to refresh it." -f $contractFallback.Source)
+    if ($strictLabelCheck) {
+        throw "Runner label check: strict mode enabled and contract is missing labels."
+    }
+    $contractFallback = $null
+}
 
 if ([string]::IsNullOrWhiteSpace($Token)) {
     $fallback = $contractFallback
@@ -237,7 +247,7 @@ if ([string]::IsNullOrWhiteSpace($Token)) {
     }
 
     $message = 'Runner label check: GitHub token not available (GITHUB_TOKEN not set).'
-    if ($requireLabelEnabled) { throw $message }
+    if ($requireLabelEnabled -and $strictLabelCheck) { throw $message }
     Write-Warning $message
     return
 }
@@ -289,7 +299,7 @@ try {
         Test-LabelSet -ExpectedLabels $expected -ActualLabels $contractFallback.Labels -SourceLabel 'contract fallback'
         return
     }
-    if ($requireLabelEnabled) { throw }
+    if ($requireLabelEnabled -and $strictLabelCheck) { throw }
     Write-Warning ("Runner label check: API lookup failed ({0})." -f $message)
     return
 }
@@ -301,7 +311,7 @@ if (-not $runnerInfo) {
         Test-LabelSet -ExpectedLabels $expected -ActualLabels $contractFallback.Labels -SourceLabel 'contract fallback'
         return
     }
-    if ($requireLabelEnabled) { throw $message }
+    if ($requireLabelEnabled -and $strictLabelCheck) { throw $message }
     Write-Warning $message
     return
 }
