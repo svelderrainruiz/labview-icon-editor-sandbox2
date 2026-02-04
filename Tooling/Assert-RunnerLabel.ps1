@@ -114,7 +114,54 @@ if ([string]::IsNullOrWhiteSpace($RunnerName)) {
     return
 }
 
+function Get-ContractLabels {
+    $contractHelper = Join-Path $PSScriptRoot 'support\RunnerContract.ps1'
+    if (-not (Test-Path -Path $contractHelper)) {
+        return $null
+    }
+
+    . $contractHelper
+    $contractPath = Resolve-RunnerContractPath -ContractPath $env:LVIE_RUNNER_CONTRACT_PATH -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+    $contract = Get-RunnerContract -ContractPath $contractPath -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+    if (-not $contract) {
+        return $null
+    }
+
+    $labels = @()
+    if ($contract.runner_labels) { $labels += $contract.runner_labels }
+    if ($contract.runner_label) { $labels += $contract.runner_label }
+    if ($contract.canonical_runner_label) { $labels += $contract.canonical_runner_label }
+    $labels = $labels | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique
+    return [pscustomobject]@{
+        Labels = $labels
+        Source = $contractPath
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($Token)) {
+    $fallback = Get-ContractLabels
+    if ($fallback -and $fallback.Labels -and $fallback.Labels.Count -gt 0) {
+        Write-Warning ("Runner label check: GitHub token not available; validating against runner contract at {0}." -f $fallback.Source)
+        $actualLabels = $fallback.Labels
+        $expectedNorm = $expected | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
+        $actualNorm = $actualLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
+        $missing = @()
+        foreach ($label in $expectedNorm) {
+            if (-not $actualNorm -or ($actualNorm -notcontains $label)) {
+                $missing += $label
+            }
+        }
+
+        Write-Host ("Runner label check: expected={0}" -f ($expected -join ', '))
+        Write-Host ("Runner label check: actual={0}" -f ($actualLabels -join ', '))
+        if ($missing.Count -gt 0) {
+            throw ("Runner label check failed: missing {0}." -f ($missing -join ', '))
+        }
+
+        Write-Host 'Runner label check: OK (contract fallback).'
+        return
+    }
+
     $message = 'Runner label check: GitHub token not available (GITHUB_TOKEN not set).'
     if ($requireLabelEnabled) { throw $message }
     Write-Warning $message
@@ -190,4 +237,3 @@ if ($missing.Count -gt 0) {
 }
 
 Write-Host 'Runner label check: OK.'
-
