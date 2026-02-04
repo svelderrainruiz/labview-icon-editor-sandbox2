@@ -1,8 +1,8 @@
 name: CI Pipeline (Composite)
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.sha }}
-  cancel-in-progress: true
+  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+  cancel-in-progress: false
 
 on:
   push:
@@ -51,7 +51,7 @@ jobs:
   apply-deps-2021-x64:
     name: Apply VIPC (2021 x64)
     needs: changes
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/apply-vipc
         if: needs.changes.outputs.vipc == 'true'
@@ -67,7 +67,7 @@ jobs:
   apply-deps-2021-x86:
     name: Apply VIPC (2021 x86)
     needs: [apply-deps-2021-x64, changes]
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/apply-vipc
         if: needs.changes.outputs.vipc == 'true'
@@ -83,7 +83,7 @@ jobs:
   apply-deps-2023-x64:
     name: Apply VIPC (2023 x64)
     needs: [close-lv-2021-before-2023, changes]
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/apply-vipc
         if: needs.changes.outputs.vipc == 'true'
@@ -99,7 +99,7 @@ jobs:
   close-lv-2021-before-2023:
     name: Close LabVIEW 2021 before 2023 tasks
     needs: apply-deps-2021-x86
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/close-labview
         with:
@@ -112,7 +112,7 @@ jobs:
 
   version:
     name: Compute Version
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     outputs:
       VERSION:       ${{ steps.compute.outputs.VERSION }}
       MAJOR:         ${{ steps.compute.outputs.MAJOR }}
@@ -132,7 +132,7 @@ jobs:
   missing-in-project-2021-x64:
     name: Test Missing-In-Project (2021 x64)
     needs: apply-deps-2023-x64
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/missing-in-project
         with:
@@ -143,7 +143,7 @@ jobs:
   missing-in-project-2021-x86:
     name: Test Missing-In-Project (2021 x86)
     needs: missing-in-project-2021-x64
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/missing-in-project
         with:
@@ -154,7 +154,7 @@ jobs:
   test-2021-x64:
     name: Run Unit Tests (2021 x64)
     needs: missing-in-project-2021-x86
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/run-unit-tests
         with:
@@ -170,7 +170,7 @@ jobs:
   test-2021-x86:
     name: Run Unit Tests (2021 x86)
     needs: test-2021-x64
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/run-unit-tests
         with:
@@ -186,7 +186,7 @@ jobs:
   build-ppl-x86:
     name: Build 32-bit Packed Library
     needs: [build-ppl-x64, version]
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/build-lvlibp
         with:
@@ -215,7 +215,7 @@ jobs:
   build-ppl-x64:
     name: Build 64-bit Packed Library
     needs: [test-2021-x86, version]
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: ./.github/actions/build-lvlibp
         with:
@@ -245,7 +245,7 @@ jobs:
     name: Build VI Package
     # Chain after 32-bit build, which already depends on 64-bit, to enforce x64 -> x86 -> build-vip ordering
     needs: [build-ppl-x86, version]
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - uses: actions/checkout@v4
         with:
