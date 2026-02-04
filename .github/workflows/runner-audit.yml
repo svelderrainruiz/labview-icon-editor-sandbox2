@@ -6,7 +6,6 @@ permissions:
 env:
   LVIE_EXPECTED_RUNNER_LABEL: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
   LVIE_CANONICAL_RUNNER_LABEL: self-hosted-windows-lv
-
 on:
   workflow_dispatch:
   schedule:
@@ -29,9 +28,4 @@ jobs:
       - name: Validate runner contract
         shell: pwsh
         run: |
-          $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling\\Validate-RunnerContract.ps1'
-          if (-not (Test-Path -Path $scriptPath)) {
-            Write-Warning "Validate-RunnerContract.ps1 not found at $scriptPath. Skipping contract validation."
-            exit 0
-          }
-          pwsh -NoProfile -File $scriptPath
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\Validate-RunnerContract.ps1"
