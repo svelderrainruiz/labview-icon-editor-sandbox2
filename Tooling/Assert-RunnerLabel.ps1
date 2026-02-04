@@ -114,7 +114,7 @@ if ([string]::IsNullOrWhiteSpace($RunnerName)) {
     return
 }
 
-function Get-ContractLabels {
+function Get-ContractLabelSet {
     $contractHelper = Join-Path $PSScriptRoot 'support\RunnerContract.ps1'
     if (-not (Test-Path -Path $contractHelper)) {
         return $null
@@ -138,27 +138,44 @@ function Get-ContractLabels {
     }
 }
 
+function Test-LabelSet {
+    param(
+        [string[]]$ExpectedLabels,
+        [string[]]$ActualLabels,
+        [string]$SourceLabel
+    )
+
+    $expectedNorm = $ExpectedLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
+    $actualNorm = $ActualLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
+
+    $missing = @()
+    foreach ($label in $expectedNorm) {
+        if (-not $actualNorm -or ($actualNorm -notcontains $label)) {
+            $missing += $label
+        }
+    }
+
+    Write-Host ("Runner label check: expected={0}" -f ($ExpectedLabels -join ', '))
+    Write-Host ("Runner label check: actual={0}" -f ($ActualLabels -join ', '))
+
+    if ($missing.Count -gt 0) {
+        throw ("Runner label check failed: missing {0}." -f ($missing -join ', '))
+    }
+
+    if ($SourceLabel) {
+        Write-Host ("Runner label check: OK ({0})." -f $SourceLabel)
+    } else {
+        Write-Host 'Runner label check: OK.'
+    }
+}
+
+$contractFallback = Get-ContractLabelSet
+
 if ([string]::IsNullOrWhiteSpace($Token)) {
-    $fallback = Get-ContractLabels
+    $fallback = $contractFallback
     if ($fallback -and $fallback.Labels -and $fallback.Labels.Count -gt 0) {
         Write-Warning ("Runner label check: GitHub token not available; validating against runner contract at {0}." -f $fallback.Source)
-        $actualLabels = $fallback.Labels
-        $expectedNorm = $expected | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
-        $actualNorm = $actualLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
-        $missing = @()
-        foreach ($label in $expectedNorm) {
-            if (-not $actualNorm -or ($actualNorm -notcontains $label)) {
-                $missing += $label
-            }
-        }
-
-        Write-Host ("Runner label check: expected={0}" -f ($expected -join ', '))
-        Write-Host ("Runner label check: actual={0}" -f ($actualLabels -join ', '))
-        if ($missing.Count -gt 0) {
-            throw ("Runner label check failed: missing {0}." -f ($missing -join ', '))
-        }
-
-        Write-Host 'Runner label check: OK (contract fallback).'
+        Test-LabelSet -ExpectedLabels $expected -ActualLabels $fallback.Labels -SourceLabel 'contract fallback'
         return
     }
 
@@ -205,9 +222,28 @@ function Get-RunnerInfo {
     return $null
 }
 
-$runnerInfo = Get-RunnerInfo -RepoName $Repo -RunnerName $RunnerName -TokenValue $Token
+$runnerInfo = $null
+try {
+    $runnerInfo = Get-RunnerInfo -RepoName $Repo -RunnerName $RunnerName -TokenValue $Token
+} catch {
+    $message = $_.Exception.Message
+    if ($contractFallback -and $contractFallback.Labels -and $contractFallback.Labels.Count -gt 0) {
+        Write-Warning ("Runner label check: API lookup failed ({0}). Falling back to runner contract at {1}." -f $message, $contractFallback.Source)
+        Test-LabelSet -ExpectedLabels $expected -ActualLabels $contractFallback.Labels -SourceLabel 'contract fallback'
+        return
+    }
+    if ($requireLabelEnabled) { throw }
+    Write-Warning ("Runner label check: API lookup failed ({0})." -f $message)
+    return
+}
+
 if (-not $runnerInfo) {
     $message = ("Runner label check: runner '{0}' not found in repo {1}." -f $RunnerName, $Repo)
+    if ($contractFallback -and $contractFallback.Labels -and $contractFallback.Labels.Count -gt 0) {
+        Write-Warning ("{0} Using contract fallback at {1}." -f $message, $contractFallback.Source)
+        Test-LabelSet -ExpectedLabels $expected -ActualLabels $contractFallback.Labels -SourceLabel 'contract fallback'
+        return
+    }
     if ($requireLabelEnabled) { throw $message }
     Write-Warning $message
     return
@@ -218,22 +254,5 @@ if ($runnerInfo.labels) {
     $actualLabels = $runnerInfo.labels | ForEach-Object { $_.name }
 }
 
-$expectedNorm = $expected | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
-$actualNorm = $actualLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
-
-$missing = @()
-foreach ($label in $expectedNorm) {
-    if (-not $actualNorm -or ($actualNorm -notcontains $label)) {
-        $missing += $label
-    }
-}
-
 Write-Host ("Runner label check: runner={0}" -f $RunnerName)
-Write-Host ("Runner label check: expected={0}" -f ($expected -join ', '))
-Write-Host ("Runner label check: actual={0}" -f ($actualLabels -join ', '))
-
-if ($missing.Count -gt 0) {
-    throw ("Runner label check failed: missing {0}." -f ($missing -join ', '))
-}
-
-Write-Host 'Runner label check: OK.'
+Test-LabelSet -ExpectedLabels $expected -ActualLabels $actualLabels -SourceLabel 'api'
