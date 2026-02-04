@@ -115,14 +115,59 @@ if ([string]::IsNullOrWhiteSpace($RunnerName)) {
 }
 
 function Get-ContractLabelSet {
+    $candidatePaths = @()
     $contractHelper = Join-Path $PSScriptRoot 'support\RunnerContract.ps1'
     if (-not (Test-Path -Path $contractHelper)) {
         return $null
     }
 
     . $contractHelper
-    $contractPath = Resolve-RunnerContractPath -ContractPath $env:LVIE_RUNNER_CONTRACT_PATH -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
-    $contract = Get-RunnerContract -ContractPath $contractPath -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_CONTRACT_PATH)) {
+        $candidatePaths += $env:LVIE_RUNNER_CONTRACT_PATH
+    }
+
+    $resolvedPath = Resolve-RunnerContractPath -ContractPath $env:LVIE_RUNNER_CONTRACT_PATH -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($resolvedPath)) {
+        $candidatePaths += $resolvedPath
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
+        try {
+            $worktreeRoot = [System.IO.Path]::GetFullPath($env:LVIE_WORKTREE_ROOT)
+            $workRoot = Split-Path -Parent $worktreeRoot
+            if (-not [string]::IsNullOrWhiteSpace($workRoot)) {
+                $candidatePaths += (Join-Path $workRoot 'runner-contract.json')
+            }
+        } catch {
+            # ignore invalid path
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
+        try {
+            $repoRoot = (Resolve-Path -Path $env:GITHUB_WORKSPACE -ErrorAction Stop).Path
+            $workRoot = Split-Path -Parent (Split-Path -Parent $repoRoot)
+            if (-not [string]::IsNullOrWhiteSpace($workRoot)) {
+                $candidatePaths += (Join-Path $workRoot 'lvie\runner-contract.json')
+            }
+        } catch {
+            # ignore invalid path
+        }
+    }
+
+    $candidatePaths = $candidatePaths | Where-Object { $_ } | Select-Object -Unique
+    $contract = $null
+    $contractPath = $null
+    foreach ($candidate in $candidatePaths) {
+        if (-not (Test-Path -Path $candidate)) {
+            continue
+        }
+        $contract = Get-RunnerContract -ContractPath $candidate -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+        if ($contract) {
+            $contractPath = $candidate
+            break
+        }
+    }
     if (-not $contract) {
         return $null
     }
