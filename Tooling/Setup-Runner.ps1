@@ -100,6 +100,31 @@ if (-not [string]::IsNullOrWhiteSpace($canonicalRunnerLabel)) {
 }
 $runnerLabelsResolved = $runnerLabelsResolved | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique
 
+$canonicalRunnerLabel = if ([string]::IsNullOrWhiteSpace($CanonicalRunnerLabel)) {
+    'self-hosted-windows-lv'
+} else {
+    $CanonicalRunnerLabel.Trim()
+}
+$primaryRunnerLabel = if (-not [string]::IsNullOrWhiteSpace($RunnerLabel)) {
+    $RunnerLabel.Trim()
+} elseif (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_LABEL)) {
+    $env:LVIE_RUNNER_LABEL.Trim()
+} else {
+    $canonicalRunnerLabel
+}
+
+$runnerLabelsResolved = @()
+if ($RunnerLabels) {
+    $runnerLabelsResolved += $RunnerLabels
+}
+if (-not [string]::IsNullOrWhiteSpace($primaryRunnerLabel)) {
+    $runnerLabelsResolved += $primaryRunnerLabel
+}
+if (-not [string]::IsNullOrWhiteSpace($canonicalRunnerLabel)) {
+    $runnerLabelsResolved += $canonicalRunnerLabel
+}
+$runnerLabelsResolved = $runnerLabelsResolved | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique
+
 New-Item -Path $worktreeRootResolved -ItemType Directory -Force | Out-Null
 New-Item -Path $artifactRootResolved -ItemType Directory -Force | Out-Null
 New-Item -Path $lockRootResolved -ItemType Directory -Force | Out-Null
