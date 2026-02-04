@@ -139,7 +139,7 @@ function Get-ContractLabelSet {
                 $candidatePaths += (Join-Path $workRoot 'runner-contract.json')
             }
         } catch {
-            # ignore invalid path
+            Write-Verbose ("Runner label check: unable to resolve LVIE_WORKTREE_ROOT '{0}'." -f $env:LVIE_WORKTREE_ROOT)
         }
     }
 
@@ -151,8 +151,20 @@ function Get-ContractLabelSet {
                 $candidatePaths += (Join-Path $workRoot 'lvie\runner-contract.json')
             }
         } catch {
-            # ignore invalid path
+            Write-Verbose ("Runner label check: unable to resolve GITHUB_WORKSPACE '{0}'." -f $env:GITHUB_WORKSPACE)
         }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_WORKSPACE)) {
+        $candidatePaths += (Join-Path $env:RUNNER_WORKSPACE 'lvie\runner-contract.json')
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_WORK_ROOT)) {
+        $candidatePaths += (Join-Path $env:LVIE_RUNNER_WORK_ROOT 'lvie\runner-contract.json')
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_ROOT)) {
+        $candidatePaths += (Join-Path $env:LVIE_RUNNER_ROOT '_work\lvie\runner-contract.json')
     }
 
     $candidatePaths = $candidatePaths | Where-Object { $_ } | Select-Object -Unique
