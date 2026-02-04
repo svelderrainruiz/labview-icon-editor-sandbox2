@@ -6,7 +6,7 @@ on:
 
 jobs:
   missing-in-project-check:
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     strategy:
       fail-fast: false
       matrix:
