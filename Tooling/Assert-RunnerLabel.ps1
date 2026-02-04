@@ -61,8 +61,6 @@ if (Test-Truthy -Value $env:LVIE_SKIP_RUNNER_LABEL_CHECK) {
     return
 }
 
-$strictLabelCheck = Test-Truthy -Value $env:LVIE_STRICT_RUNNER_LABEL_CHECK
-
 if ([string]::IsNullOrWhiteSpace($ExpectedLabel)) {
     $ExpectedLabel = $env:LVIE_EXPECTED_RUNNER_LABEL
 }
@@ -116,138 +114,9 @@ if ([string]::IsNullOrWhiteSpace($RunnerName)) {
     return
 }
 
-function Get-ContractLabelSet {
-    $candidatePaths = @()
-    $contractHelper = Join-Path $PSScriptRoot 'support\RunnerContract.ps1'
-    if (-not (Test-Path -Path $contractHelper)) {
-        return $null
-    }
-
-    . $contractHelper
-    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_CONTRACT_PATH)) {
-        $candidatePaths += $env:LVIE_RUNNER_CONTRACT_PATH
-    }
-
-    $resolvedPath = Resolve-RunnerContractPath -ContractPath $env:LVIE_RUNNER_CONTRACT_PATH -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
-    if (-not [string]::IsNullOrWhiteSpace($resolvedPath)) {
-        $candidatePaths += $resolvedPath
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_WORKTREE_ROOT)) {
-        try {
-            $worktreeRoot = [System.IO.Path]::GetFullPath($env:LVIE_WORKTREE_ROOT)
-            $workRoot = Split-Path -Parent $worktreeRoot
-            if (-not [string]::IsNullOrWhiteSpace($workRoot)) {
-                $candidatePaths += (Join-Path $workRoot 'runner-contract.json')
-            }
-        } catch {
-            Write-Verbose ("Runner label check: unable to resolve LVIE_WORKTREE_ROOT '{0}'." -f $env:LVIE_WORKTREE_ROOT)
-        }
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_WORKSPACE)) {
-        try {
-            $repoRoot = (Resolve-Path -Path $env:GITHUB_WORKSPACE -ErrorAction Stop).Path
-            $workRoot = Split-Path -Parent (Split-Path -Parent $repoRoot)
-            if (-not [string]::IsNullOrWhiteSpace($workRoot)) {
-                $candidatePaths += (Join-Path $workRoot 'lvie\runner-contract.json')
-            }
-        } catch {
-            Write-Verbose ("Runner label check: unable to resolve GITHUB_WORKSPACE '{0}'." -f $env:GITHUB_WORKSPACE)
-        }
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_WORKSPACE)) {
-        $candidatePaths += (Join-Path $env:RUNNER_WORKSPACE 'lvie\runner-contract.json')
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_WORK_ROOT)) {
-        $candidatePaths += (Join-Path $env:LVIE_RUNNER_WORK_ROOT 'lvie\runner-contract.json')
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_ROOT)) {
-        $candidatePaths += (Join-Path $env:LVIE_RUNNER_ROOT '_work\lvie\runner-contract.json')
-    }
-
-    $candidatePaths = $candidatePaths | Where-Object { $_ } | Select-Object -Unique
-    $contract = $null
-    $contractPath = $null
-    foreach ($candidate in $candidatePaths) {
-        if (-not (Test-Path -Path $candidate)) {
-            continue
-        }
-        $contract = Get-RunnerContract -ContractPath $candidate -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
-        if ($contract) {
-            $contractPath = $candidate
-            break
-        }
-    }
-    if (-not $contract) {
-        return $null
-    }
-
-    $labels = @()
-    if ($contract.runner_labels) { $labels += $contract.runner_labels }
-    if ($contract.runner_label) { $labels += $contract.runner_label }
-    if ($contract.canonical_runner_label) { $labels += $contract.canonical_runner_label }
-    $labels = $labels | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique
-    return [pscustomobject]@{
-        Labels    = $labels
-        Source    = $contractPath
-        HasLabels = ($labels.Count -gt 0)
-    }
-}
-
-function Test-LabelSet {
-    param(
-        [string[]]$ExpectedLabels,
-        [string[]]$ActualLabels,
-        [string]$SourceLabel
-    )
-
-    $expectedNorm = $ExpectedLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
-    $actualNorm = $ActualLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
-
-    $missing = @()
-    foreach ($label in $expectedNorm) {
-        if (-not $actualNorm -or ($actualNorm -notcontains $label)) {
-            $missing += $label
-        }
-    }
-
-    Write-Host ("Runner label check: expected={0}" -f ($ExpectedLabels -join ', '))
-    Write-Host ("Runner label check: actual={0}" -f ($ActualLabels -join ', '))
-
-    if ($missing.Count -gt 0) {
-        throw ("Runner label check failed: missing {0}." -f ($missing -join ', '))
-    }
-
-    if ($SourceLabel) {
-        Write-Host ("Runner label check: OK ({0})." -f $SourceLabel)
-    } else {
-        Write-Host 'Runner label check: OK.'
-    }
-}
-
-$contractFallback = Get-ContractLabelSet
-if ($contractFallback -and -not $contractFallback.HasLabels) {
-    Write-Warning ("Runner label check: runner contract at {0} has no labels. Run Tooling\Setup-Runner.ps1 to refresh it." -f $contractFallback.Source)
-    if ($strictLabelCheck) {
-        throw "Runner label check: strict mode enabled and contract is missing labels."
-    }
-    $contractFallback = $null
-}
-
 if ([string]::IsNullOrWhiteSpace($Token)) {
-    $fallback = $contractFallback
-    if ($fallback -and $fallback.Labels -and $fallback.Labels.Count -gt 0) {
-        Write-Warning ("Runner label check: GitHub token not available; validating against runner contract at {0}." -f $fallback.Source)
-        Test-LabelSet -ExpectedLabels $expected -ActualLabels $fallback.Labels -SourceLabel 'contract fallback'
-        return
-    }
-
     $message = 'Runner label check: GitHub token not available (GITHUB_TOKEN not set).'
-    if ($requireLabelEnabled -and $strictLabelCheck) { throw $message }
+    if ($requireLabelEnabled) { throw $message }
     Write-Warning $message
     return
 }
@@ -289,29 +158,10 @@ function Get-RunnerInfo {
     return $null
 }
 
-$runnerInfo = $null
-try {
-    $runnerInfo = Get-RunnerInfo -RepoName $Repo -RunnerName $RunnerName -TokenValue $Token
-} catch {
-    $message = $_.Exception.Message
-    if ($contractFallback -and $contractFallback.Labels -and $contractFallback.Labels.Count -gt 0) {
-        Write-Warning ("Runner label check: API lookup failed ({0}). Falling back to runner contract at {1}." -f $message, $contractFallback.Source)
-        Test-LabelSet -ExpectedLabels $expected -ActualLabels $contractFallback.Labels -SourceLabel 'contract fallback'
-        return
-    }
-    if ($requireLabelEnabled -and $strictLabelCheck) { throw }
-    Write-Warning ("Runner label check: API lookup failed ({0})." -f $message)
-    return
-}
-
+$runnerInfo = Get-RunnerInfo -RepoName $Repo -RunnerName $RunnerName -TokenValue $Token
 if (-not $runnerInfo) {
     $message = ("Runner label check: runner '{0}' not found in repo {1}." -f $RunnerName, $Repo)
-    if ($contractFallback -and $contractFallback.Labels -and $contractFallback.Labels.Count -gt 0) {
-        Write-Warning ("{0} Using contract fallback at {1}." -f $message, $contractFallback.Source)
-        Test-LabelSet -ExpectedLabels $expected -ActualLabels $contractFallback.Labels -SourceLabel 'contract fallback'
-        return
-    }
-    if ($requireLabelEnabled -and $strictLabelCheck) { throw $message }
+    if ($requireLabelEnabled) { throw $message }
     Write-Warning $message
     return
 }
@@ -321,5 +171,23 @@ if ($runnerInfo.labels) {
     $actualLabels = $runnerInfo.labels | ForEach-Object { $_.name }
 }
 
+$expectedNorm = $expected | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
+$actualNorm = $actualLabels | ForEach-Object { $_.Trim().ToLowerInvariant() } | Select-Object -Unique
+
+$missing = @()
+foreach ($label in $expectedNorm) {
+    if (-not $actualNorm -or ($actualNorm -notcontains $label)) {
+        $missing += $label
+    }
+}
+
 Write-Host ("Runner label check: runner={0}" -f $RunnerName)
-Test-LabelSet -ExpectedLabels $expected -ActualLabels $actualLabels -SourceLabel 'api'
+Write-Host ("Runner label check: expected={0}" -f ($expected -join ', '))
+Write-Host ("Runner label check: actual={0}" -f ($actualLabels -join ', '))
+
+if ($missing.Count -gt 0) {
+    throw ("Runner label check failed: missing {0}." -f ($missing -join ', '))
+}
+
+Write-Host 'Runner label check: OK.'
+
