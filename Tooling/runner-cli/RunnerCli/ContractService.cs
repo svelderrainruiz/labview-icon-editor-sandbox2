@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace RunnerCli;
@@ -55,6 +56,31 @@ public static class ContractService
     }
 
     /// <summary>
+    /// Checks git safe.directory entries for the work root pattern (or wildcard).
+    /// Returns false with a message if missing.
+    /// </summary>
+    public static bool HasSafeDirectory(RunnerContract contract, out string message)
+    {
+        message = string.Empty;
+        if (contract is null || string.IsNullOrWhiteSpace(contract.WorkRoot))
+        {
+            message = "Runner contract missing work_root.";
+            return false;
+        }
+
+        var workRootPattern = contract.WorkRoot.Replace('\\', '/') + "/*";
+        var entries = GetGitSafeDirectories();
+        var ok = entries.Any(e =>
+            string.Equals(e, "*", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(e, workRootPattern, StringComparison.OrdinalIgnoreCase));
+
+        if (!ok)
+            message = $"Git safe.directory missing for work root pattern: {workRootPattern}";
+
+        return ok;
+    }
+
+    /// <summary>
     /// Normalizes a set of runner labels: trims whitespace, removes empties, deduplicates (case-insensitive).
     /// </summary>
     public static List<string> NormalizeLabels(IEnumerable<string>? labels)
@@ -92,5 +118,46 @@ public static class ContractService
         {
             errors.Add($"Runner contract path not found: {label} => {path}");
         }
+    }
+
+    private static List<string> GetGitSafeDirectories()
+    {
+        var entries = new List<string>();
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "git",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            psi.ArgumentList.Add("config");
+            psi.ArgumentList.Add("--system");
+            psi.ArgumentList.Add("--get-all");
+            psi.ArgumentList.Add("safe.directory");
+
+            using var process = Process.Start(psi);
+            if (process is null)
+                return entries;
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit(5000);
+
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                entries.AddRange(output
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => s.Length > 0));
+            }
+        }
+        catch
+        {
+            // If git is missing or system config is inaccessible, treat as no entries.
+        }
+
+        return entries;
     }
 }
