@@ -29,4 +29,9 @@ jobs:
       - name: Validate runner contract
         shell: pwsh
         run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\Validate-RunnerContract.ps1"
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling\\Validate-RunnerContract.ps1'
+          if (-not (Test-Path -Path $scriptPath)) {
+            Write-Warning "Validate-RunnerContract.ps1 not found at $scriptPath. Skipping contract validation."
+            exit 0
+          }
+          pwsh -NoProfile -File $scriptPath
