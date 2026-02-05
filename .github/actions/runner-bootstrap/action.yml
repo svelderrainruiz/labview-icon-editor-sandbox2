@@ -24,39 +24,16 @@ runs:
       if: ${{ inputs.initialize_runner == 'true' }}
       shell: pwsh
       run: |
-        # Try CLI first, fall back to PowerShell
-        $cli = Join-Path $env:RUNNER_TEMP 'runner-cli' 'runner-cli.exe'
-        if (Test-Path $cli) {
-          Write-Host 'Using runner-cli to initialize contract …'
-          $contractPath = Join-Path $env:RUNNER_WORKSPACE 'lvie' 'runner-contract.json'
-          & $cli init-contract `
-            --contract-path $contractPath `
-            --runner-root   (Split-Path $env:RUNNER_WORKSPACE) `
-            --work-root     $env:RUNNER_WORKSPACE
-          & $cli emit-env --contract-path $contractPath
-        } else {
-          Write-Host 'runner-cli not found; using PowerShell fallback.'
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Initialize-Runner.ps1" -WriteGitHubEnv
-        }
+        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Initialize-Runner.ps1" -WriteGitHubEnv
     - name: Runner sanity
       if: ${{ inputs.runner_sanity == 'true' }}
       shell: pwsh
       run: |
-        $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling\Check-Runner.ps1'
-        if (-not (Test-Path -Path $scriptPath)) {
-          Write-Warning "Check-Runner.ps1 not found at $scriptPath. Skipping runner sanity."
-          exit 0
-        }
-        pwsh -NoProfile -File $scriptPath -SafeDirectoryScope ${{ inputs.safe_directory_scope }}
+        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Check-Runner.ps1" -SafeDirectoryScope ${{ inputs.safe_directory_scope }}
     - name: Runner label contract
       if: ${{ inputs.runner_label_check == 'true' }}
       shell: pwsh
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling\Assert-RunnerLabel.ps1'
-        if (-not (Test-Path -Path $scriptPath)) {
-          Write-Warning "Assert-RunnerLabel.ps1 not found at $scriptPath. Skipping runner label check."
-          exit 0
-        }
-        pwsh -NoProfile -File $scriptPath
+        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Assert-RunnerLabel.ps1"
