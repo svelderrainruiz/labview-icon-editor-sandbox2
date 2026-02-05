@@ -23,7 +23,7 @@ if (-not (Test-Path -Path $contractHelper)) {
 }
 . $contractHelper
 
-function Resolve-NormalizedPath {
+function Normalize-Path {
     param([string]$Path)
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -41,10 +41,10 @@ $workRootResolved = Resolve-RunnerWorkRoot -RunnerRoot $RunnerRoot -WorkRoot $Wo
 if ([string]::IsNullOrWhiteSpace($workRootResolved)) {
     throw "Runner work root could not be resolved. Provide -RunnerRoot or -WorkRoot."
 }
-$workRootResolved = Resolve-NormalizedPath -Path $workRootResolved
+$workRootResolved = Normalize-Path -Path $workRootResolved
 
 $runnerRootResolved = if (-not [string]::IsNullOrWhiteSpace($RunnerRoot)) {
-    Resolve-NormalizedPath -Path $RunnerRoot
+    Normalize-Path -Path $RunnerRoot
 } else {
     Split-Path -Parent $workRootResolved
 }
@@ -70,10 +70,10 @@ $logRootResolved = if (-not [string]::IsNullOrWhiteSpace($LogRoot)) {
     Join-Path $workRootResolved 'lvie\logs'
 }
 
-$worktreeRootResolved = Resolve-NormalizedPath -Path $worktreeRootResolved
-$artifactRootResolved = Resolve-NormalizedPath -Path $artifactRootResolved
-$lockRootResolved = Resolve-NormalizedPath -Path $lockRootResolved
-$logRootResolved = Resolve-NormalizedPath -Path $logRootResolved
+$worktreeRootResolved = Normalize-Path -Path $worktreeRootResolved
+$artifactRootResolved = Normalize-Path -Path $artifactRootResolved
+$lockRootResolved = Normalize-Path -Path $lockRootResolved
+$logRootResolved = Normalize-Path -Path $logRootResolved
 
 $canonicalRunnerLabel = if ([string]::IsNullOrWhiteSpace($CanonicalRunnerLabel)) {
     'self-hosted-windows-lv'
@@ -166,4 +166,3 @@ try {
 } catch {
     Write-Warning ("Failed to configure git safe.directory: {0}" -f $_.Exception.Message)
 }
-

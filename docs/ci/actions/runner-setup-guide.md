@@ -169,6 +169,10 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - Optional: set `RUNNER_DIAG_RETENTION_DAYS=7` in `.env` if you want to keep recent logs.
    - The cleanup skips any diagnostics file that is still in use, so the job does not fail.
 
+5. **Stateless runner bootstrap (no service restart)**
+   - Workflows call the `runner-bootstrap` action, which runs `Tooling/Initialize-Runner.ps1` at job start to refresh the runner contract and export `LVIE_*` variables into the job environment.
+   - This avoids relying on Machine/User environment variables and does not require restarting the runner service.
+
 
 <a name="running-the-actions-locally"></a>
 ### 4. Running the Actions Locally
@@ -243,6 +247,3 @@ Notes:
 - **Troubleshoot**: If manual environment edits are needed, consult `ManualSetup.md` or the original documentation for advanced configuration steps.  
 
 **Happy Building!** By integrating these workflows, you’ll maintain a **robust, automated CI/CD** pipeline for the LabVIEW Icon Editor—complete with **semantic versioning**, **build artifact uploads**, and **metadata branding** (company/repo).
-
-
-

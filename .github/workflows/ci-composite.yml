@@ -233,6 +233,26 @@ jobs:
       - name: Job teardown
         if: always()
         uses: ./.github/actions/lvie-job-teardown
+  probe-labview-2023:
+    name: Probe LabVIEW 2023 Install
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    outputs:
+      has_lv2023: ${{ steps.probe.outputs.has_lv2023 }}
+    steps:
+      - name: Detect LabVIEW 2023 (64-bit)
+        id: probe
+        shell: pwsh
+        run: |
+          $candidates = @(
+            'C:\Program Files\National Instruments\LabVIEW 2023\LabVIEW.exe',
+            'C:\Program Files (x86)\National Instruments\LabVIEW 2023\LabVIEW.exe'
+          )
+          $found = $false
+          foreach ($path in $candidates) {
+            if (Test-Path -Path $path) { $found = $true; break }
+          }
+          Write-Host ("LabVIEW 2023 installed: {0}" -f $found)
+          "has_lv2023=$($found.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
   changes:
     name: Detect VIPC changes
@@ -278,6 +298,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 64
+          download_runner_cli: 'true'
       - name: Apply VIPC (LV x64)
         if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
@@ -314,6 +335,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 32
+          download_runner_cli: 'true'
       - name: Apply VIPC (LV x86)
         if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
@@ -323,6 +345,60 @@ jobs:
             -MinimumSupportedLVVersion $env:LABVIEW_VERSION_YEAR `
             -VIP_LVVersion $env:LABVIEW_VERSION_YEAR `
             -SupportedBitness 32 `
+            -RepoRoot "$env:REPO_ROOT" `
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc"
+      - run: echo "No .vipc changes detected; skipping dependency application."
+        if: needs.changes.outputs.vipc != 'true'
+      - name: Job teardown
+        if: always()
+        uses: ./.github/actions/lvie-job-teardown
+
+  close-lv-2021-before-2023:
+    name: Close LabVIEW 2021 before 2023 tasks
+    needs: [apply-deps-2021-x86, probe-labview-2023]
+    if: needs.probe-labview-2023.outputs.has_lv2023 == 'true'
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    steps:
+      - name: Job setup
+        uses: ./.github/actions/lvie-job-setup
+        with:
+          fetch_depth: 0
+          create_worktree: 'false'
+          download_runner_cli: 'true'
+      - uses: ./.github/actions/close-labview
+        with:
+          labview_version: 2021
+          supported_bitness: 64
+      - uses: ./.github/actions/close-labview
+        with:
+          labview_version: 2021
+          supported_bitness: 32
+
+  apply-deps-2023-x64:
+    name: Apply VIPC (LV 2023 x64)
+    needs: [close-lv-2021-before-2023, changes, probe-labview-2023]
+    if: needs.probe-labview-2023.outputs.has_lv2023 == 'true'
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Job setup
+        uses: ./.github/actions/lvie-job-setup
+        with:
+          checkout: 'false'
+          bitness: 64
+          download_runner_cli: 'true'
+      - name: Apply VIPC (LV 2023 x64)
+        if: needs.changes.outputs.vipc == 'true'
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & ".github\\actions\\apply-vipc\\ApplyVIPC.ps1" `
+            -MinimumSupportedLVVersion 2023 `
+            -VIP_LVVersion 2023 `
+            -SupportedBitness 64 `
             -RepoRoot "$env:REPO_ROOT" `
             -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc"
       - run: echo "No .vipc changes detected; skipping dependency application."
@@ -357,6 +433,7 @@ jobs:
         with:
           checkout: 'false'
           create_worktree: 'false'
+          download_runner_cli: 'true'
       - id: compute
         uses: ./.github/actions/compute-version
         with:
@@ -391,6 +468,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: ${{ matrix.bitness }}
+          download_runner_cli: 'true'
       - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -477,6 +555,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: ${{ matrix.bitness }}
+          download_runner_cli: 'true'
       - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -528,6 +607,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 32
+          download_runner_cli: 'true'
       - name: Enable Development Mode (LV 32-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -588,6 +668,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 64
+          download_runner_cli: 'true'
       - name: Enable Development Mode (LV 64-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -654,6 +735,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 64
+          download_runner_cli: 'true'
       - name: Generate release notes
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}

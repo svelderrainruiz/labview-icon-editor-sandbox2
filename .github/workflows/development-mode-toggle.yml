@@ -104,14 +104,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Runner sanity
-        shell: pwsh
-        run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\Check-Runner.ps1" -SafeDirectoryScope System
+      - name: Runner bootstrap (stateless)
+        uses: ./.github/actions/runner-bootstrap
+        with:
+          safe_directory_scope: System
       - name: Acquire LabVIEW runner lock
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Acquire
+          $lockScript = Join-Path $env:GITHUB_WORKSPACE 'Tooling\RunnerLock.ps1'
+          if (-not (Test-Path $lockScript)) {
+            Write-Warning "RunnerLock.ps1 not found at $lockScript; skipping lock acquisition."
+            exit 0
+          }
+          pwsh -NoProfile -File $lockScript -Mode Acquire
 
       - name: Log context
         shell: pwsh
@@ -170,7 +177,12 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
+          $lockScript = Join-Path $env:GITHUB_WORKSPACE 'Tooling\RunnerLock.ps1'
+          if (-not (Test-Path $lockScript)) {
+            Write-Warning "RunnerLock.ps1 not found at $lockScript; skipping lock release."
+            exit 0
+          }
+          pwsh -NoProfile -File $lockScript -Mode Release
 
       - name: Toggle dev mode (32-bit)
         if: ${{ env.selected_bitness == '32' && success() }}
