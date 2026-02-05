@@ -1,0 +1,32 @@
+name: Runner Audit
+
+permissions:
+  actions: read
+
+env:
+  LVIE_EXPECTED_RUNNER_LABEL: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+  LVIE_CANONICAL_RUNNER_LABEL: self-hosted-windows-lv
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 4 * * *"
+
+concurrency:
+  group: runner-audit-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Runner bootstrap (stateless)
+        uses: ./.github/actions/runner-bootstrap
+        with:
+          safe_directory_scope: System
+      - name: Validate runner contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\Validate-RunnerContract.ps1"

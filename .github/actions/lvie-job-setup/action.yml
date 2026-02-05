@@ -1,0 +1,94 @@
+name: LVIE Job Setup
+description: Standard setup for self-hosted LabVIEW jobs (checkout, runner sanity, lock, worktree).
+inputs:
+  checkout:
+    description: Run actions/checkout.
+    required: false
+    default: 'true'
+  fetch_depth:
+    description: Fetch depth for actions/checkout.
+    required: false
+    default: '0'
+  runner_sanity:
+    description: Run Tooling/Check-Runner.ps1.
+    required: false
+    default: 'true'
+  runner_label_check:
+    description: Validate runner labels against expected contract.
+    required: false
+    default: 'true'
+  initialize_runner:
+    description: Initialize runner contract and export LVIE_* for the job.
+    required: false
+    default: 'true'
+  safe_directory_scope:
+    description: Git safe.directory scope (System or Global).
+    required: false
+    default: System
+  acquire_lock:
+    description: Acquire LabVIEW runner lock.
+    required: false
+    default: 'true'
+  create_worktree:
+    description: Create a short-path worktree and export REPO_ROOT/PROJECT_PATH.
+    required: false
+    default: 'true'
+  bitness:
+    description: LabVIEW bitness (required when create_worktree is true).
+    required: false
+  variant:
+    description: Optional variant label for worktree naming.
+    required: false
+  worktree_root:
+    description: Optional override for worktree root.
+    required: false
+  repo_root:
+    description: Optional override for base repo root.
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Checkout code
+      if: ${{ inputs.checkout == 'true' }}
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: ${{ inputs.fetch_depth }}
+    - name: Runner bootstrap (stateless)
+      uses: ./.github/actions/runner-bootstrap
+      with:
+        initialize_runner: ${{ inputs.initialize_runner }}
+        runner_sanity: ${{ inputs.runner_sanity }}
+        runner_label_check: ${{ inputs.runner_label_check }}
+        safe_directory_scope: ${{ inputs.safe_directory_scope }}
+    - name: Assert LabVIEW version contract
+      shell: pwsh
+      run: |
+        $repoRoot = '${{ inputs.repo_root }}'
+        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
+          $repoRoot = $env:GITHUB_WORKSPACE
+        }
+        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Assert-LabVIEWVersion.ps1" -RepoRoot $repoRoot -Context 'job setup'
+    - name: Acquire LabVIEW runner lock
+      if: ${{ inputs.acquire_lock == 'true' }}
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        LVIE_RUNNER_LOCK_GITHUB_CHECK: 1
+      run: |
+        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\RunnerLock.ps1" -Mode Acquire
+    - name: Create short-path worktree
+      if: ${{ inputs.create_worktree == 'true' }}
+      shell: pwsh
+      run: |
+        $bitness = '${{ inputs.bitness }}'
+        if ([string]::IsNullOrWhiteSpace($bitness)) {
+          throw "bitness input is required when create_worktree is true."
+        }
+        $variant = '${{ inputs.variant }}'
+        $worktreeRoot = '${{ inputs.worktree_root }}'
+        $repoRoot = '${{ inputs.repo_root }}'
+        & "$env:GITHUB_WORKSPACE\Tooling\New-CIWorktreeForJob.ps1" `
+          -Bitness $bitness `
+          -Variant $variant `
+          -WorktreeRoot $worktreeRoot `
+          -RepoRoot $repoRoot
