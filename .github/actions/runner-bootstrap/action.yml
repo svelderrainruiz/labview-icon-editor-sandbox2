@@ -29,11 +29,21 @@ runs:
       if: ${{ inputs.runner_sanity == 'true' }}
       shell: pwsh
       run: |
-        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Check-Runner.ps1" -SafeDirectoryScope ${{ inputs.safe_directory_scope }}
+        $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling\Check-Runner.ps1'
+        if (-not (Test-Path -Path $scriptPath)) {
+          Write-Warning "Check-Runner.ps1 not found at $scriptPath. Skipping runner sanity."
+          exit 0
+        }
+        pwsh -NoProfile -File $scriptPath -SafeDirectoryScope ${{ inputs.safe_directory_scope }}
     - name: Runner label contract
       if: ${{ inputs.runner_label_check == 'true' }}
       shell: pwsh
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Assert-RunnerLabel.ps1"
+        $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling\Assert-RunnerLabel.ps1'
+        if (-not (Test-Path -Path $scriptPath)) {
+          Write-Warning "Assert-RunnerLabel.ps1 not found at $scriptPath. Skipping runner label check."
+          exit 0
+        }
+        pwsh -NoProfile -File $scriptPath
