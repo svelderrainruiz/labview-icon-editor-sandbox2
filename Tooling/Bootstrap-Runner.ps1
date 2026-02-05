@@ -62,6 +62,9 @@
 .PARAMETER ValidateContract
     Run Tooling/Validate-RunnerContract.ps1 after setup (default true).
 
+.PARAMETER RunnerCliPath
+    Optional path to runner-cli.exe for contract validation.
+
 .PARAMETER WriteBootstrapMarker
     Write a bootstrap marker JSON file (default true).
 
@@ -90,6 +93,7 @@ param(
     [ValidateSet('Machine', 'User', 'Process')]
     [string]$Scope = 'Machine',
     [switch]$ValidateContract,
+    [string]$RunnerCliPath,
     [switch]$WriteBootstrapMarker,
     [string]$BootstrapMarkerPath
 )
@@ -255,6 +259,27 @@ function Resolve-RunnerServiceName {
     return $null
 }
 
+function Resolve-RunnerCliPath {
+    param([string]$ExplicitPath)
+
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+        return $ExplicitPath
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_CLI_PATH)) {
+        return $env:LVIE_RUNNER_CLI_PATH
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+        $candidate = Join-Path $env:RUNNER_TEMP 'runner-cli\runner-cli.exe'
+        if (Test-Path -Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
 $contractHelper = Join-Path $PSScriptRoot 'support\RunnerContract.ps1'
 if (-not (Test-Path -Path $contractHelper)) {
     throw "RunnerContract.ps1 not found at $contractHelper"
@@ -366,6 +391,12 @@ if ($RegisterRunner) {
 }
 
 if ($validateContractEnabled) {
+    $contractPath = Resolve-RunnerContractPath -RunnerRoot $runnerRootResolved -WorkRoot $workRootResolved
+    $cliPath = Resolve-RunnerCliPath -ExplicitPath $RunnerCliPath
+    if ($cliPath -and (Test-Path -Path $cliPath) -and $contractPath) {
+        Write-Host ("Validating contract with runner-cli: {0}" -f $cliPath)
+        & $cliPath validate-contract --contract-path $contractPath
+    }
     & (Join-Path $PSScriptRoot 'Validate-RunnerContract.ps1') -FailOnMissingSafeDirectory
 }
 
