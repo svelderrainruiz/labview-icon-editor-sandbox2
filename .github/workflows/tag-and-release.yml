@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: write
       actions: write
-    runs-on: self-hosted-windows-lv
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     steps:
       - name: Exit if upstream run not from push or failed
         if: ${{ github.event.workflow_run.conclusion != 'success' || github.event.workflow_run.event != 'push' }}

@@ -135,10 +135,22 @@ The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct
 2. **Add Self-Hosted Runner**:  
    Go to **Settings → Actions → Runners** in your GitHub repository (or organization) and follow the steps to register a runner on your machine that has LabVIEW installed.
 
-3. **Label the Runner** (optional):
-   - Use labels such as `self-hosted-windows-lv` for the default jobs. The default CI matrix currently runs only on this Windows label.
-   - `self-hosted-linux-lv` is included for potential future expansion but isn't used by the default jobs yet.
-   - Adjust the workflow’s `runs-on` lines to match your runner labels. This helps ensure the correct environment is used for building the Icon Editor.
+3. **Label the Runner**:
+   - **Canonical label**: `self-hosted-windows-lv` must always be present.
+   - The workflows use `LVIE_RUNNER_LABEL` (repo variable) and fall back to `self-hosted-windows-lv`.
+   - For forks, set **Settings → Actions → Variables → `LVIE_RUNNER_LABEL`** to match your runner label.
+   - If `LVIE_RUNNER_LABEL` is set to a fork-specific label, keep `self-hosted-windows-lv` on the same runner.
+   - Example label set: `self-hosted-windows-lv`, `self-hosted-windows-lv-ie`.
+
+4. **Runner Contract (recommended)**:
+   - Run `Tooling/Setup-Runner.ps1` to create a runner contract and standardize work roots.
+   - The contract is written under the runner root and used by `Tooling/Check-Runner.ps1`.
+   - The template is `Tooling/runner-contract.template.json`.
+   - CI validates the runner labels using `Tooling/Assert-RunnerLabel.ps1` at job start.
+
+5. **Git safe.directory**:
+   - `Tooling/Setup-Runner.ps1` configures a scoped safe.directory for the work root.
+   - This prevents Git “dubious ownership” errors when the runner service account differs from the checkout owner.
 
 ---
 
@@ -193,5 +205,20 @@ Although GitHub Actions primarily run on GitHub-hosted or self-hosted agents, yo
 - **Artifact Storage**: The `.vip` file is accessible under the Actions run summary (click “Artifacts”).  
 - **Version Enforcement**: Pull requests without a version label default to `patch`; you can enforce labeling with an optional “Label Enforcer” step if desired.  
 - **Branding**: To highlight the **organization** or **repository** behind a particular build, simply pass `-CompanyName` and `-AuthorName` (or similar parameters) into the `Build.ps1` script. This metadata flows into the final **Display Information** of the Icon Editor’s VI Package.
+
+## Portability
+
+**What is portable**
+- Any Windows self-hosted runner with LabVIEW 2021 (21.0), PowerShell 7+, and Git installed.
+- Forks or orgs that keep the canonical runner label `self-hosted-windows-lv`.
+- Environments where the GitHub Actions API is restricted (runner contract fallback is local).
+
+**What is not portable**
+- Non-Windows runners (LabVIEW + g-cli requires Windows).
+- Hosts without LabVIEW 2021 installed for both 32-bit and 64-bit.
+
+**Operational caveats**
+- Service restart requires admin rights on the host machine.
+- If runner paths differ, use `Tooling/Setup-Runner.ps1` to generate the contract and set paths.
 
 By adopting these workflows—**Development Mode Toggle** and **Build VI Package**—you can maintain a **streamlined, consistent** CI/CD process for the Icon Editor while customizing the VI Package with your own **unique** or **fork-specific** branding.
