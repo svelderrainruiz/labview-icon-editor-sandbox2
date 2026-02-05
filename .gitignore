@@ -29,3 +29,7 @@ missing_IE_paths.txt
 
 # Local machine tooling snapshot
 TOOLING.md
+
+# .NET build artifacts
+Tooling/runner-cli/**/bin/
+Tooling/runner-cli/**/obj/
