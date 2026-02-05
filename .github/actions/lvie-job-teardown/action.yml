@@ -1,22 +1,78 @@
 name: LVIE Job Teardown
-description: Standard teardown for self-hosted LabVIEW jobs (optional worktree cleanup, lock release).
+description: Standard teardown for self-hosted LabVIEW jobs (revert dev mode, close LabVIEW, cleanup, release lock).
 inputs:
-  release_lock:
-    description: Release LabVIEW runner lock when RunnerLock.ps1 is available.
+  revert_dev_mode:
+    description: Revert development mode using RevertDevelopmentMode.ps1.
     required: false
     default: 'false'
-  cleanup_worktree:
-    description: Remove worktree if REPO_ROOT is set.
+  revert_bitness:
+    description: LabVIEW bitness for dev-mode revert.
+    required: false
+  close_labview:
+    description: Close LabVIEW using Close_LabVIEW.ps1.
     required: false
     default: 'false'
+  close_bitness:
+    description: LabVIEW bitness for close.
+    required: false
+  labview_version:
+    description: LabVIEW version (year). Defaults to LABVIEW_VERSION_YEAR env var.
+    required: false
   repo_root:
-    description: Optional explicit worktree path to remove.
+    description: Repo root override. Defaults to REPO_ROOT env var.
     required: false
+  cleanup_worktree:
+    description: Remove worktree and prune git metadata.
+    required: false
+    default: 'true'
+  release_lock:
+    description: Release LabVIEW runner lock.
+    required: false
+    default: 'true'
 runs:
   using: composite
   steps:
+    - name: Revert development mode
+      if: ${{ inputs.revert_dev_mode == 'true' }}
+      shell: pwsh
+      run: |
+        $labviewVersion = '${{ inputs.labview_version }}'
+        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
+          $labviewVersion = $env:LABVIEW_VERSION_YEAR
+        }
+        $bitness = '${{ inputs.revert_bitness }}'
+        if ([string]::IsNullOrWhiteSpace($bitness)) {
+          throw "revert_bitness input is required when revert_dev_mode is true."
+        }
+        $repoRoot = '${{ inputs.repo_root }}'
+        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
+          $repoRoot = $env:REPO_ROOT
+        }
+        & "$repoRoot\\.github\\actions\\revert-development-mode\\RevertDevelopmentMode.ps1" `
+          -MinimumSupportedLVVersion $labviewVersion `
+          -SupportedBitness $bitness `
+          -RepoRoot "$repoRoot"
+    - name: Close LabVIEW
+      if: ${{ inputs.close_labview == 'true' }}
+      shell: pwsh
+      run: |
+        $labviewVersion = '${{ inputs.labview_version }}'
+        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
+          $labviewVersion = $env:LABVIEW_VERSION_YEAR
+        }
+        $bitness = '${{ inputs.close_bitness }}'
+        if ([string]::IsNullOrWhiteSpace($bitness)) {
+          throw "close_bitness input is required when close_labview is true."
+        }
+        $repoRoot = '${{ inputs.repo_root }}'
+        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
+          $repoRoot = $env:REPO_ROOT
+        }
+        & "$repoRoot\\.github\\actions\\close-labview\\Close_LabVIEW.ps1" `
+          -MinimumSupportedLVVersion $labviewVersion `
+          -SupportedBitness $bitness
     - name: Cleanup worktree
-      if: ${{ inputs.cleanup_worktree == 'true' }}
+      if: ${{ inputs.cleanup_worktree == 'true' && always() }}
       shell: pwsh
       run: |
         $target = '${{ inputs.repo_root }}'
@@ -38,9 +94,8 @@ runs:
         } catch {
           Write-Warning ("Failed to remove worktree $target: {0}" -f $_.Exception.Message)
         }
-
     - name: Release LabVIEW runner lock
-      if: ${{ inputs.release_lock == 'true' }}
+      if: ${{ inputs.release_lock == 'true' && always() }}
       shell: pwsh
       env:
         GITHUB_TOKEN: ${{ github.token }}
