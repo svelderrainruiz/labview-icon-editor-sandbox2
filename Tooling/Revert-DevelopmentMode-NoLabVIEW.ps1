@@ -223,7 +223,11 @@ function Restore-IconApiFolderFromZip {
             Move-Item -LiteralPath $resolvedRoot -Destination $destParent -Force
         } else {
             New-Item -Path $DestinationDir -ItemType Directory -Force | Out-Null
-            Copy-Item -LiteralPath (Join-Path $resolvedRoot '*') -Destination $DestinationDir -Recurse -Force
+            $items = @(Get-ChildItem -LiteralPath $resolvedRoot -Force)
+            if ($items.Count -eq 0) {
+                throw "Icon API zip extraction produced no entries at $resolvedRoot"
+            }
+            Copy-Item -LiteralPath $items.FullName -Destination $DestinationDir -Recurse -Force
         }
     } finally {
         if (Test-Path -Path $tempRoot) {
