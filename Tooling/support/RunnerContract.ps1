@@ -134,4 +134,3 @@ function Set-RunnerContractEnvironment {
         $env:LVIE_RUNNER_CONTRACT_PATH = $ContractPath
     }
 }
-
