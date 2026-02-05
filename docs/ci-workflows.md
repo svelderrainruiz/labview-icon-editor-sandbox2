@@ -145,9 +145,10 @@ The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct
 
 3. **Label the Runner**:
    - **Canonical label**: `self-hosted-windows-lv` must always be present.
+   - The workflows use `LVIE_RUNNER_LABEL` (repo variable) and fall back to `self-hosted-windows-lv`.
    - You can add a fork-specific label (for example `self-hosted-windows-lv-ie`), but keep the canonical label on the same runner.
-   - The workflow uses `LVIE_RUNNER_LABEL` (repo variable) and falls back to `self-hosted-windows-lv`.
-   - If `LVIE_RUNNER_LABEL` is set to a fork-specific label, the runner must still include `self-hosted-windows-lv`.
+   - For forks, set **Settings → Actions → Variables → `LVIE_RUNNER_LABEL`** to match your runner label.
+   - If `LVIE_RUNNER_LABEL` is set to a fork-specific label, keep `self-hosted-windows-lv` on the same runner.
    - Example label set: `self-hosted-windows-lv`, `self-hosted-windows-lv-ie`.
 
 4. **Runner Contract (recommended)**:
@@ -159,7 +160,6 @@ The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct
 5. **Git safe.directory**:
    - `Tooling/Setup-Runner.ps1` configures a scoped safe.directory for the work root.
    - This prevents Git “dubious ownership” errors when the runner service account differs from the checkout owner.
-
 #### Runner Bootstrap (Recommended)
 
 Use the bootstrap script to configure paths, labels, and the runner contract in one step.

@@ -12,11 +12,10 @@
 [CmdletBinding()]
 param(
     [string]$ContractPath,
-    [switch]$FailOnMissingSafeDirectory
+    [switch]$FailOnMissingSafeDirectory = $true
 )
 
 $ErrorActionPreference = 'Stop'
-$failOnMissingSafeDirectoryEnabled = $FailOnMissingSafeDirectory.IsPresent -or -not $PSBoundParameters.ContainsKey('FailOnMissingSafeDirectory')
 
 function Resolve-ContractPath {
     param([string]$Path)
@@ -35,7 +34,7 @@ function Test-Directory {
     }
 }
 
-function Get-GitSafeDirectory {
+function Get-GitSafeDirectories {
     $entries = @()
     try {
         $entries = & git config --system --get-all safe.directory 2>$null
@@ -62,7 +61,7 @@ Test-Directory -Path $contract.lock_root -Label 'lock_root'
 Test-Directory -Path $contract.log_root -Label 'log_root'
 
 $workRootPattern = ($contract.work_root -replace '\\', '/') + '/*'
-$safeEntries = Get-GitSafeDirectory
+$safeEntries = Get-GitSafeDirectories
 $safeOk = $false
 if ($safeEntries) {
     $safeOk = $safeEntries | Where-Object { $_ -eq '*' -or $_ -eq $workRootPattern }
@@ -70,7 +69,7 @@ if ($safeEntries) {
 
 if (-not $safeOk) {
     $message = "Git safe.directory missing for work root pattern: $workRootPattern"
-    if ($failOnMissingSafeDirectoryEnabled) {
+    if ($FailOnMissingSafeDirectory) {
         throw $message
     } else {
         Write-Warning $message
@@ -80,4 +79,3 @@ if (-not $safeOk) {
 }
 
 Write-Host ("Runner contract OK: {0}" -f $resolvedContract)
-

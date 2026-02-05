@@ -62,6 +62,59 @@ runs:
         echo "projFile=$pf" >> $Env:GITHUB_OUTPUT
         Write-Host "ℹ️  Using project file: $pf"
 
+    - name: Preflight – ensure NI Icon Editor resources exist
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $lvVer   = '${{ inputs.lv-ver }}'
+        $arch    = '${{ inputs.arch }}'
+        $bitness = if ($arch -eq '64') { '64' } else { '32' }
+
+        # Probe path: a known VI that PrepareIESource deploys
+        $niDir = "C:\Program Files\National Instruments\LabVIEW $lvVer"
+        $probe = Join-Path $niDir 'resource\plugins\NIIconEditor\Miscellaneous\Classes Initialization.vi'
+
+        if (Test-Path $probe) {
+          Write-Host "✅  NI Icon Editor resources already present ($probe)"
+          return
+        }
+
+        Write-Host "⚠️  NI Icon Editor resources missing – preparing source …"
+
+        # Wait for any existing g-cli / LabVIEW processes to finish (do NOT kill them)
+        $maxWait = 300  # seconds
+        $elapsed = 0
+        $interval = 10
+        while ($elapsed -lt $maxWait) {
+          $gcli = Get-Process -Name 'g-cli' -ErrorAction SilentlyContinue
+          $lv   = Get-Process -Name 'LabVIEW' -ErrorAction SilentlyContinue
+          if (-not $gcli -and -not $lv) { break }
+          Write-Host "⏳  g-cli/LabVIEW running – waiting ($elapsed s / $maxWait s) …"
+          Start-Sleep -Seconds $interval
+          $elapsed += $interval
+        }
+
+        if ($elapsed -ge $maxWait) {
+          Write-Host "⚠️  Timed out waiting for g-cli/LabVIEW to exit – skipping preflight preparation."
+          Write-Host "    The Missing-In-Project check may fail if resources are still missing."
+          return
+        }
+
+        $prepareScript = Join-Path $Env:GITHUB_WORKSPACE '.github\actions\prepare-labview-source\Prepare_LabVIEW_source.ps1'
+        & $prepareScript `
+          -MinimumSupportedLVVersion $lvVer `
+          -SupportedBitness          $bitness `
+          -RelativePath              $Env:GITHUB_WORKSPACE `
+          -LabVIEW_Project           'lv_icon_editor' `
+          -Build_Spec                'Editor Packed Library'
+
+        if (Test-Path $probe) {
+          Write-Host "✅  NI Icon Editor resources deployed successfully."
+        } else {
+          Write-Host "⚠️  PrepareIESource completed but probe file still missing."
+          Write-Host "    The Missing-In-Project check may report failures."
+        }
+
     - name: Invoke PS1 wrapper
       id: run_vi
       shell: pwsh

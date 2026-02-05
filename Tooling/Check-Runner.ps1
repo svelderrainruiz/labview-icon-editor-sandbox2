@@ -26,15 +26,13 @@ param(
     [string]$WorkRoot,
     [string]$WorktreeRoot,
     [string]$RepoRoot,
-    [switch]$FixSafeDirectory,
+    [switch]$FixSafeDirectory = $true,
     [ValidateSet('System', 'Global')]
     [string]$SafeDirectoryScope = 'System'
 )
 
 $ErrorActionPreference = 'Stop'
-$fixSafeDirectoryEnabled = $FixSafeDirectory.IsPresent -or -not $PSBoundParameters.ContainsKey('FixSafeDirectory')
-
-function Resolve-NormalizedPath {
+function Normalize-Path {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
     $full = [System.IO.Path]::GetFullPath($Path)
@@ -171,8 +169,8 @@ function Grant-ModifyAccess {
 
 $resolvedWorkRoot = if ($WorkRoot) { $WorkRoot } else { $env:LVIE_RUNNER_WORK_ROOT }
 $resolvedWorktreeRoot = if ($WorktreeRoot) { $WorktreeRoot } else { $env:LVIE_WORKTREE_ROOT }
-$resolvedWorkRoot = Resolve-NormalizedPath -Path $resolvedWorkRoot
-$resolvedWorktreeRoot = Resolve-NormalizedPath -Path $resolvedWorktreeRoot
+$resolvedWorkRoot = Normalize-Path -Path $resolvedWorkRoot
+$resolvedWorktreeRoot = Normalize-Path -Path $resolvedWorktreeRoot
 $resolvedRepoRoot = Resolve-RepoRoot -Path $RepoRoot
 
 Write-Host ("Runner check: work_root={0}" -f ($resolvedWorkRoot ?? '<unset>'))
@@ -186,14 +184,14 @@ if ($resolvedWorktreeRoot -and -not (Test-Path -Path $resolvedWorktreeRoot)) {
     Write-Warning ("Worktree root does not exist: {0}" -f $resolvedWorktreeRoot)
 }
 
-function Get-GitSafeDirectory {
+function Get-GitSafeDirectories {
     param([string]$Scope)
-    $gitArgs = @('config')
-    if ($Scope -eq 'System') { $gitArgs += '--system' }
-    if ($Scope -eq 'Global') { $gitArgs += '--global' }
-    $gitArgs += @('--get-all', 'safe.directory')
+    $args = @('config')
+    if ($Scope -eq 'System') { $args += '--system' }
+    if ($Scope -eq 'Global') { $args += '--global' }
+    $args += @('--get-all', 'safe.directory')
     try {
-        & git @gitArgs 2>$null | Where-Object { $_ -and $_.Trim().Length -gt 0 }
+        & git @args 2>$null | Where-Object { $_ -and $_.Trim().Length -gt 0 }
     } catch {
         @()
     }
@@ -201,16 +199,16 @@ function Get-GitSafeDirectory {
 
 function Add-GitSafeDirectory {
     param([string]$Scope, [string]$PathPattern)
-    $gitArgs = @('config')
-    if ($Scope -eq 'System') { $gitArgs += '--system' }
-    if ($Scope -eq 'Global') { $gitArgs += '--global' }
-    $gitArgs += @('--add', 'safe.directory', $PathPattern)
-    & git @gitArgs
+    $args = @('config')
+    if ($Scope -eq 'System') { $args += '--system' }
+    if ($Scope -eq 'Global') { $args += '--global' }
+    $args += @('--add', 'safe.directory', $PathPattern)
+    & git @args
 }
 
 if ($resolvedWorkRoot) {
     $safePattern = ($resolvedWorkRoot -replace '\\', '/') + '/*'
-    $safeList = Get-GitSafeDirectory -Scope $SafeDirectoryScope
+    $safeList = Get-GitSafeDirectories -Scope $SafeDirectoryScope
     $hasSafe = $false
     if ($safeList) {
         $hasSafe = $safeList | Where-Object { $_ -eq '*' -or $_ -eq $safePattern }
@@ -218,7 +216,7 @@ if ($resolvedWorkRoot) {
 
     if (-not $hasSafe) {
         Write-Warning ("Git safe.directory missing for {0} (scope: {1})" -f $safePattern, $SafeDirectoryScope)
-        if ($fixSafeDirectoryEnabled) {
+        if ($FixSafeDirectory) {
             try {
                 Add-GitSafeDirectory -Scope $SafeDirectoryScope -PathPattern $safePattern
                 Write-Host ("Added git safe.directory: {0} ({1})" -f $safePattern, $SafeDirectoryScope)
@@ -230,7 +228,6 @@ if ($resolvedWorkRoot) {
         Write-Host ("Git safe.directory OK: {0} ({1})" -f $safePattern, $SafeDirectoryScope)
     }
 }
-
 if ($resolvedRepoRoot) {
     $assertScript = Join-Path $resolvedRepoRoot 'Tooling/Assert-LabVIEWVersion.ps1'
     if (Test-Path -Path $assertScript) {
@@ -348,5 +345,3 @@ if ($resolvedRepoRoot) {
 } else {
     Write-Warning "Runner check: repo_root not resolved; skipping LabVIEW version checks."
 }
-
-
