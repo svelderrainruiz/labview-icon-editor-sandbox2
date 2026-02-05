@@ -30,10 +30,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Runner sanity
-        shell: pwsh
-        run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\Check-Runner.ps1" -SafeDirectoryScope System
+      - name: Runner bootstrap (stateless)
+        uses: ./.github/actions/runner-bootstrap
+        with:
+          safe_directory_scope: System
       - name: Acquire LabVIEW runner lock
         shell: pwsh
         run: |
@@ -169,13 +169,3 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\RunnerLock.ps1" -Mode Release
-
-
-
-
-
-
-
-
-
-
