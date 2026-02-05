@@ -17,6 +17,10 @@ inputs:
     description: Validate runner labels against expected contract.
     required: false
     default: 'true'
+  initialize_runner:
+    description: Initialize runner contract and export LVIE_* for the job.
+    required: false
+    default: 'true'
   safe_directory_scope:
     description: Git safe.directory scope (System or Global).
     required: false
@@ -49,18 +53,13 @@ runs:
       uses: actions/checkout@v4
       with:
         fetch-depth: ${{ inputs.fetch_depth }}
-    - name: Runner sanity
-      if: ${{ inputs.runner_sanity == 'true' }}
-      shell: pwsh
-      run: |
-        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Check-Runner.ps1" -SafeDirectoryScope ${{ inputs.safe_directory_scope }}
-    - name: Runner label contract
-      if: ${{ inputs.runner_label_check == 'true' }}
-      shell: pwsh
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      run: |
-        pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Assert-RunnerLabel.ps1"
+    - name: Runner bootstrap (stateless)
+      uses: ./.github/actions/runner-bootstrap
+      with:
+        initialize_runner: ${{ inputs.initialize_runner }}
+        runner_sanity: ${{ inputs.runner_sanity }}
+        runner_label_check: ${{ inputs.runner_label_check }}
+        safe_directory_scope: ${{ inputs.safe_directory_scope }}
     - name: Assert LabVIEW version contract
       shell: pwsh
       run: |
