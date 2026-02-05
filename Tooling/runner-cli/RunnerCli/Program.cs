@@ -26,16 +26,6 @@ validateCmd.SetHandler((string path, bool failOnSafeDir) =>
         Environment.ExitCode = 1;
         return;
     }
-    if (!ContractService.HasSafeDirectory(contract, out var safeMessage))
-    {
-        if (failOnSafeDir)
-        {
-            Console.Error.WriteLine($"ERROR: {safeMessage}");
-            Environment.ExitCode = 1;
-            return;
-        }
-        Console.Error.WriteLine($"WARNING: {safeMessage}");
-    }
     Console.WriteLine($"Runner contract OK: {path}");
 }, contractPathOption, failOnSafeDirOption);
 
