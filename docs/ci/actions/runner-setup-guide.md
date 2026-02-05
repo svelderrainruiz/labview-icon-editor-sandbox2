@@ -156,6 +156,7 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
      - `pwsh -NoProfile -File .\Tooling\Setup-Runner.ps1 -RunnerRoot C:\actions-runner -Scope Machine`
    - This writes `<runner-root>\_work\lvie\runner-contract.json` and sets `LVIE_WORKTREE_ROOT`, `LVIE_ARTIFACT_ROOT`, `LVIE_LOCK_ROOT`, and `LVIE_LOG_ROOT`.
    - Restart the runner service after setting Machine/User environment variables.
+   - **No-restart alternative (stateless jobs)**: workflows call the `runner-bootstrap` action, which runs `Tooling/Initialize-Runner.ps1` at job start to refresh the runner contract and export `LVIE_*` variables into the job environment without a service restart.
 
 5. **Runner diagnostics cleanup (recommended)**
    - Some runner failures can occur before checkout if old diagnostics logs accumulate under the runner's `_diag\pages` folder.

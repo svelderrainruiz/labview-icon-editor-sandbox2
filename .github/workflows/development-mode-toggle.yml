@@ -5,6 +5,8 @@ permissions:
 
 env:
   LVIE_FORCE_NO_LABVIEW_DEVMODE: 1
+  LVIE_EXPECTED_RUNNER_LABEL: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+  LVIE_CANONICAL_RUNNER_LABEL: self-hosted-windows-lv
 
 concurrency:
   group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -98,16 +100,15 @@ jobs:
 
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
-      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
       selected_bitness: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.bitness || inputs.bitness }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Runner sanity
-        shell: pwsh
-        run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\\Tooling\\Check-Runner.ps1" -SafeDirectoryScope System
+      - name: Runner bootstrap (stateless)
+        uses: ./.github/actions/runner-bootstrap
+        with:
+          safe_directory_scope: System
       - name: Acquire LabVIEW runner lock
         shell: pwsh
         run: |
