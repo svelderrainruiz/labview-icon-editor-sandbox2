@@ -41,6 +41,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Runner bootstrap (stateless)
+        uses: ./.github/actions/runner-bootstrap
+        with:
+          safe_directory_scope: System
 
       - name: Log context
         shell: pwsh

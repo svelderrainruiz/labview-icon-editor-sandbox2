@@ -18,6 +18,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Runner bootstrap (stateless)
+        uses: ./.github/actions/runner-bootstrap
+        with:
+          safe_directory_scope: System
 
       # 1️⃣  Detect the first *.lvproj and expose its **absolute path**
       - name: Find .lvproj file
