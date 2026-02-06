@@ -260,6 +260,7 @@ if ($resolvedRepoRoot) {
 
             if ($aclCheckEnabled) {
                 $autoFixEnabled = Test-EnvBool -Name 'LVIE_RUNNER_ACL_AUTOFIX' -Default $false
+                $warnOnly = Test-EnvBool -Name 'LVIE_RUNNER_ACL_WARN_ONLY' -Default $false
                 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
                 Write-Host ("Runner ACL check: identity={0}, autofix={1}" -f $identity, $autoFixEnabled)
 
@@ -338,7 +339,12 @@ if ($resolvedRepoRoot) {
 
                 if ($issues.Count -gt 0) {
                     $details = $issues -join [Environment]::NewLine
-                    throw "Runner ACL check failed. Grant Modify permissions to the runner identity for LabVIEW install paths, or set LVIE_RUNNER_ACL_AUTOFIX=1. Issues:`n$details"
+                    $message = "Runner ACL check failed. Grant Modify permissions to the runner identity for LabVIEW install paths, or set LVIE_RUNNER_ACL_AUTOFIX=1. Issues:`n$details"
+                    if ($warnOnly) {
+                        Write-Warning $message
+                    } else {
+                        throw $message
+                    }
                 }
             }
         }
