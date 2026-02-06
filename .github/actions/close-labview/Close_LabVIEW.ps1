@@ -113,41 +113,6 @@ function Get-TargetLabVIEWProcesses {
     }
 }
 
-function Get-LabVIEWInstallRoot {
-    param(
-        [string]$Version,
-        [string]$Bitness
-    )
-
-    if ($Bitness -eq '32') {
-        return "C:\Program Files (x86)\National Instruments\LabVIEW $Version"
-    }
-    return "C:\Program Files\National Instruments\LabVIEW $Version"
-}
-
-function Get-TargetLabVIEWProcesses {
-    param(
-        [string]$Version,
-        [string]$Bitness
-    )
-
-    $installRoot = Get-LabVIEWInstallRoot -Version $Version -Bitness $Bitness
-    $processes = @()
-    try {
-        $processes = Get-CimInstance Win32_Process -Filter "Name='LabVIEW.exe'" -ErrorAction Stop
-    } catch {
-        $processes = @()
-    }
-
-    if (-not $processes) {
-        return @()
-    }
-
-    return $processes | Where-Object {
-        $_.ExecutablePath -and $_.ExecutablePath.StartsWith($installRoot, [System.StringComparison]::OrdinalIgnoreCase)
-    }
-}
-
 function Invoke-SafeQuitLabVIEW {
     param(
         [string]$Version,
