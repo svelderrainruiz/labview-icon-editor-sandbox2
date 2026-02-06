@@ -862,8 +862,7 @@ function Invoke-RunnerContractValidation {
     $requireEnabled = $RequireRunnerCli.IsPresent -or -not $PSBoundParameters.ContainsKey('RequireRunnerCli')
     $ensureScript = Join-Path $RepoRoot 'Tooling\Ensure-RunnerCli.ps1'
     if (Test-Path -Path $ensureScript) {
-        . $ensureScript
-        $ensureResult = Ensure-RunnerCli -RepoRoot $RepoRoot -RunnerCliPath $RunnerCliPath -Require:$requireEnabled
+        $ensureResult = & $ensureScript -RepoRoot $RepoRoot -RunnerCliPath $RunnerCliPath -Require:$requireEnabled
         if ($ensureResult -and $ensureResult.Path) {
             $RunnerCliPath = $ensureResult.Path
         }
