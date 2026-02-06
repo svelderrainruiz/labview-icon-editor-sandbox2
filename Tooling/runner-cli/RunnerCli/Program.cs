@@ -277,11 +277,13 @@ pylaviScanCmd.SetHandler((InvocationContext context) =>
 
         var result = PylaviService.Run(options);
         Environment.ExitCode = result.ExitCode;
+        context.ExitCode = result.ExitCode;
     }
     catch (Exception ex)
     {
         Console.Error.WriteLine($"ERROR: {ex.Message}");
         Environment.ExitCode = 1;
+        context.ExitCode = 1;
     }
 });
 
@@ -367,13 +369,14 @@ pylaviSummarizeCmd.SetHandler((InvocationContext context) =>
                 {
                     var shaHint = PylaviOffendersService.ResolveSha(sha, resolvedPath, null);
                     var labelValueHint = string.IsNullOrWhiteSpace(label) ? "pylavi" : label;
-                    PylaviOffendersService.WriteMachineLines(resolvedPath, labelValueHint, shaHint, false, 0, 2);
-                }
-                Environment.ExitCode = 2;
-                return;
+                PylaviOffendersService.WriteMachineLines(resolvedPath, labelValueHint, shaHint, false, 0, 2);
             }
-            throw new FileNotFoundException(message, resolvedPath);
+            Environment.ExitCode = 2;
+            context.ExitCode = 2;
+            return;
         }
+        throw new FileNotFoundException(message, resolvedPath);
+    }
 
         if (validateExists)
         {
@@ -383,6 +386,7 @@ pylaviSummarizeCmd.SetHandler((InvocationContext context) =>
                 var labelValueHint = string.IsNullOrWhiteSpace(label) ? "pylavi" : label;
                 PylaviOffendersService.WriteMachineLines(resolvedPath, labelValueHint, shaHint, false, 0, 0);
             }
+            context.ExitCode = 0;
             return;
         }
 
@@ -447,6 +451,7 @@ pylaviSummarizeCmd.SetHandler((InvocationContext context) =>
             {
                 Console.Error.WriteLine($"ERROR: {exitMessage}");
                 Environment.ExitCode = exitCode;
+                context.ExitCode = exitCode;
             }
             return;
         }
@@ -492,12 +497,14 @@ pylaviSummarizeCmd.SetHandler((InvocationContext context) =>
         {
             Console.Error.WriteLine($"ERROR: {exitMessage}");
             Environment.ExitCode = exitCode;
+            context.ExitCode = exitCode;
         }
     }
     catch (Exception ex)
     {
         Console.Error.WriteLine($"ERROR: {ex.Message}");
         Environment.ExitCode = 1;
+        context.ExitCode = 1;
     }
 });
 
@@ -586,6 +593,7 @@ pylaviFetchCmd.SetHandler((InvocationContext context) =>
     {
         Console.Error.WriteLine($"ERROR: {ex.Message}");
         Environment.ExitCode = 1;
+        context.ExitCode = 1;
     }
 });
 
