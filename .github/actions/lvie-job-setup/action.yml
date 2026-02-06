@@ -105,6 +105,40 @@ runs:
         runner_label_check: ${{ inputs.runner_label_check }}
         safe_directory_scope: ${{ inputs.safe_directory_scope }}
 
+    - name: Export repo root (non-worktree)
+      if: ${{ inputs.create_worktree != 'true' }}
+      shell: pwsh
+      run: |
+        $repoRoot = '${{ inputs.repo_root }}'
+        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
+          $repoRoot = $env:GITHUB_WORKSPACE
+        }
+        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
+          throw "REPO_ROOT could not be resolved."
+        }
+        if (-not (Test-Path -Path $repoRoot)) {
+          throw "Repo root not found: $repoRoot"
+        }
+        $repoRoot = (Resolve-Path -Path $repoRoot -ErrorAction Stop).Path
+        $projectPath = Join-Path $repoRoot 'lv_icon_editor.lvproj'
+        if (-not (Test-Path -Path $projectPath)) {
+          throw "Project file not found at $projectPath"
+        }
+        $assertScript = Join-Path $repoRoot 'Tooling\Assert-LabVIEWVersion.ps1'
+        if (-not (Test-Path -Path $assertScript)) {
+          throw "Assert-LabVIEWVersion.ps1 not found at $assertScript"
+        }
+        $lvInfo = & $assertScript -RepoRoot $repoRoot -Context 'ci-job-setup'
+        if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) {
+          throw "GITHUB_ENV not set; cannot export REPO_ROOT."
+        }
+        "REPO_ROOT=$repoRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+        "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+        "LABVIEW_VERSION_RAW=$($lvInfo.Raw)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+        "LABVIEW_VERSION_YEAR=$($lvInfo.Year)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+        "LABVIEW_MINOR_REVISION=$($lvInfo.MinorRevision)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+        "LABVIEW_NUMERIC_VERSION=$($lvInfo.NumericVersion)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
     - name: Acquire LabVIEW runner lock
       if: ${{ inputs.acquire_lock == 'true' }}
       shell: pwsh
