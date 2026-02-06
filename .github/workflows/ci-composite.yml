@@ -117,6 +117,9 @@ jobs:
     name: Build runner-cli (linux-x64)
     needs: run-metadata
     uses: ./.github/workflows/runner-cli-reusable.yml
+    permissions:
+      actions: read
+      contents: read
     with:
       rid: linux-x64
       artifact_name: runner-cli-linux-x64
