@@ -92,7 +92,7 @@ runs:
           git -C "$env:GITHUB_WORKSPACE" worktree prune 2>$null | Out-Null
           Write-Host "Removed worktree: $target"
         } catch {
-          Write-Warning ("Failed to remove worktree $target: {0}" -f $_.Exception.Message)
+          Write-Warning ("Failed to remove worktree {0}: {1}" -f $target, $_.Exception.Message)
         }
     - name: Release LabVIEW runner lock
       if: ${{ inputs.release_lock == 'true' && always() }}
