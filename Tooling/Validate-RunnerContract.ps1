@@ -12,7 +12,7 @@
 [CmdletBinding()]
 param(
     [string]$ContractPath,
-    [switch]$FailOnMissingSafeDirectory = $true
+    [bool]$FailOnMissingSafeDirectory = $true
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,7 +34,7 @@ function Test-Directory {
     }
 }
 
-function Get-GitSafeDirectories {
+function Get-GitSafeDirectoryEntry {
     $entries = @()
     try {
         $entries = & git config --system --get-all safe.directory 2>$null
@@ -61,7 +61,7 @@ Test-Directory -Path $contract.lock_root -Label 'lock_root'
 Test-Directory -Path $contract.log_root -Label 'log_root'
 
 $workRootPattern = ($contract.work_root -replace '\\', '/') + '/*'
-$safeEntries = Get-GitSafeDirectories
+$safeEntries = Get-GitSafeDirectoryEntry
 $safeOk = $false
 if ($safeEntries) {
     $safeOk = $safeEntries | Where-Object { $_ -eq '*' -or $_ -eq $workRootPattern }

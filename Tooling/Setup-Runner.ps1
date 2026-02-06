@@ -23,7 +23,7 @@ if (-not (Test-Path -Path $contractHelper)) {
 }
 . $contractHelper
 
-function Normalize-Path {
+function Resolve-RunnerPath {
     param([string]$Path)
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -41,10 +41,10 @@ $workRootResolved = Resolve-RunnerWorkRoot -RunnerRoot $RunnerRoot -WorkRoot $Wo
 if ([string]::IsNullOrWhiteSpace($workRootResolved)) {
     throw "Runner work root could not be resolved. Provide -RunnerRoot or -WorkRoot."
 }
-$workRootResolved = Normalize-Path -Path $workRootResolved
+$workRootResolved = Resolve-RunnerPath -Path $workRootResolved
 
 $runnerRootResolved = if (-not [string]::IsNullOrWhiteSpace($RunnerRoot)) {
-    Normalize-Path -Path $RunnerRoot
+    Resolve-RunnerPath -Path $RunnerRoot
 } else {
     Split-Path -Parent $workRootResolved
 }
@@ -70,10 +70,10 @@ $logRootResolved = if (-not [string]::IsNullOrWhiteSpace($LogRoot)) {
     Join-Path $workRootResolved 'lvie\logs'
 }
 
-$worktreeRootResolved = Normalize-Path -Path $worktreeRootResolved
-$artifactRootResolved = Normalize-Path -Path $artifactRootResolved
-$lockRootResolved = Normalize-Path -Path $lockRootResolved
-$logRootResolved = Normalize-Path -Path $logRootResolved
+$worktreeRootResolved = Resolve-RunnerPath -Path $worktreeRootResolved
+$artifactRootResolved = Resolve-RunnerPath -Path $artifactRootResolved
+$lockRootResolved = Resolve-RunnerPath -Path $lockRootResolved
+$logRootResolved = Resolve-RunnerPath -Path $logRootResolved
 
 $canonicalRunnerLabel = if ([string]::IsNullOrWhiteSpace($CanonicalRunnerLabel)) {
     'self-hosted-windows-lv'
