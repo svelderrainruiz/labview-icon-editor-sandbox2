@@ -209,6 +209,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: ${{ matrix.bitness }}
+          create_worktree: 'true'
       - name: Initialize VerifyIEPaths archive folder
         shell: pwsh
         run: |
@@ -280,6 +281,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 64
+          create_worktree: 'true'
       - name: Apply VIPC (LV x64)
         if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
@@ -316,6 +318,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 32
+          create_worktree: 'true'
       - name: Apply VIPC (LV x86)
         if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
@@ -393,6 +396,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: ${{ matrix.bitness }}
+          create_worktree: 'true'
       - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -479,6 +483,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: ${{ matrix.bitness }}
+          create_worktree: 'true'
       - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -530,6 +535,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 32
+          create_worktree: 'true'
       - name: Enable Development Mode (LV 32-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -590,6 +596,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 64
+          create_worktree: 'true'
       - name: Enable Development Mode (LV 64-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -656,6 +663,7 @@ jobs:
         with:
           checkout: 'false'
           bitness: 64
+          create_worktree: 'true'
       - name: Generate release notes
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
