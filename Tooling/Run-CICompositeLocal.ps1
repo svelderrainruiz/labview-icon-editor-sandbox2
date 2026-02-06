@@ -607,6 +607,9 @@ function New-ViValidateOffendersReport {
     } else {
         @()
     }
+    if ($roots.Count -gt 1) {
+        $roots = $roots | Sort-Object -Unique
+    }
     $redactPattern = $null
     if ($roots.Count -gt 0) {
         $redactPattern = ($roots | ForEach-Object { [regex]::Escape($_) }) -join '|'
@@ -768,31 +771,61 @@ function Invoke-ViValidate {
         $viArgs += $viVersion
     }
 
-    $labelSuffix = if ([string]::IsNullOrWhiteSpace($Label)) { '' } else { " ($Label)" }
-    Write-Host ("vi_validate command{0}: {1} {2}" -f $labelSuffix, $viValidate.Source, ($viArgs -join ' '))
-    $result = Invoke-CheckedWithOutput -Label "Validate LabVIEW files (pylavi$labelSuffix)" -Action {
-        & $viValidate.Source @viArgs
-    }
-
-    $outputLines = if ($null -ne $result.Output) { @($result.Output) } else { @() }
-
     $rootsRaw = $env:LVIE_PYLAVI_ABSOLUTE_PATH_ROOTS
     $roots = if (-not [string]::IsNullOrWhiteSpace($rootsRaw)) {
         $rootsRaw -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
     } else {
         @()
     }
-    foreach ($root in $roots) {
-        if ([string]::IsNullOrWhiteSpace($root)) { continue }
-        $rootHits = $outputLines | Where-Object { $_ -like "*$root*" } | Select-Object -Unique
-        if ($rootHits.Count -gt 0) {
-            Write-Warning ("Absolute linker paths referencing {0} detected ({1} lines)." -f $root, $rootHits.Count)
-            $preview = $rootHits | Select-Object -First 20
-            foreach ($hit in $preview) {
-                Write-Warning $hit
+    if ($roots.Count -gt 1) {
+        $roots = $roots | Sort-Object -Unique
+    }
+    $redactRegex = $null
+    if ($roots.Count -gt 0) {
+        $pattern = ($roots | ForEach-Object { [regex]::Escape($_) }) -join '|'
+        $redactRegex = [regex]::new($pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    }
+    function Redact-Value {
+        param([string]$Value)
+        if ([string]::IsNullOrWhiteSpace($Value)) { return $Value }
+        if (-not $redactRegex) { return $Value }
+        return $redactRegex.Replace($Value, '<redacted>')
+    }
+    function Format-CommandArgs {
+        param([string[]]$Args)
+        if (-not $Args) { return '' }
+        return ($Args | ForEach-Object {
+            if ([string]::IsNullOrWhiteSpace($_)) { '""' }
+            elseif ($_ -match '\s') { '"' + $_ + '"' }
+            else { $_ }
+        }) -join ' '
+    }
+
+    $labelSuffix = if ([string]::IsNullOrWhiteSpace($Label)) { '' } else { " ($Label)" }
+    $displayArgs = Format-CommandArgs -Args $viArgs
+    Write-Host ("vi_validate command{0}: {1} {2}" -f $labelSuffix, $viValidate.Source, $displayArgs)
+    $result = Invoke-CheckedWithOutput -Label "Validate LabVIEW files (pylavi$labelSuffix)" -Action {
+        & $viValidate.Source @viArgs
+    } -RedactionRegex $redactRegex
+
+    $outputLines = if ($null -ne $result.Output) { @($result.Output) } else { @() }
+    if ($roots.Count -gt 0 -and $outputLines.Count -gt 0) {
+        $hits = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($root in $roots) {
+            foreach ($line in $outputLines) {
+                if ($line -like "*$root*") {
+                    [void]$hits.Add($line)
+                }
             }
-            if ($rootHits.Count -gt $preview.Count) {
-                Write-Warning ("... {0} more" -f ($rootHits.Count - $preview.Count))
+        }
+        if ($hits.Count -gt 0) {
+            Write-Warning ("Absolute linker paths referencing configured roots detected (count: {0})." -f $hits.Count)
+            $preview = $hits | Select-Object -First 20
+            foreach ($hit in $preview) {
+                Write-Warning (Redact-Value -Value $hit)
+            }
+            if ($hits.Count -gt $preview.Count) {
+                Write-Warning ("... {0} more" -f ($hits.Count - $preview.Count))
             }
         }
     }
@@ -951,7 +984,8 @@ function Invoke-CheckedWithResult {
 function Invoke-CheckedWithOutput {
     param(
         [string]$Label,
-        [scriptblock]$Action
+        [scriptblock]$Action,
+        [System.Text.RegularExpressions.Regex]$RedactionRegex
     )
 
     $stepStart = Get-Date
@@ -981,7 +1015,11 @@ function Invoke-CheckedWithOutput {
         $normalizedOutput = @($output | ForEach-Object { $_.ToString() })
     }
     foreach ($line in $normalizedOutput) {
-        Write-Host $line
+        $renderLine = $line
+        if ($RedactionRegex) {
+            $renderLine = $RedactionRegex.Replace($renderLine, '<redacted>')
+        }
+        Write-Host $renderLine
     }
 
     Write-Host ("=== {0} completed in {1}s ===" -f $Label, $duration)

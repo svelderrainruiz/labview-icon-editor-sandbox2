@@ -82,6 +82,12 @@ runs:
           $label = 'pylavi'
         }
         $absoluteRootsRaw = '${{ inputs.absolute_roots }}'
+        $viCommand = Get-Command vi_validate -ErrorAction SilentlyContinue
+        if (-not $viCommand) {
+          throw 'vi_validate not found in PATH. Install pylavi (python -m pip install pylavi).'
+        }
+        $commandLine = "{0} --config `"{1}`" --eq {2}" -f $viCommand.Source, $config, $labviewNumeric
+        Write-Host ("vi_validate command ({0}): {1}" -f $label, $commandLine)
         $runnerCliProject = Join-Path $env:GITHUB_WORKSPACE 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
         $canUseRunnerCli = (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject)
         if ($canUseRunnerCli) {
@@ -136,12 +142,6 @@ runs:
 
           return
         }
-        $viCommand = Get-Command vi_validate -ErrorAction SilentlyContinue
-        if (-not $viCommand) {
-          throw 'vi_validate not found in PATH. Install pylavi (python -m pip install pylavi).'
-        }
-        $commandLine = "{0} --config `"{1}`" --eq {2}" -f $viCommand.Source, $config, $labviewNumeric
-        Write-Host ("vi_validate command ({0}): {1}" -f $label, $commandLine)
         if (-not (Test-Path $config)) {
           throw "vi_validate config not found: $config"
         }
@@ -150,6 +150,9 @@ runs:
         $absoluteRoots = @()
         if (-not [string]::IsNullOrWhiteSpace($absoluteRootsRaw)) {
           $absoluteRoots = $absoluteRootsRaw -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        }
+        if ($absoluteRoots.Count -gt 1) {
+          $absoluteRoots = $absoluteRoots | Sort-Object -Unique
         }
         $redactPattern = $null
         if ($absoluteRoots.Count -gt 0) {
