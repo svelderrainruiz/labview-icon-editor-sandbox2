@@ -224,7 +224,7 @@ public static class PylaviFetchService
         return entries[0];
     }
 
-    private static string ExtractOffendersJson(byte[] zipBytes)
+    internal static string ExtractOffendersJson(byte[] zipBytes)
     {
         using var stream = new MemoryStream(zipBytes);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
