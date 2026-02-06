@@ -309,8 +309,20 @@ if ($shouldRun) {
         throw "Run script not found at $scriptPath"
     }
 
-    Write-Host ("Invoking: pwsh -NoProfile -File {0} {1}" -f $scriptPath, ($RunArgs -join ' '))
-    & pwsh -NoProfile -File $scriptPath @RunArgs
+    if ($root) {
+        $env:LVIE_WORKTREE_ROOT = $root
+    }
+
+    $argsToUse = @()
+    if ($RunArgs) {
+        $argsToUse += $RunArgs
+    }
+    if ($scriptPath -like '*Run-CICompositeLocal.ps1' -and ($argsToUse -notcontains '-Orchestrated')) {
+        $argsToUse += '-Orchestrated'
+    }
+
+    Write-Host ("Invoking: pwsh -NoProfile -File {0} {1}" -f $scriptPath, ($argsToUse -join ' '))
+    & pwsh -NoProfile -File $scriptPath @argsToUse
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
         exit $LASTEXITCODE
     }

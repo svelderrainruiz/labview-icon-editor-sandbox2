@@ -130,6 +130,9 @@
 
 .PARAMETER Commit
     Override commit hash.
+
+.PARAMETER Orchestrated
+    Internal flag used by Invoke-WorktreeOrchestrator to prevent recursion.
 #>
 
 [CmdletBinding()]
@@ -241,10 +244,57 @@ param(
     [int]$Build,
 
     [Parameter(Mandatory = $false)]
-    [string]$Commit
+    [string]$Commit,
+
+    [switch]$Orchestrated
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $Orchestrated) {
+    $orchestrator = Join-Path $PSScriptRoot 'Invoke-WorktreeOrchestrator.ps1'
+    if (Test-Path -Path $orchestrator) {
+        Write-Warning "Direct execution of Run-CICompositeLocal.ps1 is deprecated. Use Invoke-WorktreeOrchestrator.ps1."
+
+        $forward = @()
+        foreach ($entry in $PSBoundParameters.GetEnumerator()) {
+            if ($entry.Key -eq 'Orchestrated') {
+                continue
+            }
+
+            $paramName = "-$($entry.Key)"
+            $value = $entry.Value
+
+            if ($value -is [System.Management.Automation.SwitchParameter]) {
+                if ($value.IsPresent) {
+                    $forward += $paramName
+                }
+                continue
+            }
+
+            if ($value -is [bool]) {
+                $forward += $paramName
+                $forward += $value.ToString().ToLowerInvariant()
+                continue
+            }
+
+            if ($value -is [array]) {
+                $forward += $paramName
+                $forward += $value
+                continue
+            }
+
+            $forward += $paramName
+            $forward += $value
+        }
+
+        $forward += '-Orchestrated'
+        & $orchestrator -Run -RunScript $PSCommandPath -RunArgs $forward
+        exit $LASTEXITCODE
+    } else {
+        Write-Warning "Invoke-WorktreeOrchestrator.ps1 not found; continuing direct execution."
+    }
+}
 
 if ($ViValidateOnly -and $SkipViValidate) {
     throw "ViValidateOnly cannot be combined with -SkipViValidate."

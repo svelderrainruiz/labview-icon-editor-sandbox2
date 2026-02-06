@@ -10,7 +10,8 @@ Common entrypoints:
   Optional absolute-path focus: set `LVIE_PYLAVI_ABSOLUTE_PATH_ROOTS` (semicolon-delimited) to flag specific roots without committing sensitive paths. CI redacts configured roots in logs and the uploaded pylavi log artifact, uploads a redacted top-offenders report (`pylavi-validate-offenders-<label>`), and prints a top-offenders table in the step summary.
 - `Run-CICompositeLocal.ps1`  
   Local CI parity run (Verify IE Paths, VIPC, missing-in-project, unit tests, PPLs, VIP build).  
-  Example: `pwsh -NoProfile -File .\\Tooling\\Run-CICompositeLocal.ps1 -EnsureCleanState`
+  Example: `pwsh -NoProfile -File .\\Tooling\\Run-CICompositeLocal.ps1 -EnsureCleanState`  
+  Note: Direct execution is deprecated; use `Invoke-WorktreeOrchestrator.ps1` for worktree-aware runs.
 - `Run-CICompositeLocal-Auto.ps1`  
   Retry loop for local CI parity with adaptive timeouts.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Run-CICompositeLocal-Auto.ps1 -EnsureCleanState -MaxAttempts 5`
