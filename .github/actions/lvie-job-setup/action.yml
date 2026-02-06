@@ -87,6 +87,10 @@ runs:
         New-Item -Path $cliDir -ItemType Directory -Force | Out-Null
         try {
           gh run download $runId -R $repo -n runner-cli-win-x64 -D $cliDir | Out-Null
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+            Write-Warning ("runner-cli artifact download failed (exit {0})." -f $LASTEXITCODE)
+            exit 0
+          }
         } catch {
           Write-Warning ("Failed to download runner-cli artifact: {0}" -f $_.Exception.Message)
           exit 0
@@ -96,6 +100,7 @@ runs:
         } else {
           Write-Warning "runner-cli artifact downloaded but runner-cli.exe not found in $cliDir"
         }
+        exit 0
 
     - name: Runner bootstrap (stateless)
       uses: ./.github/actions/runner-bootstrap
