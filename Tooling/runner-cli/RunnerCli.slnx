@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="RunnerCli.Tests/RunnerCli.Tests.csproj" />
-  <Project Path="RunnerCli/RunnerCli.csproj" />
-</Solution>

@@ -117,10 +117,6 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 4. **Labels** (optional)
    - The workflow uses the `self-hosted-windows-lv` label. Its `runs-on` expression also references `self-hosted-linux-lv` for potential Linux jobs, though the default matrix runs only on Windows. Label your runner accordingly, and prepare a Linux runner with `self-hosted-linux-lv` if you expand the matrix.
 
-5. **Stateless runner bootstrap (no service restart)**
-   - Workflows call the `runner-bootstrap` action, which runs `Tooling/Initialize-Runner.ps1` at job start to refresh the runner contract and export `LVIE_*` variables into the job environment.
-   - This avoids relying on Machine/User environment variables and does not require restarting the runner service.
-
 
 <a name="running-the-actions-locally"></a>
 ### 4. Running the Actions Locally

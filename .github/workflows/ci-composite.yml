@@ -1,8 +1,8 @@
 name: CI Pipeline (Composite)
 
 concurrency:
-  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -32,27 +32,6 @@ on:
         type: string
 
 jobs:
-  probe-labview-2023:
-    name: Probe LabVIEW 2023 Install
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-    outputs:
-      has_lv2023: ${{ steps.probe.outputs.has_lv2023 }}
-    steps:
-      - name: Detect LabVIEW 2023 (64-bit)
-        id: probe
-        shell: pwsh
-        run: |
-          $candidates = @(
-            'C:\Program Files\National Instruments\LabVIEW 2023\LabVIEW.exe',
-            'C:\Program Files (x86)\National Instruments\LabVIEW 2023\LabVIEW.exe'
-          )
-          $found = $false
-          foreach ($path in $candidates) {
-            if (Test-Path -Path $path) { $found = $true; break }
-          }
-          Write-Host ("LabVIEW 2023 installed: {0}" -f $found)
-          "has_lv2023=$($found.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-
   changes:
     name: Detect VIPC changes
     runs-on: ubuntu-latest
@@ -72,13 +51,8 @@ jobs:
   apply-deps-2021-x64:
     name: Apply VIPC (2021 x64)
     needs: changes
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/apply-vipc
         if: needs.changes.outputs.vipc == 'true'
         with:
@@ -93,13 +67,8 @@ jobs:
   apply-deps-2021-x86:
     name: Apply VIPC (2021 x86)
     needs: [apply-deps-2021-x64, changes]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/apply-vipc
         if: needs.changes.outputs.vipc == 'true'
         with:
@@ -113,15 +82,9 @@ jobs:
 
   apply-deps-2023-x64:
     name: Apply VIPC (2023 x64)
-    needs: [close-lv-2021-before-2023, changes, probe-labview-2023]
-    if: needs.probe-labview-2023.outputs.has_lv2023 == 'true'
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    needs: [close-lv-2021-before-2023, changes]
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/apply-vipc
         if: needs.changes.outputs.vipc == 'true'
         with:
@@ -135,15 +98,9 @@ jobs:
 
   close-lv-2021-before-2023:
     name: Close LabVIEW 2021 before 2023 tasks
-    needs: [apply-deps-2021-x86, probe-labview-2023]
-    if: needs.probe-labview-2023.outputs.has_lv2023 == 'true'
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    needs: apply-deps-2021-x86
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/close-labview
         with:
           minimum_supported_lv_version: 2021
@@ -155,7 +112,7 @@ jobs:
 
   version:
     name: Compute Version
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     outputs:
       VERSION:       ${{ steps.compute.outputs.VERSION }}
       MAJOR:         ${{ steps.compute.outputs.MAJOR }}
@@ -164,11 +121,9 @@ jobs:
       BUILD:         ${{ steps.compute.outputs.BUILD }}
       IS_PRERELEASE: ${{ steps.compute.outputs.IS_PRERELEASE }}
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
+      - uses: actions/checkout@v4
         with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
+          fetch-depth: 0
       - id: compute
         uses: ./.github/actions/compute-version
         with:
@@ -176,14 +131,9 @@ jobs:
 
   missing-in-project-2021-x64:
     name: Test Missing-In-Project (2021 x64)
-    needs: apply-deps-2021-x86
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    needs: apply-deps-2023-x64
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/missing-in-project
         with:
           lv-ver:       "2021"
@@ -193,13 +143,8 @@ jobs:
   missing-in-project-2021-x86:
     name: Test Missing-In-Project (2021 x86)
     needs: missing-in-project-2021-x64
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/missing-in-project
         with:
           lv-ver:       "2021"
@@ -209,13 +154,8 @@ jobs:
   test-2021-x64:
     name: Run Unit Tests (2021 x64)
     needs: missing-in-project-2021-x86
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/run-unit-tests
         with:
           minimum_supported_lv_version: "2021"
@@ -230,13 +170,8 @@ jobs:
   test-2021-x86:
     name: Run Unit Tests (2021 x86)
     needs: test-2021-x64
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/run-unit-tests
         with:
           minimum_supported_lv_version: "2021"
@@ -251,13 +186,8 @@ jobs:
   build-ppl-x86:
     name: Build 32-bit Packed Library
     needs: [build-ppl-x64, version]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/build-lvlibp
         with:
           minimum_supported_lv_version: 2021
@@ -285,13 +215,8 @@ jobs:
   build-ppl-x64:
     name: Build 64-bit Packed Library
     needs: [test-2021-x86, version]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
       - uses: ./.github/actions/build-lvlibp
         with:
           minimum_supported_lv_version: 2021
@@ -319,15 +244,12 @@ jobs:
   build-vip:
     name: Build VI Package
     # Chain after 32-bit build, which already depends on 64-bit, to enforce x64 -> x86 -> build-vip ordering
-    needs: [build-ppl-x86, version, probe-labview-2023]
-    if: needs.probe-labview-2023.outputs.has_lv2023 == 'true'
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    needs: [build-ppl-x86, version]
+    runs-on: self-hosted-windows-lv
     steps:
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
+      - uses: actions/checkout@v4
         with:
-          fetch_depth: 0
-          download_runner_cli: 'true'
+          fetch-depth: 0
       - name: Generate release notes
         uses: ./.github/actions/generate-release-notes
         # output_path defaults to Tooling/deployment/release_notes.md

@@ -16,7 +16,3 @@
 # Build output
 /resource/plugins/lv_icon.lvlibp
 *.xml
-
-# .NET build artifacts
-Tooling/runner-cli/**/bin/
-Tooling/runner-cli/**/obj/
