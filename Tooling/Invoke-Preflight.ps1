@@ -185,7 +185,8 @@ function Write-PreflightContext {
         [string]$ArtifactRoot,
         [string]$RunId,
         [string]$LabVIEWVersion,
-        [string]$LabVIEWBitness
+        [string]$LabVIEWBitness,
+        [string]$RunnerCliPath
     )
 
     $runnerRoot = $env:LVIE_RUNNER_ROOT
@@ -193,8 +194,8 @@ function Write-PreflightContext {
     $lockRoot = $env:LVIE_LOCK_ROOT
     $logRoot = $env:LVIE_LOG_ROOT
 
-    $contextLine = "LVIE_CONTEXT repo_root={0} worktree_root={1} run_id={2} artifact_root={3} labview_version={4} labview_bitness={5} runner_root={6} lock_root={7} log_root={8} contract_path={9}" -f `
-        $RepoRoot, $WorktreeRoot, $RunId, $ArtifactRoot, $LabVIEWVersion, $LabVIEWBitness, $runnerRoot, $lockRoot, $logRoot, $contractPath
+    $contextLine = "LVIE_CONTEXT repo_root={0} worktree_root={1} run_id={2} artifact_root={3} labview_version={4} labview_bitness={5} runner_root={6} lock_root={7} log_root={8} contract_path={9} runner_cli_path={10}" -f `
+        $RepoRoot, $WorktreeRoot, $RunId, $ArtifactRoot, $LabVIEWVersion, $LabVIEWBitness, $runnerRoot, $lockRoot, $logRoot, $contractPath, $RunnerCliPath
     Write-Host $contextLine
 
     if (-not [string]::IsNullOrWhiteSpace($ArtifactRoot)) {
@@ -212,6 +213,7 @@ function Write-PreflightContext {
                 lock_root       = $lockRoot
                 log_root        = $logRoot
                 contract_path   = $contractPath
+                runner_cli_path = $RunnerCliPath
                 labview_version = $LabVIEWVersion
                 labview_bitness = $LabVIEWBitness
                 timestamp_utc   = (Get-Date).ToUniversalTime().ToString('o')
@@ -249,7 +251,11 @@ function Invoke-Preflight {
 
         [switch]$CleanRoom,
 
-        [switch]$RequireGcli
+        [switch]$RequireGcli,
+
+        [string]$RunnerCliPath,
+
+        [switch]$RequireRunnerCli
     )
 
     $resolvedRepoRoot = Resolve-RepoRoot -RepoRoot $RepoRoot
@@ -263,6 +269,20 @@ function Invoke-Preflight {
             Set-RunnerContractEnvironment -Contract $contract -ContractPath $contractPath
         } elseif ($env:LVIE_REQUIRE_RUNNER_CONTRACT -eq '1') {
             throw "Runner contract not found. Run Tooling\\Setup-Runner.ps1 to create $contractPath."
+        }
+    }
+
+    $runnerCliResolved = $null
+    $ensureCliScript = Join-Path $resolvedRepoRoot 'Tooling\Ensure-RunnerCli.ps1'
+    if (Test-Path -Path $ensureCliScript) {
+        . $ensureCliScript
+        try {
+            $ensureResult = Ensure-RunnerCli -RepoRoot $resolvedRepoRoot -RunnerCliPath $RunnerCliPath -Require:$RequireRunnerCli
+            if ($ensureResult -and $ensureResult.Path) {
+                $runnerCliResolved = $ensureResult.Path
+            }
+        } catch {
+            throw $_
         }
     }
 
@@ -401,7 +421,7 @@ function Invoke-Preflight {
         }
     }
 
-    Write-PreflightContext -RepoRoot $resolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -ArtifactRoot $resolvedArtifactRoot -RunId $resolvedRunId -LabVIEWVersion $resolvedLabVIEWVersion -LabVIEWBitness $LabVIEWBitness
+    Write-PreflightContext -RepoRoot $resolvedRepoRoot -WorktreeRoot $resolvedWorktreeRoot -ArtifactRoot $resolvedArtifactRoot -RunId $resolvedRunId -LabVIEWVersion $resolvedLabVIEWVersion -LabVIEWBitness $LabVIEWBitness -RunnerCliPath $runnerCliResolved
 
     return [pscustomobject]@{
         Reinvoked           = $false
@@ -413,6 +433,7 @@ function Invoke-Preflight {
         LabVIEWInfo         = $labviewInfo
         LabVIEWBitness      = $LabVIEWBitness
         CleanRoomAfter      = $CleanRoom
+        RunnerCliPath       = $runnerCliResolved
     }
 }
 

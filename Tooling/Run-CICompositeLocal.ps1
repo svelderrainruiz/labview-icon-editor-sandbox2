@@ -95,6 +95,9 @@
 .PARAMETER RunnerCliPath
     Optional path to runner-cli.exe for runner contract validation.
 
+.PARAMETER RequireRunnerCli
+    Require runner-cli for contract validation (default true).
+
 .PARAMETER Major
     Override major version.
 
@@ -189,6 +192,8 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string]$RunnerCliPath,
+
+    [switch]$RequireRunnerCli,
 
     [Parameter(Mandatory = $false)]
     [int]$Major,
@@ -840,7 +845,8 @@ function Resolve-RunnerCliPath {
 function Invoke-RunnerContractValidation {
     param(
         [string]$RepoRoot,
-        [string]$RunnerCliPath
+        [string]$RunnerCliPath,
+        [switch]$RequireRunnerCli
     )
 
     $contractPath = $env:LVIE_RUNNER_CONTRACT_PATH
@@ -851,6 +857,16 @@ function Invoke-RunnerContractValidation {
     if (-not (Test-Path -Path $contractPath)) {
         Write-Warning ("Runner contract not found at {0}; skipping validation." -f $contractPath)
         return
+    }
+
+    $requireEnabled = $RequireRunnerCli.IsPresent -or -not $PSBoundParameters.ContainsKey('RequireRunnerCli')
+    $ensureScript = Join-Path $RepoRoot 'Tooling\Ensure-RunnerCli.ps1'
+    if (Test-Path -Path $ensureScript) {
+        . $ensureScript
+        $ensureResult = Ensure-RunnerCli -RepoRoot $RepoRoot -RunnerCliPath $RunnerCliPath -Require:$requireEnabled
+        if ($ensureResult -and $ensureResult.Path) {
+            $RunnerCliPath = $ensureResult.Path
+        }
     }
 
     $cliPath = Resolve-RunnerCliPath -ExplicitPath $RunnerCliPath -RepoRoot $RepoRoot
@@ -871,6 +887,7 @@ function Invoke-RunnerContractValidation {
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
+$requireRunnerCliEnabled = $RequireRunnerCli.IsPresent -or -not $PSBoundParameters.ContainsKey('RequireRunnerCli')
 $artifactRootResolved = $null
 $preflight = $null
 $preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
@@ -890,7 +907,9 @@ if (Test-Path -Path $preflightScript) {
         -RunId $RunId `
         -ArtifactRoot $ArtifactRoot `
         -CleanRoom:$CleanRoom `
-        -RequireGcli
+        -RequireGcli `
+        -RunnerCliPath $RunnerCliPath `
+        -RequireRunnerCli:$requireRunnerCliEnabled
     if ($preflight.Reinvoked) {
         return
     }
@@ -898,7 +917,7 @@ if (Test-Path -Path $preflightScript) {
     $artifactRootResolved = $preflight.ArtifactRoot
 }
 
-Invoke-RunnerContractValidation -RepoRoot $repoRoot -RunnerCliPath $RunnerCliPath
+Invoke-RunnerContractValidation -RepoRoot $repoRoot -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled
 
 $assertScript = Join-Path $repoRoot 'Tooling\Assert-LabVIEWVersion.ps1'
 if (Test-Path -Path $assertScript) {
@@ -931,7 +950,7 @@ Initialize-CsvHeader -Path $script:RunHistoryPath -Header 'timestamp,status,dura
 Initialize-CsvHeader -Path $script:StepHistoryPath -Header 'timestamp,step,status,duration_seconds'
 $env:LABVIEW_CLOSE_METRICS_PATH = $script:CloseHistoryPath
 $runLog = Join-Path $logRoot "ci-local-$runTimestamp.log"
-$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -EnsureCleanState:$EnsureCleanState -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -UseLabVIEWDevMode:$UseLabVIEWDevMode -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom"
+$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -EnsureCleanState:$EnsureCleanState -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -UseLabVIEWDevMode:$UseLabVIEWDevMode -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled"
 $script:TranscriptStarted = $false
 try {
     Start-Transcript -Path $runLog -Append | Out-Null
