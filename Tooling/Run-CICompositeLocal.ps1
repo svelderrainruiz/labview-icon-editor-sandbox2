@@ -842,6 +842,86 @@ function Resolve-RunnerCliPath {
     return $null
 }
 
+function Initialize-RunnerContractIfNeeded {
+    param(
+        [string]$RepoRoot,
+        [string]$RunnerCliPath,
+        [switch]$RequireRunnerCli
+    )
+
+    $contractHelper = Join-Path $RepoRoot 'Tooling\support\RunnerContract.ps1'
+    if (-not (Test-Path -Path $contractHelper)) {
+        return
+    }
+
+    . $contractHelper
+
+    $contractPath = Resolve-RunnerContractPath -ContractPath $env:LVIE_RUNNER_CONTRACT_PATH -RunnerRoot $env:LVIE_RUNNER_ROOT -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($contractPath) -and (Test-Path -Path $contractPath)) {
+        return
+    }
+
+    $runnerRoot = $env:LVIE_RUNNER_ROOT
+    $workRoot = Resolve-RunnerWorkRoot -RunnerRoot $runnerRoot -WorkRoot $env:LVIE_RUNNER_WORK_ROOT
+    if ([string]::IsNullOrWhiteSpace($workRoot)) {
+        Write-Host 'Runner work root not resolved; skipping runner contract initialization.'
+        return
+    }
+    if ([string]::IsNullOrWhiteSpace($runnerRoot)) {
+        if ((Split-Path -Leaf $workRoot) -ieq '_work') {
+            $runnerRoot = Split-Path -Parent $workRoot
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($runnerRoot)) {
+        Write-Host 'Runner root not resolved; skipping runner contract initialization.'
+        return
+    }
+
+    if ([string]::IsNullOrWhiteSpace($contractPath)) {
+        $contractPath = Join-Path $workRoot 'lvie\runner-contract.json'
+    }
+
+    $cliPath = $null
+    $ensureScript = Join-Path $RepoRoot 'Tooling\Ensure-RunnerCli.ps1'
+    if (Test-Path -Path $ensureScript) {
+        $ensureResult = & $ensureScript -RepoRoot $RepoRoot -RunnerCliPath $RunnerCliPath -Require:$RequireRunnerCli
+        if ($ensureResult -and $ensureResult.Path) {
+            $cliPath = $ensureResult.Path
+        }
+    }
+    if (-not $cliPath) {
+        $cliPath = Resolve-RunnerCliPath -ExplicitPath $RunnerCliPath -RepoRoot $RepoRoot
+    }
+
+    if (-not $cliPath -or -not (Test-Path -Path $cliPath)) {
+        if ($RequireRunnerCli.IsPresent) {
+            throw 'runner-cli not available to initialize runner contract.'
+        }
+        Write-Host 'runner-cli not found; skipping runner contract initialization.'
+        return
+    }
+
+    $runnerLabel = if ([string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_LABEL)) { 'self-hosted-windows-lv' } else { $env:LVIE_RUNNER_LABEL }
+    $canonicalLabel = if ([string]::IsNullOrWhiteSpace($env:LVIE_CANONICAL_RUNNER_LABEL)) { 'self-hosted-windows-lv' } else { $env:LVIE_CANONICAL_RUNNER_LABEL }
+
+    Write-Host ("Initializing runner contract with runner-cli: {0}" -f $cliPath)
+    & $cliPath init-contract `
+        --contract-path $contractPath `
+        --runner-root $runnerRoot `
+        --work-root $workRoot `
+        --runner-label $runnerLabel `
+        --canonical-label $canonicalLabel
+
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+        throw ("runner-cli init-contract failed (exit {0})." -f $LASTEXITCODE)
+    }
+
+    $contract = Get-RunnerContract -ContractPath $contractPath -RunnerRoot $runnerRoot -WorkRoot $workRoot
+    if ($contract) {
+        Set-RunnerContractEnvironment -Contract $contract -ContractPath $contractPath
+    }
+}
+
 function Invoke-RunnerContractValidation {
     param(
         [string]$RepoRoot,
@@ -887,6 +967,7 @@ function Invoke-RunnerContractValidation {
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
 $requireRunnerCliEnabled = $RequireRunnerCli.IsPresent -or -not $PSBoundParameters.ContainsKey('RequireRunnerCli')
+$requireRunnerCliInit = $RequireRunnerCli.IsPresent
 $artifactRootResolved = $null
 $preflight = $null
 $preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
@@ -915,6 +996,8 @@ if (Test-Path -Path $preflightScript) {
     $repoRoot = $preflight.RepoRoot
     $artifactRootResolved = $preflight.ArtifactRoot
 }
+
+Initialize-RunnerContractIfNeeded -RepoRoot $repoRoot -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliInit
 
 Invoke-RunnerContractValidation -RepoRoot $repoRoot -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled
 
