@@ -10,6 +10,7 @@ env:
   LVIE_CANONICAL_RUNNER_LABEL: self-hosted-windows-lv
   LVIE_FORCE_NO_LABVIEW_DEVMODE: 1
   LVIE_RUNNER_ACL_AUTOFIX: 1
+  LVIE_RUNNER_ACL_WARN_ONLY: 1
 
 concurrency:
   group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
