@@ -275,9 +275,8 @@ function Invoke-Preflight {
     $runnerCliResolved = $null
     $ensureCliScript = Join-Path $resolvedRepoRoot 'Tooling\Ensure-RunnerCli.ps1'
     if (Test-Path -Path $ensureCliScript) {
-        . $ensureCliScript
         try {
-            $ensureResult = Ensure-RunnerCli -RepoRoot $resolvedRepoRoot -RunnerCliPath $RunnerCliPath -Require:$RequireRunnerCli
+            $ensureResult = & $ensureCliScript -RepoRoot $resolvedRepoRoot -RunnerCliPath $RunnerCliPath -Require:$RequireRunnerCli
             if ($ensureResult -and $ensureResult.Path) {
                 $runnerCliResolved = $ensureResult.Path
             }
