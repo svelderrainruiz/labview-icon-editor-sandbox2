@@ -601,6 +601,89 @@ pylaviCmd.AddCommand(pylaviScanCmd);
 pylaviCmd.AddCommand(pylaviSummarizeCmd);
 pylaviCmd.AddCommand(pylaviFetchCmd);
 
+// ── missing-in-project ────────────────────────────────────────────
+var missingCmd = new Command("missing-in-project", "Run missing-in-project check via g-cli.");
+var missingArchOption = new Option<string>(
+    name: "--arch",
+    description: "LabVIEW bitness (32 or 64).")
+{ IsRequired = true };
+var missingProjectFileOption = new Option<string>(
+    name: "--project-file",
+    description: "Path to the .lvproj to inspect.")
+{ IsRequired = true };
+var missingLabviewOption = new Option<string?>(
+    name: "--labview",
+    description: "LabVIEW version input (year or numeric). Defaults to .lvversion.");
+var missingWorktreeRootOption = new Option<string?>(
+    name: "--worktree-root",
+    description: "Optional worktree root override.");
+var missingSkipWorktreeCheckOption = new Option<bool>(
+    name: "--skip-worktree-root-check",
+    getDefaultValue: () => false,
+    description: "Skip worktree root validation.");
+var missingConnectTimeoutOption = new Option<int>(
+    name: "--connect-timeout-ms",
+    getDefaultValue: () => 0,
+    description: "Connect timeout override for g-cli (ms).");
+
+missingCmd.AddOption(repoRootOption);
+missingCmd.AddOption(missingArchOption);
+missingCmd.AddOption(missingProjectFileOption);
+missingCmd.AddOption(missingLabviewOption);
+missingCmd.AddOption(missingWorktreeRootOption);
+missingCmd.AddOption(missingSkipWorktreeCheckOption);
+missingCmd.AddOption(missingConnectTimeoutOption);
+
+missingCmd.SetHandler((InvocationContext context) =>
+{
+    try
+    {
+        var repoRoot = context.ParseResult.GetValueForOption(repoRootOption);
+        var arch = context.ParseResult.GetValueForOption(missingArchOption);
+        var projectFile = context.ParseResult.GetValueForOption(missingProjectFileOption);
+        var labviewInput = context.ParseResult.GetValueForOption(missingLabviewOption);
+        var worktreeRoot = context.ParseResult.GetValueForOption(missingWorktreeRootOption);
+        var skipWorktreeRootCheck = context.ParseResult.GetValueForOption(missingSkipWorktreeCheckOption);
+        var connectTimeoutMs = context.ParseResult.GetValueForOption(missingConnectTimeoutOption);
+
+        if (string.IsNullOrWhiteSpace(arch))
+        {
+            Console.Error.WriteLine("ERROR: --arch is required.");
+            Environment.ExitCode = 1;
+            context.ExitCode = 1;
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(projectFile))
+        {
+            Console.Error.WriteLine("ERROR: --project-file is required.");
+            Environment.ExitCode = 1;
+            context.ExitCode = 1;
+            return;
+        }
+
+        var resolvedRoot = RepoLocator.Resolve(repoRoot, Environment.CurrentDirectory);
+        var options = new MissingInProjectOptions(
+            resolvedRoot,
+            arch,
+            projectFile,
+            labviewInput,
+            worktreeRoot,
+            skipWorktreeRootCheck,
+            connectTimeoutMs > 0 ? connectTimeoutMs : null
+        );
+
+        var exitCode = MissingInProjectService.Run(options);
+        Environment.ExitCode = exitCode;
+        context.ExitCode = exitCode;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"ERROR: {ex.Message}");
+        Environment.ExitCode = 1;
+        context.ExitCode = 1;
+    }
+});
+
 // ── root ───────────────────────────────────────────────────────────
 var rootCmd = new RootCommand("LVIE Runner CLI – contract and parity helpers for stateless runners.");
 rootCmd.AddCommand(validateCmd);
@@ -608,5 +691,6 @@ rootCmd.AddCommand(initCmd);
 rootCmd.AddCommand(emitCmd);
 rootCmd.AddCommand(versionCmd);
 rootCmd.AddCommand(pylaviCmd);
+rootCmd.AddCommand(missingCmd);
 
 return await rootCmd.InvokeAsync(args);

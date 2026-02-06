@@ -47,7 +47,10 @@ jobs:
         run: dotnet build RunnerCli/RunnerCli.csproj --no-restore --configuration Release
 
       - name: Run tests
-        run: dotnet test RunnerCli.Tests/RunnerCli.Tests.csproj --no-build --configuration Release --verbosity normal
+        run: dotnet test RunnerCli.Tests/RunnerCli.Tests.csproj --configuration Release --verbosity normal
+      - name: Shutdown dotnet build servers
+        if: always()
+        run: dotnet build-server shutdown
 
   publish:
     name: Publish Runner CLI (${{ matrix.rid }})
@@ -78,6 +81,9 @@ jobs:
           -p:PublishSingleFile=true
           -p:PublishTrimmed=true
           --output ./publish/${{ matrix.rid }}
+      - name: Shutdown dotnet build servers
+        if: always()
+        run: dotnet build-server shutdown
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
@@ -100,7 +106,7 @@ jobs:
             rid: linux-x64
           - os: windows-latest
             rid: win-x64
-          - os: macos-13
+          - os: macos-latest
             rid: osx-x64
           - os: macos-14
             rid: osx-arm64
@@ -113,6 +119,13 @@ jobs:
         with:
           name: runner-cli-${{ matrix.rid }}
           path: runner-cli
+      - name: Ensure Rosetta for x64 on arm64
+        if: ${{ matrix.rid == 'osx-x64' && runner.os == 'macOS' }}
+        shell: bash
+        run: |
+          if [[ "$(uname -m)" == "arm64" ]]; then
+            sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+          fi
 
       - name: Smoke test runner-cli
         shell: pwsh

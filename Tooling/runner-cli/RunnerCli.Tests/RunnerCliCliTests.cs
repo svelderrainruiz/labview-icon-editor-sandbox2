@@ -94,6 +94,22 @@ public class RunnerCliCliTests
     }
 
     [Fact]
+    public void MissingInProject_on_non_windows_returns_clear_error()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var repoRoot = FindRepoRoot();
+        var args = "missing-in-project --repo-root \"" + repoRoot + "\" --arch 64 --project-file \"" + Path.Combine(repoRoot, "lv_icon_editor.lvproj") + "\"";
+        var (exitCode, _, stderr) = RunCli(repoRoot, args);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("only supported on Windows", stderr, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void PublishedBinary_runs_version_gate_and_pylavi()
     {
         var repoRoot = FindRepoRoot();
