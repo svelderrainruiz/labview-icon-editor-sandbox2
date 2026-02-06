@@ -92,6 +92,9 @@
 .PARAMETER CleanRoom
     If set, purge known output folders before and after the run.
 
+.PARAMETER RunnerCliPath
+    Optional path to runner-cli.exe for runner contract validation.
+
 .PARAMETER Major
     Override major version.
 
@@ -183,6 +186,9 @@ param(
     [string]$ArtifactRoot,
 
     [switch]$CleanRoom,
+
+    [Parameter(Mandatory = $false)]
+    [string]$RunnerCliPath,
 
     [Parameter(Mandatory = $false)]
     [int]$Major,
@@ -797,6 +803,73 @@ function Write-GCliBuildLogTail {
     Write-Host "---- end g-cli build log ----"
 }
 
+function Resolve-RunnerCliPath {
+    param(
+        [string]$ExplicitPath,
+        [string]$RepoRoot
+    )
+
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
+        $candidates += $ExplicitPath
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_RUNNER_CLI_PATH)) {
+        $candidates += $env:LVIE_RUNNER_CLI_PATH
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+        $candidates += (Join-Path $env:RUNNER_TEMP 'runner-cli\runner-cli.exe')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($RepoRoot)) {
+        $candidates += (Join-Path $RepoRoot 'Tooling\runner-cli\publish\win-x64\runner-cli.exe')
+        $candidates += (Join-Path $RepoRoot 'Tooling\runner-cli\RunnerCli\bin\Release\net8.0\win-x64\publish\runner-cli.exe')
+        $candidates += (Join-Path $RepoRoot 'Tooling\runner-cli\RunnerCli\bin\Release\net8.0\runner-cli.exe')
+    }
+
+    foreach ($candidate in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+        if (Test-Path -Path $candidate) {
+            return (Resolve-Path -Path $candidate -ErrorAction Stop).Path
+        }
+    }
+
+    return $null
+}
+
+function Invoke-RunnerContractValidation {
+    param(
+        [string]$RepoRoot,
+        [string]$RunnerCliPath
+    )
+
+    $contractPath = $env:LVIE_RUNNER_CONTRACT_PATH
+    if ([string]::IsNullOrWhiteSpace($contractPath)) {
+        Write-Host 'Runner contract not set; skipping runner-cli validation.'
+        return
+    }
+    if (-not (Test-Path -Path $contractPath)) {
+        Write-Warning ("Runner contract not found at {0}; skipping validation." -f $contractPath)
+        return
+    }
+
+    $cliPath = Resolve-RunnerCliPath -ExplicitPath $RunnerCliPath -RepoRoot $RepoRoot
+    if ($cliPath -and (Test-Path -Path $cliPath)) {
+        Write-Host ("Validating runner contract with runner-cli: {0}" -f $cliPath)
+        & $cliPath validate-contract --contract-path $contractPath --fail-on-missing-safe-directory
+        if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+            throw ("runner-cli validation failed (exit {0})." -f $LASTEXITCODE)
+        }
+        return
+    }
+
+    $validateScript = Join-Path $RepoRoot 'Tooling\Validate-RunnerContract.ps1'
+    if (Test-Path -Path $validateScript) {
+        Write-Host 'runner-cli not found; using PowerShell fallback.'
+        & $validateScript -ContractPath $contractPath -FailOnMissingSafeDirectory
+    }
+}
+
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
 $artifactRootResolved = $null
 $preflight = $null
@@ -824,6 +897,8 @@ if (Test-Path -Path $preflightScript) {
     $repoRoot = $preflight.RepoRoot
     $artifactRootResolved = $preflight.ArtifactRoot
 }
+
+Invoke-RunnerContractValidation -RepoRoot $repoRoot -RunnerCliPath $RunnerCliPath
 
 $assertScript = Join-Path $repoRoot 'Tooling\Assert-LabVIEWVersion.ps1'
 if (Test-Path -Path $assertScript) {
