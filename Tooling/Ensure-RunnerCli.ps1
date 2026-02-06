@@ -142,11 +142,10 @@ function Publish-RunnerCli {
     }
 }
 
-function Download-RunnerCli {
+function Get-RunnerCliArtifact {
     param(
         [string]$RepoValue,
-        [string]$BranchValue,
-        [string]$RepoRootResolved
+        [string]$BranchValue
     )
 
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -216,7 +215,7 @@ if (-not $resolvedPath -and -not $skipBuildEnabled) {
 if (-not $resolvedPath -and -not $skipDownloadEnabled) {
     $repoValue = if ($Repo) { $Repo } else { $env:GITHUB_REPOSITORY }
     $branchValue = Resolve-BranchName -RepoRootResolved $repoRootResolved -BranchOverride $Branch
-    $downloaded = Download-RunnerCli -RepoValue $repoValue -BranchValue $branchValue -RepoRootResolved $repoRootResolved
+    $downloaded = Get-RunnerCliArtifact -RepoValue $repoValue -BranchValue $branchValue
     if ($downloaded) {
         $resolvedPath = Resolve-RunnerCliPath -ExplicitPath $RunnerCliPath -RepoRootResolved $repoRootResolved
     }
