@@ -90,6 +90,10 @@ runs:
         Write-Host ("vi_validate command ({0}): {1}" -f $label, $commandLine)
         $runnerCliProject = Join-Path $env:GITHUB_WORKSPACE 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
         $canUseRunnerCli = (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject)
+        $requireCli = $env:LVIE_REQUIRE_RUNNER_CLI -eq '1'
+        if ($requireCli -and -not $canUseRunnerCli) {
+          throw "runner-cli required (LVIE_REQUIRE_RUNNER_CLI=1) but not available for pylavi scan."
+        }
         if ($canUseRunnerCli) {
           Write-Host "Using runner-cli pylavi scan (incremental migration)."
           $scanArgs = @(

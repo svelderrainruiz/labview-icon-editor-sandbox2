@@ -11,6 +11,7 @@ env:
   LVIE_FORCE_NO_LABVIEW_DEVMODE: 1
   LVIE_RUNNER_ACL_AUTOFIX: 1
   LVIE_RUNNER_ACL_WARN_ONLY: 1
+  LVIE_REQUIRE_RUNNER_CLI: ${{ (github.event.inputs.runner_cli_only == 'true' || startsWith(github.ref_name, 'feature/runner-cli-only-parity') || startsWith(github.head_ref, 'feature/runner-cli-only-parity')) && '1' || '' }}
 
 concurrency:
   group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -42,6 +43,10 @@ on:
         description: "Expected tag for this run (optional, for dispatched builds)"
         required: false
         type: string
+      runner_cli_only:
+        description: "Require runner-cli and disable PowerShell fallbacks."
+        required: false
+        type: boolean
       allow_baseline_update:
         description: "Allow PSScriptAnalyzer baseline updates (manual runs only)"
         required: false
@@ -152,6 +157,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $repoRoot = $env:GITHUB_WORKSPACE
+          $requireCli = $env:LVIE_REQUIRE_RUNNER_CLI -eq '1'
           $cliPath = Join-Path $env:RUNNER_TEMP 'runner-cli' 'runner-cli'
           if (Test-Path $cliPath) {
             Write-Host "Using prebuilt runner-cli artifact (incremental migration)."
@@ -182,6 +188,9 @@ jobs:
             }
             $info = $json | ConvertFrom-Json
             } else {
+              if ($requireCli) {
+                throw "runner-cli required (LVIE_REQUIRE_RUNNER_CLI=1) but not available for version-gate."
+              }
               Write-Warning "runner-cli unavailable; falling back to Assert-LabVIEWVersion.ps1."
               $info = & "$repoRoot/Tooling/Assert-LabVIEWVersion.ps1" -RepoRoot $repoRoot -Context 'ci-version-gate' -WriteSummary
             }
@@ -506,10 +515,35 @@ jobs:
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
-          & ".github\\actions\\missing-in-project\\Invoke-MissingInProjectCLI.ps1" `
-            -LVVersion   "$env:LABVIEW_VERSION_YEAR" `
-            -Arch        "${{ matrix.bitness }}" `
-            -ProjectFile "${{ steps.proj.outputs.project_file }}"
+          $requireCli = $env:LVIE_REQUIRE_RUNNER_CLI -eq '1'
+          $runnerCliProject = Join-Path $env:REPO_ROOT 'Tooling\runner-cli\RunnerCli\RunnerCli.csproj'
+          $canUseRunnerCli = (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject)
+          if ($canUseRunnerCli) {
+            Write-Host "Using runner-cli missing-in-project (runner-cli-only mode=$requireCli)."
+            $args = @(
+              'run',
+              '--project', $runnerCliProject,
+              '--configuration', 'Release',
+              '--',
+              'missing-in-project',
+              '--repo-root', $env:REPO_ROOT,
+              '--arch', '${{ matrix.bitness }}',
+              '--project-file', '${{ steps.proj.outputs.project_file }}',
+              '--labview', "$env:LABVIEW_VERSION_YEAR"
+            )
+            & dotnet @args
+            if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+              exit $LASTEXITCODE
+            }
+          } else {
+            if ($requireCli) {
+              throw "runner-cli required (LVIE_REQUIRE_RUNNER_CLI=1) but not available for missing-in-project."
+            }
+            & ".github\\actions\\missing-in-project\\Invoke-MissingInProjectCLI.ps1" `
+              -LVVersion   "$env:LABVIEW_VERSION_YEAR" `
+              -Arch        "${{ matrix.bitness }}" `
+              -ProjectFile "${{ steps.proj.outputs.project_file }}"
+          }
 
           $missingFile = Join-Path $env:REPO_ROOT '.github\\actions\\missing-in-project\\missing_files.txt'
           $missingCsv = ''
