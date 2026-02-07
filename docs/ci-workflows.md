@@ -1,5 +1,9 @@
 # Local CI/CD Workflows
 
+**Last updated:** 2026-02-07
+
+Quick link: `.github/workflows/runner-cli.yml` (Runner CLI consolidated workflow).
+
 This document explains how to automate build, test, and distribution steps for the Icon Editor using GitHub Actions. It includes features such as **automatic version bumping** (using labels) and **artifact upload**. Additionally, it shows how you can **brand** the resulting VI Package with **organization** and **repository** metadata for unique identification.
 
 ---
