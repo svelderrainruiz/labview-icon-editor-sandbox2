@@ -158,13 +158,13 @@ function Resolve-RepoRoot {
                 return (Resolve-Path -Path $gitRoot.Trim()).Path
             }
         } catch {
-            # fall back to script location
+            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
         }
     }
     return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
 }
 
-function Write-MachineLines {
+function Write-MachineLine {
     param(
         [string]$File,
         [string]$LabelValue,
@@ -184,7 +184,7 @@ function Write-MachineLines {
     Write-Host ("PYLAVI_OFFENDERS_EXIT_CODE={0}" -f $ExitCode)
 }
 
-function Normalize-Sha {
+function ConvertTo-NormalizedSha {
     param([string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
     $candidate = $Value.Trim()
@@ -199,7 +199,7 @@ function Resolve-ShaFromReport {
     if (-not $Report) { return $null }
     foreach ($field in @('source_sha', 'sha', 'head_sha', 'commit')) {
         if ($Report.PSObject.Properties.Name -contains $field) {
-            $normalized = Normalize-Sha -Value $Report.$field
+            $normalized = ConvertTo-NormalizedSha -Value $Report.$field
             if ($normalized) { return $normalized }
         }
     }
@@ -211,10 +211,10 @@ function Resolve-ShaFromPath {
     if ([string]::IsNullOrWhiteSpace($Path)) { return $null }
     $name = [System.IO.Path]::GetFileName($Path)
     if ($name -match '^pylavi-offenders\.(?<label>[^.]+)\.(?<sha>[0-9a-fA-F]{7,40})\.json$') {
-        return (Normalize-Sha -Value $Matches['sha'])
+        return (ConvertTo-NormalizedSha -Value $Matches['sha'])
     }
     if ($name -match '^pylavi-offenders\.(?<sha>[0-9a-fA-F]{7,40})\.json$') {
-        return (Normalize-Sha -Value $Matches['sha'])
+        return (ConvertTo-NormalizedSha -Value $Matches['sha'])
     }
     return $null
 }
@@ -224,12 +224,12 @@ function Resolve-ShaHint {
         [string]$Path,
         [string]$Provided
     )
-    $normalized = Normalize-Sha -Value $Provided
+    $normalized = ConvertTo-NormalizedSha -Value $Provided
     if ($normalized) { return $normalized }
     return Resolve-ShaFromPath -Path $Path
 }
 
-function Escape-Markdown {
+function ConvertTo-MarkdownEscaped {
     param([string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
     $safe = $Value -replace "(`r`n|`n|`r)", ' '
@@ -309,7 +309,7 @@ if (-not (Test-Path -Path $reportPath)) {
             $shaHint = Resolve-ShaHint -Path $reportPath -Provided $Sha
             Write-Error $message
             if (-not $AsJson) {
-                Write-MachineLines -File $reportPath -LabelValue $Label -ShaValue $shaHint -HasFindings:$false -TotalFails 0 -ExitCode 2
+                Write-MachineLine -File $reportPath -LabelValue $Label -ShaValue $shaHint -HasFindings:$false -TotalFails 0 -ExitCode 2
             }
             exit 2
         }
@@ -320,7 +320,7 @@ if (-not (Test-Path -Path $reportPath)) {
 if ($ValidateExists) {
     if (-not $AsJson) {
         $shaHint = Resolve-ShaHint -Path $reportPath -Provided $Sha
-        Write-MachineLines -File $reportPath -LabelValue $Label -ShaValue $shaHint -HasFindings:$false -TotalFails 0 -ExitCode 0
+        Write-MachineLine -File $reportPath -LabelValue $Label -ShaValue $shaHint -HasFindings:$false -TotalFails 0 -ExitCode 0
     }
     exit 0
 }
@@ -407,7 +407,7 @@ if ($WriteSummary -and $env:GITHUB_STEP_SUMMARY) {
         $summary += "| Item | Count |"
         $summary += "|---|---:|"
         foreach ($entry in ($report.top_offenders | Select-Object -First $Top)) {
-            $summary += ("| {0} | {1} |" -f (Escape-Markdown $entry.item), $entry.count)
+            $summary += ("| {0} | {1} |" -f (ConvertTo-MarkdownEscaped $entry.item), $entry.count)
         }
         $summary += ""
     }
@@ -417,7 +417,7 @@ if ($WriteSummary -and $env:GITHUB_STEP_SUMMARY) {
         $summary += "| Item | Count |"
         $summary += "|---|---:|"
         foreach ($entry in ($report.top_absolute_offenders | Select-Object -First $Top)) {
-            $summary += ("| {0} | {1} |" -f (Escape-Markdown $entry.item), $entry.count)
+            $summary += ("| {0} | {1} |" -f (ConvertTo-MarkdownEscaped $entry.item), $entry.count)
         }
         $summary += ""
     }
@@ -446,9 +446,10 @@ if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     $summaryReport | ConvertTo-Json -Depth 6 | Out-File -FilePath $OutputPath -Encoding utf8
 }
 
-Write-MachineLines -File $reportPath -LabelValue $labelValue -ShaValue $shaValue -HasFindings:$hasOffenders -TotalFails $totalFails -ExitCode $exitCode
+Write-MachineLine -File $reportPath -LabelValue $labelValue -ShaValue $shaValue -HasFindings:$hasOffenders -TotalFails $totalFails -ExitCode $exitCode
 
 if ($exitCode -ne 0) {
     Write-Error $exitMessage
     exit $exitCode
 }
+

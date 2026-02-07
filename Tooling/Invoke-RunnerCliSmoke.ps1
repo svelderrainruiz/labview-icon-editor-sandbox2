@@ -22,7 +22,7 @@ function Resolve-RepoRoot {
       return $gitRoot.Trim()
     }
   } catch {
-    # Fall back to script location.
+    Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
   }
 
   return (Resolve-Path -Path (Split-Path -Path $PSScriptRoot -Parent)).Path

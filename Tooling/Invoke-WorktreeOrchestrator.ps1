@@ -84,7 +84,7 @@ function Resolve-RepoRoot {
                 return (Resolve-Path -Path $gitRoot.Trim() -ErrorAction Stop).Path
             }
         } catch {
-            # fall back to script location
+            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
         }
     }
 
@@ -216,7 +216,7 @@ function Get-RunnerCliFileName {
     return 'runner-cli'
 }
 
-function Ensure-RunnerCli {
+function Initialize-RunnerCli {
     param(
         [string]$RepoRootResolved
     )
@@ -291,7 +291,7 @@ if ($policy -eq 'Relaxed' -and $root -and -not (Test-IsUnderRoot -Path $repoRoot
     Write-Warning ("RepoRoot '{0}' is not under worktree root '{1}'. Continuing (Relaxed policy)." -f $repoRootResolved, $root)
 }
 
-$runnerCli = Ensure-RunnerCli -RepoRootResolved $targetRepoRoot
+    $runnerCli = Initialize-RunnerCli -RepoRootResolved $targetRepoRoot
 
 Write-Host ("Worktree policy: {0}" -f $policy)
 if ($root) {

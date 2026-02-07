@@ -19,7 +19,7 @@ function Get-LabVIEWVersionInfo {
         [string]$RepoRoot
     )
 
-    function Parse-LabVIEWVersion {
+    function ConvertFrom-LabVIEWVersion {
         param([string]$Raw)
 
         if ([string]::IsNullOrWhiteSpace($Raw)) {
@@ -78,10 +78,10 @@ function Get-LabVIEWVersionInfo {
         $repoRaw = (Get-Content -Raw -Path $versionPath).Trim()
     }
 
-    $info = Parse-LabVIEWVersion -Raw $raw
+    $info = ConvertFrom-LabVIEWVersion -Raw $raw
 
     if ($inputProvided -and -not [string]::IsNullOrWhiteSpace($repoRaw)) {
-        $repoInfo = Parse-LabVIEWVersion -Raw $repoRaw
+        $repoInfo = ConvertFrom-LabVIEWVersion -Raw $repoRaw
         if ($info.Year -ne $repoInfo.Year -or $info.MinorRevision -ne $repoInfo.MinorRevision) {
             throw "LabVIEW version '$($info.Raw)' does not match .lvversion '$($repoInfo.Raw)'."
         }

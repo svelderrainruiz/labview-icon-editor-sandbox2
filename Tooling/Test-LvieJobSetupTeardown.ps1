@@ -89,7 +89,7 @@ function Resolve-RepoRoot {
                 return (Resolve-Path -Path $gitRoot.Trim() -ErrorAction Stop).Path
             }
         } catch {
-            # fall back to script location
+            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
         }
     }
     return (Resolve-Path -Path (Join-Path $scriptRoot '..') -ErrorAction Stop).Path

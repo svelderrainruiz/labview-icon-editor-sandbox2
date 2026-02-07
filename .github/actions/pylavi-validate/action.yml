@@ -335,7 +335,7 @@ runs:
             $artifactName = 'pylavi-validate-offenders'
           }
           $artifactName = "$artifactName-$label"
-          $summaryTables += ("Offenders report artifact: `{0}`" -f (Escape-Markdown $artifactName))
+          $summaryTables += ('Offenders report artifact: ' + '`' + (Escape-Markdown $artifactName) + '`')
           $summaryTables += ""
         }
         if ($summaryTables.Count -gt 0) {

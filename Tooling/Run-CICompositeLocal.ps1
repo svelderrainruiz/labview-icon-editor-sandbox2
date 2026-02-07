@@ -378,7 +378,7 @@ function Resolve-RepoRoot {
                 return (Resolve-Path -Path $gitRoot.Trim()).Path
             }
         } catch {
-            # fall back to script location
+            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
         }
     }
     return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
@@ -526,7 +526,7 @@ function Resolve-ViValidateVersion {
 
 function Get-ViValidatePlan {
     param(
-        [string]$Profile,
+        [string]$ProfileName,
         [string]$CustomConfigPath,
         [bool]$CustomConfigSpecified,
         [bool]$SkipVersionGate,
@@ -537,7 +537,7 @@ function Get-ViValidatePlan {
     $legacyConfig = 'Tooling/pylavi/vi-validate-legacy.yml'
     $plan = @()
 
-    switch ($Profile) {
+    switch ($ProfileName) {
         'strict' {
             $plan += [pscustomobject]@{
                 Label           = 'strict'
@@ -614,7 +614,7 @@ function New-ViValidateOffendersReport {
     if ($roots.Count -gt 0) {
         $redactPattern = ($roots | ForEach-Object { [regex]::Escape($_) }) -join '|'
     }
-    function Redact-Value {
+    function ConvertTo-RedactedValue {
         param([string]$Value)
         if ([string]::IsNullOrWhiteSpace($Value)) { return $Value }
         if ([string]::IsNullOrWhiteSpace($redactPattern)) { return $Value }
@@ -650,14 +650,14 @@ function New-ViValidateOffendersReport {
 
     $topOffenders = $offenderCounts.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 20 | ForEach-Object {
         [pscustomobject]@{
-            item          = (Redact-Value -Value $_.Key)
+            item          = (ConvertTo-RedactedValue -Value $_.Key)
             count         = $_.Value
-            sample_reason = (Redact-Value -Value $offenderReasons[$_.Key])
+            sample_reason = (ConvertTo-RedactedValue -Value $offenderReasons[$_.Key])
         }
     }
     $topAbsolute = $absoluteOffenderCounts.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 20 | ForEach-Object {
         [pscustomobject]@{
-            item  = (Redact-Value -Value $_.Key)
+            item  = (ConvertTo-RedactedValue -Value $_.Key)
             count = $_.Value
         }
     }
@@ -785,16 +785,16 @@ function Invoke-ViValidate {
         $pattern = ($roots | ForEach-Object { [regex]::Escape($_) }) -join '|'
         $redactRegex = [regex]::new($pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
     }
-    function Redact-Value {
+    function ConvertTo-RedactedValue {
         param([string]$Value)
         if ([string]::IsNullOrWhiteSpace($Value)) { return $Value }
         if (-not $redactRegex) { return $Value }
         return $redactRegex.Replace($Value, '<redacted>')
     }
-    function Format-CommandArgs {
-        param([string[]]$Args)
-        if (-not $Args) { return '' }
-        return ($Args | ForEach-Object {
+    function Format-CommandArgument {
+        param([string[]]$Arguments)
+        if (-not $Arguments) { return '' }
+        return ($Arguments | ForEach-Object {
             if ([string]::IsNullOrWhiteSpace($_)) { '""' }
             elseif ($_ -match '\s') { '"' + $_ + '"' }
             else { $_ }
@@ -802,7 +802,7 @@ function Invoke-ViValidate {
     }
 
     $labelSuffix = if ([string]::IsNullOrWhiteSpace($Label)) { '' } else { " ($Label)" }
-    $displayArgs = Format-CommandArgs -Args $viArgs
+    $displayArgs = Format-CommandArgument -Arguments $viArgs
     Write-Host ("vi_validate command{0}: {1} {2}" -f $labelSuffix, $viValidate.Source, $displayArgs)
     $result = Invoke-CheckedWithOutput -Label "Validate LabVIEW files (pylavi$labelSuffix)" -Action {
         & $viValidate.Source @viArgs
@@ -822,7 +822,7 @@ function Invoke-ViValidate {
             Write-Warning ("Absolute linker paths referencing configured roots detected (count: {0})." -f $hits.Count)
             $preview = $hits | Select-Object -First 20
             foreach ($hit in $preview) {
-                Write-Warning (Redact-Value -Value $hit)
+                Write-Warning (ConvertTo-RedactedValue -Value $hit)
             }
             if ($hits.Count -gt $preview.Count) {
                 Write-Warning ("... {0} more" -f ($hits.Count - $preview.Count))
@@ -1605,7 +1605,7 @@ try {
     $viValidatePlan = @()
     if ($ViValidateOnly -or (-not $SkipViValidate)) {
         $viValidatePlan = Get-ViValidatePlan `
-            -Profile $ViValidateProfile `
+            -ProfileName $ViValidateProfile `
             -CustomConfigPath $ViValidateConfigPath `
             -CustomConfigSpecified:$customViConfigSpecified `
             -SkipVersionGate:$ViValidateSkipVersionGate `
@@ -1946,6 +1946,7 @@ finally {
     "{0},{1},{2},{3}" -f $runTimestamp, $runStatus, $runDuration, ($commandLine -replace ',', ' ') | Add-Content -Path $script:RunHistoryPath
     Pop-Location
 }
+
 
 
 
