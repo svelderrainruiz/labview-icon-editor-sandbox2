@@ -894,7 +894,8 @@ jobs:
         id: vip-status
         shell: pwsh
         run: |
-          $statusPath = Join-Path $env:REPO_ROOT 'builds/status/vip-build.json'
+          $statusRoot = if (-not [string]::IsNullOrWhiteSpace($env:LVIE_ARTIFACT_ROOT)) { $env:LVIE_ARTIFACT_ROOT } else { $env:REPO_ROOT }
+          $statusPath = Join-Path $statusRoot 'builds/status/vip-build.json'
           $exists = Test-Path -Path $statusPath
           "exists=$($exists.ToString().ToLowerInvariant())" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
       - name: Upload VIP build status
@@ -902,7 +903,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vip-build-status
-          path: ${{ env.REPO_ROOT }}/builds/status/vip-build.json
+          path: ${{ env.LVIE_ARTIFACT_ROOT || env.REPO_ROOT }}/builds/status/vip-build.json
           if-no-files-found: warn
       - name: Prepare release notes artifact
         id: release-notes
