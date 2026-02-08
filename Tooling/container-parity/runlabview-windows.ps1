@@ -97,7 +97,7 @@ function Save-LabVIEWCliLog {
         $destination = Join-Path $logRoot ("{0}-{1}-{2}.log" -f $OperationName.ToLowerInvariant(), $timestamp, $index)
         Copy-Item -LiteralPath $source -Destination $destination -Force
         $copied += $destination
-        Write-Host "Captured LabVIEWCLI log: $destination"
+        Write-Output "Captured LabVIEWCLI log: $destination"
     }
 
     return $copied
@@ -114,7 +114,7 @@ function Invoke-LabVIEWCliOperation {
     $exitCode = $LASTEXITCODE
     foreach ($line in $outputLines) {
         if ($null -ne $line) {
-            Write-Host ([string]$line)
+            Write-Output ([string]$line)
         }
     }
 
@@ -181,16 +181,16 @@ try {
     foreach ($relativePath in $excludeFiles) {
         $candidate = Join-Path $stagingDir $relativePath
         if (Test-Path -LiteralPath $candidate) {
-            Write-Host "Excluding template from parity compile: $relativePath"
+            Write-Output "Excluding template from parity compile: $relativePath"
             Remove-Item -LiteralPath $candidate -Recurse -Force
         }
     }
 
-    Write-Host "Running LabVIEWCLI MassCompile in headless mode."
-    Write-Host "Target directory: $TargetDir"
-    Write-Host "LabVIEW path: $LabVIEWPath"
-    Write-Host ("Excluded templates: {0}" -f ($excludeFiles -join '; '))
-    Write-Host "Staging directory: $stagingDir"
+    Write-Output "Running LabVIEWCLI MassCompile in headless mode."
+    Write-Output "Target directory: $TargetDir"
+    Write-Output "LabVIEW path: $LabVIEWPath"
+    Write-Output ("Excluded templates: {0}" -f ($excludeFiles -join '; '))
+    Write-Output "Staging directory: $stagingDir"
 
     $massCompile = Invoke-LabVIEWCliOperation -OperationName 'MassCompile' -Arguments @(
         '-LogToConsole', 'TRUE',
@@ -203,10 +203,10 @@ try {
         throw "LabVIEWCLI MassCompile failed with exit code $($massCompile.ExitCode)."
     }
 
-    Write-Host "MassCompile completed successfully."
+    Write-Output "MassCompile completed successfully."
 
     if (-not $buildSpecEnabled) {
-        Write-Host "Build specification step disabled (set CONTAINER_PARITY_BUILD_SPEC=true to enable)."
+        Write-Output "Build specification step disabled (set CONTAINER_PARITY_BUILD_SPEC=true to enable)."
         return
     }
 
@@ -228,7 +228,7 @@ try {
         throw "Unable to resolve LabVIEW version year for no-LabVIEW dev mode plumbing."
     }
 
-    Write-Host "Preparing no-LabVIEW dev mode before build-spec execution."
+    Write-Output "Preparing no-LabVIEW dev mode before build-spec execution."
     & $setDevModeScript `
         -LabVIEWVersion $labviewYear `
         -SupportedBitness 64 `
@@ -241,11 +241,11 @@ try {
 
     $buildSpecError = $null
     try {
-        Write-Host "Running LabVIEWCLI ExecuteBuildSpec in headless mode."
-        Write-Host "Project path: $ProjectPath"
-        Write-Host "Build specification: $BuildSpecName"
-        Write-Host "Target name: $TargetName"
-        Write-Host "Expected output: $buildOutputPath"
+        Write-Output "Running LabVIEWCLI ExecuteBuildSpec in headless mode."
+        Write-Output "Project path: $ProjectPath"
+        Write-Output "Build specification: $BuildSpecName"
+        Write-Output "Target name: $TargetName"
+        Write-Output "Expected output: $buildOutputPath"
 
         $buildSpec = Invoke-LabVIEWCliOperation -OperationName 'ExecuteBuildSpec' -Arguments @(
             '-LogToConsole', 'TRUE',
@@ -265,11 +265,11 @@ try {
         }
 
         $buildOutput = Get-Item -LiteralPath $buildOutputPath
-        Write-Host ("Build specification completed: {0} ({1} bytes)" -f $buildOutput.FullName, $buildOutput.Length)
+        Write-Output ("Build specification completed: {0} ({1} bytes)" -f $buildOutput.FullName, $buildOutput.Length)
     } catch {
         $buildSpecError = $_
     } finally {
-        Write-Host "Reverting no-LabVIEW dev mode after build-spec execution."
+        Write-Output "Reverting no-LabVIEW dev mode after build-spec execution."
         & $revertDevModeScript `
             -LabVIEWVersion $labviewYear `
             -SupportedBitness 64 `
