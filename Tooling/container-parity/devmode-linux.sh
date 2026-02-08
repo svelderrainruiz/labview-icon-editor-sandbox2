@@ -132,20 +132,17 @@ write_library_paths() {
   awk -v newline="$newline" -v set_line="$set_line" '
     BEGIN {
       IGNORECASE = 1
-      replaced = 0
+      found = 0
     }
     {
-      if ($0 ~ /^[[:space:]]*localhost\.librarypaths[[:space:]]*=/ && replaced == 0) {
-        if (set_line == "1") {
-          print newline
-        }
-        replaced = 1
+      if ($0 ~ /^[[:space:]]*localhost\.librarypaths[[:space:]]*=/) {
+        found = 1
         next
       }
       print
     }
     END {
-      if (replaced == 0 && set_line == "1") {
+      if (set_line == "1") {
         print newline
       }
     }

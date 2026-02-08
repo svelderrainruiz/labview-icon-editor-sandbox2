@@ -12,6 +12,7 @@ TARGET_NAME="${CONTAINER_PARITY_TARGET_NAME:-My Computer}"
 BUILD_OUTPUT_RELATIVE_PATH="${CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH:-resource/plugins/lv_icon.lvlibp}"
 BUILD_OUTPUT_PATH="$WORKSPACE_ROOT/$BUILD_OUTPUT_RELATIVE_PATH"
 BUILD_SPEC_ENABLED_RAW="${CONTAINER_PARITY_BUILD_SPEC:-false}"
+ENABLE_DEVMODE_RAW="${CONTAINER_PARITY_ENABLE_DEVMODE:-false}"
 LOG_ROOT="$WORKSPACE_ROOT/TestResults/container-parity/linux/logs"
 LABVIEW_ROOT="$(dirname "$LABVIEW_PATH")"
 DEVMODE_SCRIPT="$WORKSPACE_ROOT/Tooling/container-parity/devmode-linux.sh"
@@ -152,13 +153,16 @@ if [[ ! -f "$PROJECT_PATH" ]]; then
   exit 1
 fi
 
-if [[ ! -x "$DEVMODE_SCRIPT" ]]; then
-  chmod +x "$DEVMODE_SCRIPT"
+if is_enabled_value "$ENABLE_DEVMODE_RAW"; then
+  if [[ ! -x "$DEVMODE_SCRIPT" ]]; then
+    chmod +x "$DEVMODE_SCRIPT"
+  fi
+  echo "Preparing no-LabVIEW dev mode before build-spec execution."
+  "$DEVMODE_SCRIPT" enable "$LABVIEW_ROOT" "$WORKSPACE_ROOT"
+  DEVMODE_ENABLED=1
+else
+  echo "No-LabVIEW dev mode is disabled for container parity (set CONTAINER_PARITY_ENABLE_DEVMODE=true to enable)."
 fi
-
-echo "Preparing no-LabVIEW dev mode before build-spec execution."
-"$DEVMODE_SCRIPT" enable "$LABVIEW_ROOT" "$WORKSPACE_ROOT"
-DEVMODE_ENABLED=1
 
 echo "Running LabVIEWCLI ExecuteBuildSpec in headless mode."
 echo "Project path: $PROJECT_PATH"

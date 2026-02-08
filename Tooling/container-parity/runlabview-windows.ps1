@@ -147,6 +147,7 @@ if ([string]::IsNullOrWhiteSpace($TargetName)) {
 }
 
 $buildSpecEnabled = $BuildProjectSpec.IsPresent -or (Test-EnabledValue -Value $env:CONTAINER_PARITY_BUILD_SPEC)
+$enableDevMode = Test-EnabledValue -Value $env:CONTAINER_PARITY_ENABLE_DEVMODE
 $buildOutputRelativePath = if ([string]::IsNullOrWhiteSpace($env:CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH)) {
     'resource\plugins\lv_icon.lvlibp'
 } else {
@@ -209,29 +210,38 @@ try {
         throw "Project file does not exist: $ProjectPath"
     }
 
-    $setDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
-    $revertDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
-    if (-not (Test-Path -LiteralPath $setDevModeScript -PathType Leaf)) {
-        throw "Required script not found: $setDevModeScript"
-    }
-    if (-not (Test-Path -LiteralPath $revertDevModeScript -PathType Leaf)) {
-        throw "Required script not found: $revertDevModeScript"
-    }
+    $setDevModeScript = $null
+    $revertDevModeScript = $null
+    $labviewYear = $null
+    $devModeEnabled = $false
+    if ($enableDevMode) {
+        $setDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
+        $revertDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
+        if (-not (Test-Path -LiteralPath $setDevModeScript -PathType Leaf)) {
+            throw "Required script not found: $setDevModeScript"
+        }
+        if (-not (Test-Path -LiteralPath $revertDevModeScript -PathType Leaf)) {
+            throw "Required script not found: $revertDevModeScript"
+        }
 
-    $labviewYear = Resolve-LabVIEWVersionYear -VersionInput $LabVIEWVersion -LabVIEWExecutablePath $LabVIEWPath
-    if ([string]::IsNullOrWhiteSpace($labviewYear)) {
-        throw "Unable to resolve LabVIEW version year for no-LabVIEW dev mode plumbing."
-    }
+        $labviewYear = Resolve-LabVIEWVersionYear -VersionInput $LabVIEWVersion -LabVIEWExecutablePath $LabVIEWPath
+        if ([string]::IsNullOrWhiteSpace($labviewYear)) {
+            throw "Unable to resolve LabVIEW version year for no-LabVIEW dev mode plumbing."
+        }
 
-    Write-Output "Preparing no-LabVIEW dev mode before build-spec execution."
-    & $setDevModeScript `
-        -LabVIEWVersion $labviewYear `
-        -SupportedBitness 64 `
-        -RepoRoot $WorkspaceRoot `
-        -SkipProcessCheck `
-        -SkipRepoVersionCheck
-    if ($LASTEXITCODE -ne 0) {
-        throw "Set-DevelopmentMode-NoLabVIEW failed with exit code $LASTEXITCODE."
+        Write-Output "Preparing no-LabVIEW dev mode before build-spec execution."
+        & $setDevModeScript `
+            -LabVIEWVersion $labviewYear `
+            -SupportedBitness 64 `
+            -RepoRoot $WorkspaceRoot `
+            -SkipProcessCheck `
+            -SkipRepoVersionCheck
+        if ($LASTEXITCODE -ne 0) {
+            throw "Set-DevelopmentMode-NoLabVIEW failed with exit code $LASTEXITCODE."
+        }
+        $devModeEnabled = $true
+    } else {
+        Write-Output "No-LabVIEW dev mode is disabled for container parity (set CONTAINER_PARITY_ENABLE_DEVMODE=true to enable)."
     }
 
     $buildSpecError = $null
@@ -264,19 +274,21 @@ try {
     } catch {
         $buildSpecError = $_
     } finally {
-        Write-Output "Reverting no-LabVIEW dev mode after build-spec execution."
-        & $revertDevModeScript `
-            -LabVIEWVersion $labviewYear `
-            -SupportedBitness 64 `
-            -RepoRoot $WorkspaceRoot `
-            -SkipProcessCheck `
-            -SkipRepoVersionCheck
-        if ($LASTEXITCODE -ne 0) {
-            $revertError = "Revert-DevelopmentMode-NoLabVIEW failed with exit code $LASTEXITCODE."
-            if ($buildSpecError) {
-                throw ("{0} Revert error: {1}" -f $buildSpecError.Exception.Message, $revertError)
+        if ($devModeEnabled) {
+            Write-Output "Reverting no-LabVIEW dev mode after build-spec execution."
+            & $revertDevModeScript `
+                -LabVIEWVersion $labviewYear `
+                -SupportedBitness 64 `
+                -RepoRoot $WorkspaceRoot `
+                -SkipProcessCheck `
+                -SkipRepoVersionCheck
+            if ($LASTEXITCODE -ne 0) {
+                $revertError = "Revert-DevelopmentMode-NoLabVIEW failed with exit code $LASTEXITCODE."
+                if ($buildSpecError) {
+                    throw ("{0} Revert error: {1}" -f $buildSpecError.Exception.Message, $revertError)
+                }
+                throw $revertError
             }
-            throw $revertError
         }
     }
 

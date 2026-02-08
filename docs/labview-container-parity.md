@@ -33,12 +33,14 @@ Build-spec environment contract used by container scripts:
 - `CONTAINER_PARITY_BUILD_SPEC_NAME`
 - `CONTAINER_PARITY_TARGET_NAME`
 - `CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH`
+- `CONTAINER_PARITY_ENABLE_DEVMODE` (optional; default disabled)
 
 Default build-spec settings:
 
 - Build spec name: `Editor Packed Library`
 - Target name: `My Computer`
 - Output path: `resource/plugins/lv_icon.lvlibp`
+- Dev-mode install mutation: disabled by default in parity runs to avoid removing required source items during build.
 
 ## Artifacts and Logs
 
