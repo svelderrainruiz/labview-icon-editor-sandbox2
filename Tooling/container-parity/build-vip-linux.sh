@@ -113,7 +113,6 @@ fi
 
 vipm_cmd=(
   vipm
-  --verbose
   build
   --labview-version "$LV_YEAR"
   --labview-bitness 64
