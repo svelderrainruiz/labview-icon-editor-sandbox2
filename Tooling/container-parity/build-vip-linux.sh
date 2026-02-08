@@ -8,6 +8,7 @@ CONTAINER_VIPB_PATH="${CONTAINER_VIPB_PATH:-Tooling/deployment/NI Icon editor.vi
 CONTAINER_VIP_VERSION="${CONTAINER_VIP_VERSION:-}"
 CONTAINER_RELEASE_NOTES_PATH="${CONTAINER_RELEASE_NOTES_PATH:-Tooling/deployment/release_notes.md}"
 CONTAINER_VIPM_TIMEOUT_SECONDS="${CONTAINER_VIPM_TIMEOUT_SECONDS:-900}"
+CONTAINER_VIPM_PACKAGE_URL="${CONTAINER_VIPM_PACKAGE_URL:-https://packages.jki.net/vipm/preview/vipm_latest_preview_amd64.deb}"
 
 LOG_DIR="${WORKSPACE_ROOT}/builds/logs"
 VIPM_LOG="${LOG_DIR}/vipm-build-linux.log"
@@ -35,6 +36,41 @@ require_file() {
   fi
 }
 
+ensure_vipm() {
+  if command -v vipm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "vipm not found on PATH. Installing VIPM CLI from ${CONTAINER_VIPM_PACKAGE_URL}."
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    fail "apt-get is required to install VIPM CLI in this container."
+  fi
+  if ! command -v dpkg >/dev/null 2>&1; then
+    fail "dpkg is required to install VIPM CLI in this container."
+  fi
+
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y --no-install-recommends ca-certificates wget
+
+  mkdir -p /usr/local/jki/vipm /etc/jki
+  touch /usr/local/jki/vipm/Settings.ini /etc/jki/jki.conf
+
+  local vipm_deb
+  vipm_deb="$(mktemp /tmp/vipm.XXXXXX.deb)"
+  wget -q -O "$vipm_deb" "$CONTAINER_VIPM_PACKAGE_URL"
+  dpkg -i "$vipm_deb" || {
+    apt-get install -f -y
+    dpkg -i "$vipm_deb"
+  }
+  rm -f "$vipm_deb"
+
+  if ! command -v vipm >/dev/null 2>&1; then
+    fail "VIPM CLI installation completed but vipm is still not available on PATH."
+  fi
+}
+
 if [[ -z "$CONTAINER_VIP_VERSION" ]]; then
   fail "CONTAINER_VIP_VERSION is required (expected format: major.minor.patch.build)."
 fi
@@ -43,9 +79,7 @@ if [[ ! "$LV_YEAR" =~ ^[0-9]{4}$ ]]; then
   fail "LV_YEAR must be a 4-digit year. Resolved value: '$LV_YEAR'"
 fi
 
-if ! command -v vipm >/dev/null 2>&1; then
-  fail "vipm is not available on PATH in this container."
-fi
+ensure_vipm
 
 VIPB_PATH="$(resolve_workspace_path "$CONTAINER_VIPB_PATH")"
 RELEASE_NOTES_PATH="$(resolve_workspace_path "$CONTAINER_RELEASE_NOTES_PATH")"
