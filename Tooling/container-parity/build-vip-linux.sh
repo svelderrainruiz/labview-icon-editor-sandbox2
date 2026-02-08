@@ -9,6 +9,7 @@ CONTAINER_VIP_VERSION="${CONTAINER_VIP_VERSION:-}"
 CONTAINER_RELEASE_NOTES_PATH="${CONTAINER_RELEASE_NOTES_PATH:-Tooling/deployment/release_notes.md}"
 CONTAINER_VIPM_TIMEOUT_SECONDS="${CONTAINER_VIPM_TIMEOUT_SECONDS:-900}"
 CONTAINER_VIPM_PACKAGE_URL="${CONTAINER_VIPM_PACKAGE_URL:-https://packages.jki.net/vipm/preview/vipm_latest_preview_amd64.deb}"
+CONTAINER_VIPM_REWRITE_PACKAGE_LV_VERSION="${CONTAINER_VIPM_REWRITE_PACKAGE_LV_VERSION:-true}"
 
 LOG_DIR="${WORKSPACE_ROOT}/builds/logs"
 VIPM_LOG="${LOG_DIR}/vipm-build-linux.log"
@@ -96,12 +97,26 @@ mkdir -p "$VIP_OUTPUT_DIR"
 
 build_started_epoch="$(date +%s)"
 
+vipm_vipb_path="$VIPB_PATH"
+vipm_vipb_is_temp=0
+if [[ "${CONTAINER_VIPM_REWRITE_PACKAGE_LV_VERSION,,}" == "true" ]]; then
+  lv_major="$((10#$LV_YEAR - 2000))"
+  if [[ "$lv_major" -le 0 ]]; then
+    fail "Unable to derive LabVIEW major version from LV_YEAR='$LV_YEAR'"
+  fi
+
+  vipm_vipb_path="$(mktemp /tmp/vipm-buildspec.XXXXXX.vipb)"
+  cp "$VIPB_PATH" "$vipm_vipb_path"
+  sed -i -E "s|<Package_LabVIEW_Version>[^<]+</Package_LabVIEW_Version>|<Package_LabVIEW_Version>${lv_major}.0</Package_LabVIEW_Version>|g" "$vipm_vipb_path"
+  vipm_vipb_is_temp=1
+fi
+
 vipm_cmd=(
   vipm
   build
   --labview-version "$LV_YEAR"
   --labview-bitness 64
-  "$VIPB_PATH"
+  "$vipm_vipb_path"
 )
 
 run_cmd=("${vipm_cmd[@]}")
@@ -113,6 +128,7 @@ echo "Building VI Package on Linux container."
 echo "Workspace root: $WORKSPACE_ROOT"
 echo "LabVIEW release/year: $LV_RELEASE / $LV_YEAR"
 echo "VIPB path: $VIPB_PATH"
+echo "VIPM build spec path: $vipm_vipb_path"
 echo "Release notes path: $RELEASE_NOTES_PATH"
 echo "Requested VIP version: $CONTAINER_VIP_VERSION"
 echo "Required PPLs:"
@@ -137,6 +153,10 @@ fi
 
 if [[ "$vipm_exit" -ne 0 ]]; then
   fail "vipm build failed with exit code $vipm_exit. See $VIPM_LOG"
+fi
+
+if [[ "$vipm_vipb_is_temp" -eq 1 ]]; then
+  rm -f "$vipm_vipb_path"
 fi
 
 latest_vip_line="$(
