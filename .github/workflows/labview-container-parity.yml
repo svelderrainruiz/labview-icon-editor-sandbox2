@@ -75,9 +75,31 @@ jobs:
             -e WORKSPACE_ROOT=C:\workspace `
             -e TARGET_DIR=C:\workspace\Test\Templates `
             -e "CONTAINER_PARITY_EXCLUDE_FILES=Polymorphic Template.vi" `
+            -e "CONTAINER_PARITY_BUILD_SPEC=true" `
+            -e "CONTAINER_PARITY_BUILD_SPEC_NAME=Editor Packed Library" `
+            -e "CONTAINER_PARITY_BUILD_TARGET_NAME=My Computer" `
+            -e "CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH=resource\plugins\lv_icon.lvlibp" `
             $env:IMAGE `
             powershell -NoProfile -ExecutionPolicy Bypass -File C:\workspace\Tooling\container-parity\runlabview-windows.ps1 -WorkspaceRoot C:\workspace
 
           if ($LASTEXITCODE -ne 0) {
             throw "Windows container parity run failed with exit code $LASTEXITCODE."
           }
+
+      - name: Verify built specification output (Windows container)
+        shell: pwsh
+        run: |
+          $outputPath = Join-Path $env:GITHUB_WORKSPACE 'resource\plugins\lv_icon.lvlibp'
+          if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
+            throw "Expected build output was not found: $outputPath"
+          }
+          $item = Get-Item -LiteralPath $outputPath
+          Write-Host ("Built specification artifact: {0} ({1} bytes)" -f $item.FullName, $item.Length)
+
+      - name: Upload built specification artifact (Windows container)
+        uses: actions/upload-artifact@v4
+        with:
+          name: labview-container-editor-packed-library-windows
+          path: resource/plugins/lv_icon.lvlibp
+          if-no-files-found: error
+          retention-days: 14
