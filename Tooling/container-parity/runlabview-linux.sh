@@ -27,48 +27,55 @@ is_enabled_value() {
   return 1
 }
 
-capture_labviewcli_logs() {
-  local operation="$1"
-  local output="$2"
-  local index=0
-  local timestamp
-  timestamp="$(date +%Y%m%d-%H%M%S)"
-  mkdir -p "$LOG_ROOT"
-
-  while IFS= read -r line; do
-    if [[ "$line" =~ LabVIEWCLI[[:space:]]started[[:space:]]logging[[:space:]]in[[:space:]]file:[[:space:]]*(.+)$ ]]; then
-      local raw_path="${BASH_REMATCH[1]}"
-      raw_path="${raw_path%$'\r'}"
-      raw_path="${raw_path%\"}"
-      raw_path="${raw_path#\"}"
-      if [[ -f "$raw_path" ]]; then
-        index=$((index + 1))
-        local destination="$LOG_ROOT/${operation,,}-${timestamp}-${index}.log"
-        cp "$raw_path" "$destination"
-        echo "Captured LabVIEWCLI log: $destination"
-      else
-        echo "WARN: LabVIEWCLI log path from output was not found: $raw_path" >&2
-      fi
-    fi
-  done <<< "$output"
+list_labviewcli_temp_logs() {
+  if compgen -G '/tmp/lvtemporary_*.log' > /dev/null; then
+    compgen -G '/tmp/lvtemporary_*.log' | sort -u
+  fi
 }
 
 invoke_labviewcli() {
   local operation="$1"
   shift
 
-  local output
+  local before_logs_file
+  before_logs_file="$(mktemp)"
+  list_labviewcli_temp_logs > "$before_logs_file"
+
   local status
   set +e
-  output="$(LabVIEWCLI "$@" 2>&1)"
+  LabVIEWCLI "$@"
   status=$?
   set -e
 
-  if [[ -n "$output" ]]; then
-    printf '%s\n' "$output"
-    capture_labviewcli_logs "$operation" "$output"
+  local timestamp
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$LOG_ROOT"
+
+  local index=0
+  while IFS= read -r candidate; do
+    if [[ -z "$candidate" || ! -f "$candidate" ]]; then
+      continue
+    fi
+    if grep -Fxq "$candidate" "$before_logs_file"; then
+      continue
+    fi
+    index=$((index + 1))
+    local destination="$LOG_ROOT/${operation,,}-${timestamp}-${index}.log"
+    cp "$candidate" "$destination"
+    echo "Captured LabVIEWCLI log: $destination"
+  done < <(list_labviewcli_temp_logs)
+
+  if [[ "$index" -eq 0 ]]; then
+    local fallback
+    fallback="$(ls -1t /tmp/lvtemporary_*.log 2>/dev/null | head -n 1 || true)"
+    if [[ -n "$fallback" && -f "$fallback" ]]; then
+      local destination="$LOG_ROOT/${operation,,}-${timestamp}-fallback.log"
+      cp "$fallback" "$destination"
+      echo "Captured LabVIEWCLI log (fallback): $destination"
+    fi
   fi
 
+  rm -f "$before_logs_file"
   return "$status"
 }
 

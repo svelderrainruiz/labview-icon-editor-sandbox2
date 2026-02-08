@@ -47,53 +47,54 @@ function Resolve-LabVIEWVersionYear {
     return ''
 }
 
-function Get-LabVIEWCliLogPathsFromOutput {
+function Get-LabVIEWCliTempLogPath {
     param(
-        [object[]]$OutputLines
+        [string]$TempRoot = ([System.IO.Path]::GetTempPath())
     )
 
-    $results = @()
-    foreach ($line in $OutputLines) {
-        if ($null -eq $line) {
-            continue
-        }
-
-        $text = [string]$line
-        if ($text -match 'LabVIEWCLI started logging in file:\s*(?<path>.+)$') {
-            $path = $Matches['path'].Trim().Trim('"')
-            if (-not [string]::IsNullOrWhiteSpace($path)) {
-                $results += $path
-            }
-        }
-    }
-
-    return @($results | Select-Object -Unique)
+    return @(
+        Get-ChildItem -LiteralPath $TempRoot -Filter 'lvtemporary_*.log' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -ExpandProperty FullName
+    )
 }
 
 function Save-LabVIEWCliLog {
     param(
         [string]$WorkspaceRootPath,
         [string]$OperationName,
-        [string[]]$LogPaths
+        [string[]]$BeforeLogPaths
     )
-
-    $copied = @()
-    if ($LogPaths.Count -eq 0) {
-        return $copied
-    }
 
     $logRoot = Join-Path $WorkspaceRootPath 'TestResults\container-parity\windows\logs'
     New-Item -Path $logRoot -ItemType Directory -Force | Out-Null
     $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $index = 0
+    $beforeSet = @{}
+    foreach ($path in $BeforeLogPaths) {
+        if (-not [string]::IsNullOrWhiteSpace($path)) {
+            $beforeSet[$path] = $true
+        }
+    }
 
-    foreach ($source in $LogPaths) {
-        $index++
+    $afterLogPaths = @(Get-LabVIEWCliTempLogPath)
+    $newLogPaths = @()
+    foreach ($source in $afterLogPaths) {
+        if (-not $beforeSet.ContainsKey($source)) {
+            $newLogPaths += $source
+        }
+    }
+
+    if ($newLogPaths.Count -eq 0 -and $afterLogPaths.Count -gt 0) {
+        $newLogPaths = @($afterLogPaths[0])
+    }
+
+    $copied = @()
+    $index = 0
+    foreach ($source in $newLogPaths) {
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            Write-Warning "LabVIEWCLI log path from output was not found: $source"
             continue
         }
-
+        $index++
         $destination = Join-Path $logRoot ("{0}-{1}-{2}.log" -f $OperationName.ToLowerInvariant(), $timestamp, $index)
         Copy-Item -LiteralPath $source -Destination $destination -Force
         $copied += $destination
@@ -110,16 +111,10 @@ function Invoke-LabVIEWCliOperation {
         [string]$WorkspaceRootPath
     )
 
-    $outputLines = @(& LabVIEWCLI @Arguments 2>&1)
+    $beforeLogPaths = @(Get-LabVIEWCliTempLogPath)
+    & LabVIEWCLI @Arguments
     $exitCode = $LASTEXITCODE
-    foreach ($line in $outputLines) {
-        if ($null -ne $line) {
-            Write-Output ([string]$line)
-        }
-    }
-
-    $logPaths = Get-LabVIEWCliLogPathsFromOutput -OutputLines $outputLines
-    $copiedLogs = Save-LabVIEWCliLog -WorkspaceRootPath $WorkspaceRootPath -OperationName $OperationName -LogPaths $logPaths
+    $copiedLogs = Save-LabVIEWCliLog -WorkspaceRootPath $WorkspaceRootPath -OperationName $OperationName -BeforeLogPaths $beforeLogPaths
 
     return [pscustomobject]@{
         ExitCode   = $exitCode
