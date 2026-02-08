@@ -23,8 +23,9 @@ Build-spec parity is enabled by default and is a blocking check.
 
 - Manual input: `run_build_spec` (`true` or `false`, default `true`).
 - Gate behavior:
-  - `pull_request`: runs `ExecuteBuildSpec` for `Editor Packed Library` by default.
-  - `workflow_dispatch`: runs `ExecuteBuildSpec` by default; set `run_build_spec=false` only when explicitly skipping build-spec diagnostics.
+  - `pull_request`: Linux parity runs by default; Windows parity is intentionally skipped to keep PR feedback fast for collaborators.
+  - `push` to `develop`: both Linux and Windows parity run, including `ExecuteBuildSpec`.
+  - `workflow_dispatch`: both Linux and Windows parity run by default; set `run_build_spec=false` only when explicitly skipping build-spec diagnostics.
 - Hard-fail policy: when build-spec is enabled (default), Linux and Windows lanes must both pass.
 
 Build-spec environment contract used by container scripts:

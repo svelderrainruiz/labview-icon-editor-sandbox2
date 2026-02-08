@@ -12,6 +12,15 @@ on:
         required: false
         type: boolean
         default: true
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/labview-container-parity.yml"
+      - "Tooling/container-parity/**"
+      - "Test/Templates/**"
+      - "lv_icon_editor.lvproj"
+      - ".lvversion"
   pull_request:
     paths:
       - ".github/workflows/labview-container-parity.yml"
@@ -106,6 +115,7 @@ jobs:
 
   parity-windows:
     name: Parity (Windows Container)
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == 'develop') }}
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
