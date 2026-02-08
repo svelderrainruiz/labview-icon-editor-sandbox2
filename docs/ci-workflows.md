@@ -114,6 +114,7 @@ Below are the **key GitHub Actions** provided in this repository:
    - It uploads:
      - `vip-linux-harness-<version>`
      - `vipm-logs-linux-vip-harness`
+     - `vipm-build-log-linux-vip-harness`
      - `vip-linux-harness-inspect-report`
      - `vip-linux-harness-source-metadata`
 

@@ -270,6 +270,7 @@ components remain unchanged and only the build number increases.
 - **Outputs (artifacts)**:
   - `vip-linux-harness-<version>`
   - `vipm-logs-linux-vip-harness`
+  - `vipm-build-log-linux-vip-harness`
   - `vip-linux-harness-inspect-report`
   - `vip-linux-harness-source-metadata`
 

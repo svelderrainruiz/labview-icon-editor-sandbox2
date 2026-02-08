@@ -988,12 +988,19 @@ jobs:
           name: ${{ steps.locate-vip-linux.outputs.vip_artifact }}
           path: ${{ steps.locate-vip-linux.outputs.vip_path }}
           if-no-files-found: error
-      - name: Upload g-cli logs (Linux VIP)
+      - name: Upload VIPM logs (Linux VIP)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gcli-logs-linux-vip
+          name: vipm-logs-linux-vip
           path: ${{ github.workspace }}/builds/logs
+          if-no-files-found: warn
+      - name: Upload VIPM build log (Linux VIP)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-build-log-linux-vip
+          path: ${{ github.workspace }}/builds/logs/vipm-build-linux.log
           if-no-files-found: warn
 
   build-vip:

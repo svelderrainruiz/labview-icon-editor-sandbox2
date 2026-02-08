@@ -384,6 +384,14 @@ jobs:
           path: ${{ github.workspace }}/builds/logs
           if-no-files-found: warn
 
+      - name: Upload VIPM build log (harness)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipm-build-log-linux-vip-harness
+          path: ${{ github.workspace }}/builds/logs/vipm-build-linux.log
+          if-no-files-found: warn
+
       - name: Upload inspect report (harness)
         if: always()
         uses: actions/upload-artifact@v4
