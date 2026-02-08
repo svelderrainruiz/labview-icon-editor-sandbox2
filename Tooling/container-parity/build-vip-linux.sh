@@ -37,6 +37,28 @@ require_file() {
   fi
 }
 
+capture_vipm_diagnostics() {
+  local diag_root="${LOG_DIR}/vipm-internal"
+  mkdir -p "$diag_root"
+
+  local sources=(
+    "/usr/local/jki/vipm/error"
+    "/usr/local/jki/vipm/VIPM-CLI/error"
+    "/usr/local/jki/vipm/logs"
+    "/usr/local/jki/vipm/VIPM-CLI/logs"
+  )
+
+  for src in "${sources[@]}"; do
+    if [[ -e "$src" ]]; then
+      local name
+      name="$(basename "$src")"
+      local parent
+      parent="$(basename "$(dirname "$src")")"
+      cp -R "$src" "${diag_root}/${parent}-${name}" 2>/dev/null || true
+    fi
+  done
+}
+
 ensure_vipm() {
   if command -v vipm >/dev/null 2>&1; then
     return 0
@@ -148,10 +170,12 @@ vipm_exit="${PIPESTATUS[0]}"
 set -e
 
 if [[ "$vipm_exit" -eq 124 ]]; then
+  capture_vipm_diagnostics
   fail "vipm build timed out after ${CONTAINER_VIPM_TIMEOUT_SECONDS}s. See $VIPM_LOG"
 fi
 
 if [[ "$vipm_exit" -ne 0 ]]; then
+  capture_vipm_diagnostics
   fail "vipm build failed with exit code $vipm_exit. See $VIPM_LOG"
 fi
 
