@@ -15,12 +15,6 @@ on:
   push:
     branches:
       - develop
-    paths:
-      - ".github/workflows/labview-container-parity.yml"
-      - "Tooling/container-parity/**"
-      - "Test/Templates/**"
-      - "lv_icon_editor.lvproj"
-      - ".lvversion"
   pull_request:
     paths:
       - ".github/workflows/labview-container-parity.yml"
