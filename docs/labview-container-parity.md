@@ -40,6 +40,7 @@ Default build-spec settings:
 - Build spec name: `Editor Packed Library`
 - Target name: `My Computer`
 - Output path: `resource/plugins/lv_icon.lvlibp`
+- Source sync before build-spec: container scripts copy `resource/plugins` Icon Editor sources and `vi.lib/LabVIEW Icon API` from the mounted workspace into the container LabVIEW install so `<resource>`/`<vilib>` project references resolve in headless builds.
 - Dev-mode install mutation: disabled by default in parity runs to avoid removing required source items during build.
 
 ## Artifacts and Logs

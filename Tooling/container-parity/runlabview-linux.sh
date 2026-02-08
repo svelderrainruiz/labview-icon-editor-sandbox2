@@ -28,6 +28,49 @@ is_enabled_value() {
   return 1
 }
 
+sync_icon_editor_sources_for_build_spec() {
+  local repo_plugins="$WORKSPACE_ROOT/resource/plugins"
+  local install_plugins="$LABVIEW_ROOT/resource/plugins"
+  local repo_icon_api="$WORKSPACE_ROOT/vi.lib/LabVIEW Icon API"
+  local install_icon_api="$LABVIEW_ROOT/vi.lib/LabVIEW Icon API"
+
+  local required_paths=(
+    "$repo_plugins/NIIconEditor"
+    "$repo_plugins/lv_IconEditor.lvlib"
+    "$repo_plugins/lv_icon.vi"
+    "$repo_icon_api"
+  )
+
+  for path in "${required_paths[@]}"; do
+    if [[ ! -e "$path" ]]; then
+      echo "ERROR: Required Icon Editor source path is missing: $path" >&2
+      return 1
+    fi
+  done
+
+  mkdir -p "$install_plugins"
+  cp -a "$repo_plugins/NIIconEditor" "$install_plugins/"
+  for file_name in lv_IconEditor.lvlib lv_icon.vi lv_icon.vit SAMPLE_lv_icon.vi; do
+    local source_path="$repo_plugins/$file_name"
+    if [[ -e "$source_path" ]]; then
+      cp -a "$source_path" "$install_plugins/"
+    fi
+  done
+
+  mkdir -p "$install_icon_api"
+  cp -a "$repo_icon_api/." "$install_icon_api/"
+
+  local probe="$install_plugins/NIIconEditor/Miscellaneous/Classes Initialization.vi"
+  if [[ ! -f "$probe" ]]; then
+    echo "ERROR: Icon Editor source synchronization failed. Missing probe file: $probe" >&2
+    return 1
+  fi
+
+  echo "Synchronized Icon Editor sources into LabVIEW install:"
+  echo "  resource/plugins -> $install_plugins"
+  echo "  vi.lib/LabVIEW Icon API -> $install_icon_api"
+}
+
 list_labviewcli_temp_logs() {
   if compgen -G '/tmp/lvtemporary_*.log' > /dev/null; then
     compgen -G '/tmp/lvtemporary_*.log' | sort -u
@@ -150,6 +193,11 @@ fi
 
 if [[ ! -f "$PROJECT_PATH" ]]; then
   echo "ERROR: Project file does not exist: $PROJECT_PATH" >&2
+  exit 1
+fi
+
+echo "Synchronizing workspace Icon Editor sources into LabVIEW install before build-spec execution."
+if ! sync_icon_editor_sources_for_build_spec; then
   exit 1
 fi
 

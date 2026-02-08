@@ -47,6 +47,62 @@ function Resolve-LabVIEWVersionYear {
     return ''
 }
 
+function Sync-IconEditorSourcesForBuildSpec {
+    param(
+        [string]$WorkspaceRootPath,
+        [string]$LabVIEWExecutablePath
+    )
+
+    if (-not (Test-Path -LiteralPath $WorkspaceRootPath -PathType Container)) {
+        throw "Workspace root does not exist: $WorkspaceRootPath"
+    }
+
+    $labviewRoot = Split-Path -Path $LabVIEWExecutablePath -Parent
+    if ([string]::IsNullOrWhiteSpace($labviewRoot) -or -not (Test-Path -LiteralPath $labviewRoot -PathType Container)) {
+        throw "Unable to resolve LabVIEW install root from LabVIEW path: $LabVIEWExecutablePath"
+    }
+
+    $repoPlugins = Join-Path $WorkspaceRootPath 'resource\plugins'
+    $repoIconApi = Join-Path $WorkspaceRootPath 'vi.lib\LabVIEW Icon API'
+    $requiredPaths = @(
+        (Join-Path $repoPlugins 'NIIconEditor'),
+        (Join-Path $repoPlugins 'lv_IconEditor.lvlib'),
+        (Join-Path $repoPlugins 'lv_icon.vi'),
+        $repoIconApi
+    )
+
+    foreach ($path in $requiredPaths) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "Required Icon Editor source path is missing: $path"
+        }
+    }
+
+    $installPlugins = Join-Path $labviewRoot 'resource\plugins'
+    $installIconApi = Join-Path $labviewRoot 'vi.lib\LabVIEW Icon API'
+    New-Item -Path $installPlugins -ItemType Directory -Force | Out-Null
+    New-Item -Path $installIconApi -ItemType Directory -Force | Out-Null
+
+    Copy-Item -LiteralPath (Join-Path $repoPlugins 'NIIconEditor') -Destination $installPlugins -Recurse -Force
+
+    foreach ($fileName in @('lv_IconEditor.lvlib', 'lv_icon.vi', 'lv_icon.vit', 'SAMPLE_lv_icon.vi')) {
+        $sourcePath = Join-Path $repoPlugins $fileName
+        if (Test-Path -LiteralPath $sourcePath -PathType Leaf) {
+            Copy-Item -LiteralPath $sourcePath -Destination $installPlugins -Force
+        }
+    }
+
+    Get-ChildItem -LiteralPath $repoIconApi -Force | Copy-Item -Destination $installIconApi -Recurse -Force
+
+    $probe = Join-Path $installPlugins 'NIIconEditor\Miscellaneous\Classes Initialization.vi'
+    if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) {
+        throw "Icon Editor source synchronization failed. Missing probe file: $probe"
+    }
+
+    Write-Output "Synchronized Icon Editor sources into LabVIEW install:"
+    Write-Output "  resource\\plugins -> $installPlugins"
+    Write-Output "  vi.lib\\LabVIEW Icon API -> $installIconApi"
+}
+
 function Get-LabVIEWCliTempLogPath {
     param(
         [string]$TempRoot = ([System.IO.Path]::GetTempPath())
@@ -209,6 +265,9 @@ try {
     if (-not (Test-Path -LiteralPath $ProjectPath -PathType Leaf)) {
         throw "Project file does not exist: $ProjectPath"
     }
+
+    Write-Output "Synchronizing workspace Icon Editor sources into LabVIEW install before build-spec execution."
+    Sync-IconEditorSourcesForBuildSpec -WorkspaceRootPath $WorkspaceRoot -LabVIEWExecutablePath $LabVIEWPath
 
     $setDevModeScript = $null
     $revertDevModeScript = $null
