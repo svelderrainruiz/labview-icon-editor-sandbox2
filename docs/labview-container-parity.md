@@ -17,15 +17,15 @@ This repository includes a hosted parity workflow at `.github/workflows/labview-
 
 The workflow defaults to release tag `2026q1`, and supports override via `workflow_dispatch` input `lv_release`.
 
-## Manual-Only Build-Spec Phase
+## Default Build-Spec Behavior
 
-Build-spec parity is manual-only in this phase and does not run on pull requests by default.
+Build-spec parity is enabled by default and is a blocking check.
 
-- Manual input: `run_build_spec` (`true` or `false`, default `false`).
+- Manual input: `run_build_spec` (`true` or `false`, default `true`).
 - Gate behavior:
-  - `workflow_dispatch` with `run_build_spec=true`: runs `ExecuteBuildSpec` for `Editor Packed Library`.
-  - `pull_request`: forces build-spec off and runs only MassCompile parity.
-- Hard-fail policy: when build-spec is enabled, Linux and Windows lanes must both pass.
+  - `pull_request`: runs `ExecuteBuildSpec` for `Editor Packed Library` by default.
+  - `workflow_dispatch`: runs `ExecuteBuildSpec` by default; set `run_build_spec=false` only when explicitly skipping build-spec diagnostics.
+- Hard-fail policy: when build-spec is enabled (default), Linux and Windows lanes must both pass.
 
 Build-spec environment contract used by container scripts:
 
@@ -58,9 +58,9 @@ Manual run:
 
 1. Open Actions and run **LabVIEW Container Parity**.
 2. Optionally set `lv_release` (for example `2026q1`).
-3. Set `run_build_spec=true` only when you want build-spec parity checks.
+3. Leave `run_build_spec=true` (default) to keep packed-library parity enabled; set it to `false` only when intentionally bypassing build-spec execution.
 
 PR run:
 
 - Triggered automatically when parity workflow/script files, `.lvversion`, `lv_icon_editor.lvproj`, or `Test/Templates` change.
-- PR runs execute MassCompile parity only.
+- PR runs execute both MassCompile parity and packed-library build-spec parity by default.
