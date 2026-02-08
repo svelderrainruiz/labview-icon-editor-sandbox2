@@ -269,7 +269,7 @@ components remain unchanged and only the build number increases.
   - `vip_version` (optional): explicit `major.minor.patch.build`; defaults to `0.0.0.<github.run_number>`.
 - **Outputs (artifacts)**:
   - `vip-linux-harness-<version>`
-  - `gcli-logs-linux-vip-harness`
+  - `vipm-logs-linux-vip-harness`
   - `vip-linux-harness-inspect-report`
   - `vip-linux-harness-source-metadata`
 

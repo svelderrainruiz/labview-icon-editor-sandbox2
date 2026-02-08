@@ -376,11 +376,11 @@ jobs:
           path: ${{ steps.locate.outputs.vip_path }}
           if-no-files-found: error
 
-      - name: Upload g-cli logs (harness)
+      - name: Upload VIPM logs (harness)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gcli-logs-linux-vip-harness
+          name: vipm-logs-linux-vip-harness
           path: ${{ github.workspace }}/builds/logs
           if-no-files-found: warn
 

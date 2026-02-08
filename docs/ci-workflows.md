@@ -113,7 +113,7 @@ Below are the **key GitHub Actions** provided in this repository:
    - It runs `Tooling/container-parity/build-vip-linux.sh` inside `nationalinstruments/labview:<lv_release>-linux`.
    - It uploads:
      - `vip-linux-harness-<version>`
-     - `gcli-logs-linux-vip-harness`
+     - `vipm-logs-linux-vip-harness`
      - `vip-linux-harness-inspect-report`
      - `vip-linux-harness-source-metadata`
 
