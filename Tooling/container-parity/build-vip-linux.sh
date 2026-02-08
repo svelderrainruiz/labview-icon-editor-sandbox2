@@ -121,13 +121,23 @@ build_started_epoch="$(date +%s)"
 
 vipm_vipb_path="$VIPB_PATH"
 vipm_vipb_is_temp=0
+
+cleanup_temp_vipb() {
+  if [[ "${vipm_vipb_is_temp:-0}" -eq 1 ]] && [[ -n "${vipm_vipb_path:-}" ]] && [[ -f "${vipm_vipb_path:-}" ]]; then
+    rm -f "$vipm_vipb_path" || true
+  fi
+}
+
+trap cleanup_temp_vipb EXIT
+
 if [[ "${CONTAINER_VIPM_REWRITE_PACKAGE_LV_VERSION,,}" == "true" ]]; then
   lv_major="$((10#$LV_YEAR - 2000))"
   if [[ "$lv_major" -le 0 ]]; then
     fail "Unable to derive LabVIEW major version from LV_YEAR='$LV_YEAR'"
   fi
 
-  vipm_vipb_path="$(mktemp /tmp/vipm-buildspec.XXXXXX.vipb)"
+  vipb_dir="$(dirname "$VIPB_PATH")"
+  vipm_vipb_path="$(mktemp "${vipb_dir}/.vipm-buildspec.XXXXXX.vipb")"
   cp "$VIPB_PATH" "$vipm_vipb_path"
   sed -i -E "s|<Package_LabVIEW_Version>[^<]+</Package_LabVIEW_Version>|<Package_LabVIEW_Version>${lv_major}.0</Package_LabVIEW_Version>|g" "$vipm_vipb_path"
   vipm_vipb_is_temp=1
@@ -177,10 +187,6 @@ fi
 if [[ "$vipm_exit" -ne 0 ]]; then
   capture_vipm_diagnostics
   fail "vipm build failed with exit code $vipm_exit. See $VIPM_LOG"
-fi
-
-if [[ "$vipm_vipb_is_temp" -eq 1 ]]; then
-  rm -f "$vipm_vipb_path"
 fi
 
 latest_vip_line="$(
