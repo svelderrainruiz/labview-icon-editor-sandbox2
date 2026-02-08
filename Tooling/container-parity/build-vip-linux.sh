@@ -10,7 +10,7 @@ CONTAINER_RELEASE_NOTES_PATH="${CONTAINER_RELEASE_NOTES_PATH:-Tooling/deployment
 CONTAINER_VIPM_TIMEOUT_SECONDS="${CONTAINER_VIPM_TIMEOUT_SECONDS:-900}"
 
 LOG_DIR="${WORKSPACE_ROOT}/builds/logs"
-GCLI_LOG="${LOG_DIR}/gcli-build-linux.log"
+VIPM_LOG="${LOG_DIR}/vipm-build-linux.log"
 VIP_OUTPUT_DIR="${WORKSPACE_ROOT}/builds/VI Package"
 
 fail() {
@@ -43,8 +43,8 @@ if [[ ! "$LV_YEAR" =~ ^[0-9]{4}$ ]]; then
   fail "LV_YEAR must be a 4-digit year. Resolved value: '$LV_YEAR'"
 fi
 
-if ! command -v g-cli >/dev/null 2>&1; then
-  fail "g-cli is not available on PATH in this container."
+if ! command -v vipm >/dev/null 2>&1; then
+  fail "vipm is not available on PATH in this container."
 fi
 
 VIPB_PATH="$(resolve_workspace_path "$CONTAINER_VIPB_PATH")"
@@ -62,43 +62,47 @@ mkdir -p "$VIP_OUTPUT_DIR"
 
 build_started_epoch="$(date +%s)"
 
-gcli_args=(
-  --lv-ver "$LV_YEAR"
-  --arch 64
-  --connect-timeout 120000
-  --kill
-  --kill-timeout 20000
-  --verbose
-  vipb --
-  --buildspec "$VIPB_PATH"
-  -v "$CONTAINER_VIP_VERSION"
-  --release-notes "$RELEASE_NOTES_PATH"
-  --timeout "$CONTAINER_VIPM_TIMEOUT_SECONDS"
+vipm_cmd=(
+  vipm
+  build
+  --labview-version "$LV_YEAR"
+  --labview-bitness 64
+  "$VIPB_PATH"
 )
+
+run_cmd=("${vipm_cmd[@]}")
+if command -v timeout >/dev/null 2>&1; then
+  run_cmd=(timeout --foreground "${CONTAINER_VIPM_TIMEOUT_SECONDS}s" "${vipm_cmd[@]}")
+fi
 
 echo "Building VI Package on Linux container."
 echo "Workspace root: $WORKSPACE_ROOT"
 echo "LabVIEW release/year: $LV_RELEASE / $LV_YEAR"
 echo "VIPB path: $VIPB_PATH"
 echo "Release notes path: $RELEASE_NOTES_PATH"
+echo "Requested VIP version: $CONTAINER_VIP_VERSION"
 echo "Required PPLs:"
 echo "  - $PPL_X86_PATH"
 echo "  - $PPL_X64_PATH"
-echo "Log path: $GCLI_LOG"
+echo "Log path: $VIPM_LOG"
 
-printf 'Executing: g-cli'
-for arg in "${gcli_args[@]}"; do
+printf 'Executing:'
+for arg in "${run_cmd[@]}"; do
   printf ' %q' "$arg"
 done
 printf '\n'
 
 set +e
-g-cli "${gcli_args[@]}" 2>&1 | tee "$GCLI_LOG"
-gcli_exit="${PIPESTATUS[0]}"
+"${run_cmd[@]}" 2>&1 | tee "$VIPM_LOG"
+vipm_exit="${PIPESTATUS[0]}"
 set -e
 
-if [[ "$gcli_exit" -ne 0 ]]; then
-  fail "g-cli VIP build failed with exit code $gcli_exit. See $GCLI_LOG"
+if [[ "$vipm_exit" -eq 124 ]]; then
+  fail "vipm build timed out after ${CONTAINER_VIPM_TIMEOUT_SECONDS}s. See $VIPM_LOG"
+fi
+
+if [[ "$vipm_exit" -ne 0 ]]; then
+  fail "vipm build failed with exit code $vipm_exit. See $VIPM_LOG"
 fi
 
 latest_vip_line="$(

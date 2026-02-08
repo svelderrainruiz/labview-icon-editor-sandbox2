@@ -41,6 +41,11 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Checkout workflow code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Resolve source run and download PPL artifacts
         id: source
         shell: pwsh
@@ -189,6 +194,18 @@ jobs:
           "ppl_x64_path=$selectedX64Dest" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "selected_run_url=https://github.com/$repo/actions/runs/$selectedRunId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
+      - name: Cache Linux VIP build script
+        id: build-script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache_dir="${RUNNER_TEMP}/vip-linux-harness/tooling"
+          mkdir -p "${cache_dir}"
+          script_path="${cache_dir}/build-vip-linux.sh"
+          cp "${GITHUB_WORKSPACE}/Tooling/container-parity/build-vip-linux.sh" "${script_path}"
+          chmod +x "${script_path}"
+          echo "script_path=${script_path}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout selected source commit
         uses: actions/checkout@v4
         with:
@@ -260,6 +277,7 @@ jobs:
           LV_YEAR="${LV_RELEASE:0:4}"
           docker run --rm \
             -v "${GITHUB_WORKSPACE}:/workspace" \
+            -v "${{ steps.build-script.outputs.script_path }}:/tmp/build-vip-linux.sh:ro" \
             -e WORKSPACE_ROOT=/workspace \
             -e "LV_RELEASE=${LV_RELEASE}" \
             -e "LV_YEAR=${LV_YEAR}" \
@@ -268,7 +286,7 @@ jobs:
             -e "CONTAINER_RELEASE_NOTES_PATH=Tooling/deployment/release_notes.md" \
             -e "CONTAINER_VIPM_TIMEOUT_SECONDS=900" \
             "${{ steps.image.outputs.image }}" \
-            bash -lc "chmod +x /workspace/Tooling/container-parity/build-vip-linux.sh && /workspace/Tooling/container-parity/build-vip-linux.sh"
+            bash -lc "/tmp/build-vip-linux.sh"
 
       - name: Locate built VI package
         id: locate
