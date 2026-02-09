@@ -79,6 +79,20 @@ Describe 'RunUnitTests port resolution' {
         $resolved.HasEnvOverride | Should -BeTrue
     }
 
+    It 'does not emit warnings for a valid bitness-specific environment override' {
+        $env:LVIE_LUNIT_PORT_64 = '3377'
+
+        $captured = @(Resolve-LUnitPort -Bitness '64' -LabVIEWExecutablePath $script:labviewExe 3>&1)
+        $warningRecords = @($captured | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        $outputObjects = @($captured | Where-Object { $_ -isnot [System.Management.Automation.WarningRecord] })
+        $resolved = $outputObjects[0]
+
+        $warningRecords.Count | Should -Be 0
+        $outputObjects.Count | Should -Be 1
+        $resolved.PortNumber | Should -Be 3377
+        $resolved.Source | Should -Be '$env:LVIE_LUNIT_PORT_64'
+    }
+
     It 'uses generic environment override when bitness-specific is absent' {
         $env:LVIE_LUNIT_PORT = '3399'
 
@@ -106,8 +120,14 @@ Describe 'RunUnitTests port resolution' {
         $env:LVIE_LUNIT_PORT_64 = 'not-a-number'
         'server.tcp.port=3370' | Set-Content -Path $script:iniPath -Encoding ascii
 
-        $resolved = Resolve-LUnitPort -Bitness '64' -LabVIEWExecutablePath $script:labviewExe
+        $captured = @(Resolve-LUnitPort -Bitness '64' -LabVIEWExecutablePath $script:labviewExe 3>&1)
+        $warningRecords = @($captured | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        $outputObjects = @($captured | Where-Object { $_ -isnot [System.Management.Automation.WarningRecord] })
+        $resolved = $outputObjects[0]
 
+        $warningRecords.Count | Should -BeGreaterThan 0
+        $warningRecords[0].Message | Should -Match 'Ignoring invalid LUnit port value'
+        $outputObjects.Count | Should -Be 1
         $resolved.PortNumber | Should -Be 3370
         $resolved.Source | Should -Be "$script:iniPath (server.tcp.port)"
     }
@@ -117,5 +137,15 @@ Describe 'RunUnitTests port resolution' {
 
         $resolved.PortNumber | Should -Be 3363
         $resolved.Source | Should -Be 'default:3363'
+    }
+
+    It 'defaults to 3363 when server.tcp.enabled is true but server.tcp.port is not set' {
+        'server.tcp.enabled=true' | Set-Content -Path $script:iniPath -Encoding ascii
+
+        $resolved = Resolve-LUnitPort -Bitness '32' -LabVIEWExecutablePath $script:labviewExe
+
+        $resolved.PortNumber | Should -Be 3363
+        $resolved.Source | Should -Be 'default:3363'
+        $resolved.ViServerEnabled | Should -BeTrue
     }
 }

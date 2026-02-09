@@ -294,7 +294,8 @@ function Invoke-DevModeNoLabVIEW {
         [string]$LabVIEWVersion,
         [string]$Bitness,
         [ValidateSet('enable', 'disable')]
-        [string]$Mode
+        [string]$Mode,
+        [switch]$SkipProcessCheck
     )
 
     $scriptPath = if ($Mode -eq 'enable') {
@@ -307,11 +308,16 @@ function Invoke-DevModeNoLabVIEW {
         throw "Dev mode script not found at $scriptPath"
     }
 
-    return Invoke-LabVIEWScript -ScriptPath $scriptPath -Arguments @(
+    $arguments = @(
         '-LabVIEWVersion', $LabVIEWVersion,
         '-SupportedBitness', $Bitness,
         '-RepoRoot', $RepoRoot
     )
+    if ($SkipProcessCheck) {
+        $arguments += '-SkipProcessCheck'
+    }
+
+    return Invoke-LabVIEWScript -ScriptPath $scriptPath -Arguments $arguments
 }
 
 function New-LabVIEWStageContext {
@@ -349,6 +355,8 @@ function Invoke-LabVIEWStage {
 
         [switch]$DevModeNoLabVIEW,
 
+        [switch]$SkipDevModeProcessCheck,
+
         [switch]$CloseBetweenStages,
 
         [switch]$SkipOnBaselineFailure,
@@ -361,6 +369,13 @@ function Invoke-LabVIEWStage {
 
     $closeBetweenStagesEnabled = $CloseBetweenStages.IsPresent -or -not $PSBoundParameters.ContainsKey('CloseBetweenStages')
     $skipOnBaselineFailureEnabled = $SkipOnBaselineFailure.IsPresent -or -not $PSBoundParameters.ContainsKey('SkipOnBaselineFailure')
+    $skipDevModeProcessCheckEnabled = $SkipDevModeProcessCheck.IsPresent
+    if (-not $skipDevModeProcessCheckEnabled -and -not [string]::IsNullOrWhiteSpace($env:LVIE_SKIP_DEVMODE_PROCESS_CHECK)) {
+        $skipSetting = $env:LVIE_SKIP_DEVMODE_PROCESS_CHECK.Trim().ToLowerInvariant()
+        if (@('1', 'true', 'yes', 'y', 'on') -contains $skipSetting) {
+            $skipDevModeProcessCheckEnabled = $true
+        }
+    }
 
     $resolvedRepoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
     $resolvedVersion = Resolve-LabVIEWVersion -VersionInput $LabVIEWVersion -RepoRoot $resolvedRepoRoot
@@ -400,6 +415,7 @@ function Invoke-LabVIEWStage {
                 EndUtc          = $bitnessEnd.ToUniversalTime().ToString('o')
                 DurationMs      = [int]([Math]::Round(($bitnessEnd - $bitnessStart).TotalMilliseconds))
                 DevModeNoLabVIEW = [bool]$DevModeNoLabVIEW
+                SkipDevModeProcessCheck = [bool]$skipDevModeProcessCheckEnabled
                 CloseBetweenStages = [bool]$closeBetweenStagesEnabled
                 Result          = $resultEntry
                 Steps           = [pscustomobject]@{
@@ -425,7 +441,7 @@ function Invoke-LabVIEWStage {
 
         if ($DevModeNoLabVIEW) {
             $baselineStart = Get-Date
-            $baseline = Invoke-DevModeNoLabVIEW -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedVersion -Bitness $bitness -Mode 'disable'
+            $baseline = Invoke-DevModeNoLabVIEW -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedVersion -Bitness $bitness -Mode 'disable' -SkipProcessCheck:$skipDevModeProcessCheckEnabled
             $baselineEnd = Get-Date
             $baselineInfo = New-LabVIEWStageStepLog -Name 'baseline-revert' -StartTime $baselineStart -EndTime $baselineEnd -ExitCode $baseline.ExitCode -ErrorMessage $null -OutputLines $baseline.OutputLines
             if ($baseline.ExitCode -ne 0) {
@@ -456,6 +472,7 @@ function Invoke-LabVIEWStage {
                         EndUtc          = $bitnessEnd.ToUniversalTime().ToString('o')
                         DurationMs      = [int]([Math]::Round(($bitnessEnd - $bitnessStart).TotalMilliseconds))
                         DevModeNoLabVIEW = [bool]$DevModeNoLabVIEW
+                        SkipDevModeProcessCheck = [bool]$skipDevModeProcessCheckEnabled
                         CloseBetweenStages = [bool]$closeBetweenStagesEnabled
                         Result          = $resultEntry
                         Steps           = [pscustomobject]@{
@@ -481,7 +498,7 @@ function Invoke-LabVIEWStage {
         try {
             if ($DevModeNoLabVIEW) {
                 $enableStart = Get-Date
-                $enable = Invoke-DevModeNoLabVIEW -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedVersion -Bitness $bitness -Mode 'enable'
+                $enable = Invoke-DevModeNoLabVIEW -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedVersion -Bitness $bitness -Mode 'enable' -SkipProcessCheck:$skipDevModeProcessCheckEnabled
                 $enableEnd = Get-Date
                 $enableInfo = New-LabVIEWStageStepLog -Name 'enable-devmode' -StartTime $enableStart -EndTime $enableEnd -ExitCode $enable.ExitCode -ErrorMessage $null -OutputLines $enable.OutputLines
                 if ($enable.ExitCode -ne 0) {
@@ -546,7 +563,7 @@ function Invoke-LabVIEWStage {
         } finally {
             if ($devModeEnabled) {
                 $revertStart = Get-Date
-                $revertResult = Invoke-DevModeNoLabVIEW -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedVersion -Bitness $bitness -Mode 'disable'
+                $revertResult = Invoke-DevModeNoLabVIEW -RepoRoot $resolvedRepoRoot -LabVIEWVersion $resolvedVersion -Bitness $bitness -Mode 'disable' -SkipProcessCheck:$skipDevModeProcessCheckEnabled
                 $revertEnd = Get-Date
                 $revertInfo = New-LabVIEWStageStepLog -Name 'revert-devmode' -StartTime $revertStart -EndTime $revertEnd -ExitCode $revertResult.ExitCode -ErrorMessage $null -OutputLines $revertResult.OutputLines
             }
@@ -569,6 +586,7 @@ function Invoke-LabVIEWStage {
             EndUtc          = $bitnessEnd.ToUniversalTime().ToString('o')
             DurationMs      = [int]([Math]::Round(($bitnessEnd - $bitnessStart).TotalMilliseconds))
             DevModeNoLabVIEW = [bool]$DevModeNoLabVIEW
+            SkipDevModeProcessCheck = [bool]$skipDevModeProcessCheckEnabled
             CloseBetweenStages = [bool]$closeBetweenStagesEnabled
             Result          = $resultEntry
             Steps           = [pscustomobject]@{

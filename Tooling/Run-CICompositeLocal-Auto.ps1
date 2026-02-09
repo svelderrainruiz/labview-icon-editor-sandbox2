@@ -43,6 +43,15 @@
 .PARAMETER EnsureCleanState
     Revert dev mode before enabling it for Verify IE Paths.
 
+.PARAMETER SkipDevModeNoLabVIEWSmoke
+    Skip DevMode.NoLabVIEW smoke tests in parity runs.
+
+.PARAMETER DevModeNoLabVIEWSmokeDepth
+    Smoke depth: minimal, balanced, or full.
+
+.PARAMETER ForceGcliLunit
+    Force g-cli as the primary LUnit backend for parity unit tests.
+
 .PARAMETER SkipViValidate
     Skip pylavi vi_validate checks.
 
@@ -131,6 +140,14 @@ param(
 
     [Parameter(Mandatory = $false)]
     [switch]$EnsureCleanState,
+
+    [switch]$SkipDevModeNoLabVIEWSmoke,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('minimal', 'balanced', 'full')]
+    [string]$DevModeNoLabVIEWSmokeDepth = 'balanced',
+
+    [switch]$ForceGcliLunit,
 
     [switch]$SkipViValidate,
 
@@ -307,6 +324,9 @@ if ($DryRun) {
         -LabVIEWBitness $LabVIEWBitness `
         -AllowVersionMismatch:$AllowVersionMismatch `
         -DryRun `
+        -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke `
+        -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
+        -ForceGcliLunit:$ForceGcliLunit `
         -SkipViValidate:$SkipViValidate `
         -ViValidateConfigPath $ViValidateConfigPath `
         -ViValidateProfile $ViValidateProfile `
@@ -345,6 +365,9 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
             -LabVIEWBitness $LabVIEWBitness `
             -AllowVersionMismatch:$AllowVersionMismatch `
             -EnsureCleanState:$EnsureCleanState `
+            -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke `
+            -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
+            -ForceGcliLunit:$ForceGcliLunit `
             -SkipViValidate:$SkipViValidate `
             -ViValidateConfigPath $ViValidateConfigPath `
             -ViValidateProfile $ViValidateProfile `

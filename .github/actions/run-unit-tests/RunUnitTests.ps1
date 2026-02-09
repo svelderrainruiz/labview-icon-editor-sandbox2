@@ -36,6 +36,7 @@
 .NOTES
     PowerShell 7.5+ assumed for cross-platform support.
     This script prefers LabVIEWCLI LUnit. g-cli fallback is opt-in.
+    Set LVIE_LUNIT_BACKEND=gcli (or LVIE_FORCE_GCLI_LUNIT=1) to force g-cli.
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'Run')]
@@ -122,13 +123,24 @@ if (Test-Path -Path $preflightScript) {
 }
 $versionHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWVersion.ps1'
 $labviewYear = $LabVIEWVersion
+$labviewNumericVersion = $null
 if (Test-Path -Path $versionHelper) {
     . $versionHelper
     $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $repoRoot
     $labviewYear = $versionInfo.Year
+    $labviewNumericVersion = $versionInfo.NumericVersion
 }
 if ([string]::IsNullOrWhiteSpace($labviewYear)) {
     throw "LabVIEW version could not be resolved. Check .lvversion."
+}
+if ([string]::IsNullOrWhiteSpace($labviewNumericVersion)) {
+    $parsedYear = 0
+    if ([int]::TryParse($labviewYear, [ref]$parsedYear)) {
+        if ($parsedYear -ge 2000) {
+            $parsedYear -= 2000
+        }
+        $labviewNumericVersion = "{0}.0" -f $parsedYear
+    }
 }
 $labviewExecutableHelper = Join-Path $repoRoot 'Tooling\support\LabVIEWExecutablePath.ps1'
 if (-not (Test-Path -Path $labviewExecutableHelper)) {
@@ -580,6 +592,229 @@ function Resolve-LUnitPort {
     }
 }
 
+function Test-LUnitOperationFolder {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$OperationFolderPath
+    )
+
+    if (-not (Test-Path -Path $OperationFolderPath -PathType Container)) {
+        return $false
+    }
+
+    $runOperation = Join-Path -Path $OperationFolderPath -ChildPath 'RunOperation.vi'
+    return (Test-Path -Path $runOperation -PathType Leaf)
+}
+
+function Resolve-LUnitOperationRootFromPath {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$CandidatePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Source,
+
+        [switch]$WarnWhenMissing
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CandidatePath)) {
+        return $null
+    }
+
+    if (-not (Test-Path -Path $CandidatePath -PathType Container)) {
+        if ($WarnWhenMissing) {
+            Write-Warning ("Ignoring missing LUnit operation directory candidate from {0}: {1}" -f $Source, $CandidatePath)
+        }
+        return $null
+    }
+
+    $resolvedPath = (Resolve-Path -Path $CandidatePath).Path
+    $candidateLeaf = Split-Path -Path $resolvedPath -Leaf
+
+    if ($candidateLeaf -ieq 'LUnit') {
+        if (Test-LUnitOperationFolder -OperationFolderPath $resolvedPath) {
+            return [pscustomobject]@{
+                OperationRoot = (Split-Path -Path $resolvedPath -Parent)
+                Source        = ("{0} (LUnit folder)" -f $Source)
+            }
+        }
+    }
+
+    $lunitFolder = Join-Path -Path $resolvedPath -ChildPath 'LUnit'
+    if (Test-LUnitOperationFolder -OperationFolderPath $lunitFolder) {
+        return [pscustomobject]@{
+            OperationRoot = $resolvedPath
+            Source        = $Source
+        }
+    }
+
+    if ($WarnWhenMissing) {
+        Write-Warning ("No usable 'LUnit\\RunOperation.vi' found under candidate from {0}: {1}" -f $Source, $resolvedPath)
+    }
+    return $null
+}
+
+function Get-LUnitOperationRootsFromVipmIndex {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$LabVIEWNumericVersion,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness
+    )
+
+    if ([string]::IsNullOrWhiteSpace($LabVIEWNumericVersion)) {
+        return @()
+    }
+
+    $dbRoot = Join-Path $env:ProgramData 'JKI\VIPM\databases'
+    if (-not (Test-Path -Path $dbRoot -PathType Container)) {
+        return @()
+    }
+
+    $dbFolder = if ($Bitness -eq '64') { "LV $LabVIEWNumericVersion (64-bit)" } else { "LV $LabVIEWNumericVersion" }
+    $indexPath = Join-Path (Join-Path (Join-Path $dbRoot $dbFolder) 'astemes_lib_lunit_cli') 'files-installed'
+    if (-not (Test-Path -Path $indexPath -PathType Leaf)) {
+        return @()
+    }
+
+    $candidates = @()
+    $seen = @{}
+
+    foreach ($line in Get-Content -Path $indexPath -ErrorAction SilentlyContinue) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+
+        $candidateRoots = @()
+        $trimmed = $line.Trim()
+
+        $operationsMatch = [regex]::Match($trimmed, '^(?<root>.+?[\\/](?:Operations|operations))(?:[\\/]LUnit(?:[\\/].*)?)$')
+        if ($operationsMatch.Success) {
+            $candidateRoots += [string]$operationsMatch.Groups['root'].Value
+        }
+
+        $runOperationMatch = [regex]::Match($trimmed, '^(?<root>.+?)[\\/]LUnit[\\/]RunOperation\.vi$')
+        if ($runOperationMatch.Success) {
+            $candidateRoots += [string]$runOperationMatch.Groups['root'].Value
+        }
+
+        $exampleMatch = [regex]::Match($trimmed, '^(?<root>.+?)[\\/]LUnit CLI(?:[\\/].*)?$')
+        if ($exampleMatch.Success) {
+            $candidateRoots += [string]$exampleMatch.Groups['root'].Value
+        }
+
+        foreach ($root in $candidateRoots) {
+            if ([string]::IsNullOrWhiteSpace($root)) {
+                continue
+            }
+            try {
+                $fullRoot = [System.IO.Path]::GetFullPath($root)
+            }
+            catch {
+                continue
+            }
+            $key = $fullRoot.ToLowerInvariant()
+            if (-not $seen.ContainsKey($key)) {
+                $seen[$key] = $true
+                $candidates += [pscustomobject]@{
+                    Path   = $fullRoot
+                    Source = ("VIPM files-installed ({0})" -f $indexPath)
+                }
+            }
+        }
+    }
+
+    return $candidates
+}
+
+function Resolve-LUnitOperationDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWCliPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$LabVIEWNumericVersion
+    )
+
+    $sourceTrail = New-Object System.Collections.Generic.List[string]
+    $defaultOperationRoot = Join-Path -Path (Split-Path -Path $LabVIEWCliPath -Parent) -ChildPath 'Operations'
+    $specificEnvName = "LVIE_LUNIT_OPERATION_DIR_{0}" -f $Bitness
+    $specificEnvValue = [Environment]::GetEnvironmentVariable($specificEnvName)
+    $genericEnvValue = [Environment]::GetEnvironmentVariable('LVIE_LUNIT_OPERATION_DIR')
+
+    $specific = Resolve-LUnitOperationRootFromPath -CandidatePath $specificEnvValue -Source ('$env:{0}' -f $specificEnvName) -WarnWhenMissing
+    if ($specific) {
+        return [pscustomobject]@{
+            Found                            = $true
+            OperationRoot                    = $specific.OperationRoot
+            Source                           = $specific.Source
+            RequiresAdditionalOperationDirectory = -not ($specific.OperationRoot.Equals($defaultOperationRoot, [System.StringComparison]::OrdinalIgnoreCase))
+            SourceTrail                      = @($sourceTrail)
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($specificEnvValue)) {
+        $sourceTrail.Add(('$env:{0}={1}' -f $specificEnvName, $specificEnvValue))
+    }
+
+    $generic = Resolve-LUnitOperationRootFromPath -CandidatePath $genericEnvValue -Source '$env:LVIE_LUNIT_OPERATION_DIR' -WarnWhenMissing
+    if ($generic) {
+        return [pscustomobject]@{
+            Found                            = $true
+            OperationRoot                    = $generic.OperationRoot
+            Source                           = $generic.Source
+            RequiresAdditionalOperationDirectory = -not ($generic.OperationRoot.Equals($defaultOperationRoot, [System.StringComparison]::OrdinalIgnoreCase))
+            SourceTrail                      = @($sourceTrail)
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($genericEnvValue)) {
+        $sourceTrail.Add(('$env:LVIE_LUNIT_OPERATION_DIR={0}' -f $genericEnvValue))
+    }
+
+    $defaultCandidate = Resolve-LUnitOperationRootFromPath -CandidatePath $defaultOperationRoot -Source 'default LabVIEW CLI Operations directory'
+    if ($defaultCandidate) {
+        return [pscustomobject]@{
+            Found                            = $true
+            OperationRoot                    = $defaultCandidate.OperationRoot
+            Source                           = $defaultCandidate.Source
+            RequiresAdditionalOperationDirectory = $false
+            SourceTrail                      = @($sourceTrail)
+        }
+    }
+    $sourceTrail.Add($defaultOperationRoot)
+
+    $vipmCandidates = Get-LUnitOperationRootsFromVipmIndex -LabVIEWNumericVersion $LabVIEWNumericVersion -Bitness $Bitness
+    foreach ($candidate in $vipmCandidates) {
+        $resolved = Resolve-LUnitOperationRootFromPath -CandidatePath $candidate.Path -Source $candidate.Source
+        if ($resolved) {
+            return [pscustomobject]@{
+                Found                            = $true
+                OperationRoot                    = $resolved.OperationRoot
+                Source                           = $resolved.Source
+                RequiresAdditionalOperationDirectory = -not ($resolved.OperationRoot.Equals($defaultOperationRoot, [System.StringComparison]::OrdinalIgnoreCase))
+                SourceTrail                      = @($sourceTrail)
+            }
+        }
+        $sourceTrail.Add(('{0}: {1}' -f $candidate.Source, $candidate.Path))
+    }
+
+    return [pscustomobject]@{
+        Found                            = $false
+        OperationRoot                    = $null
+        Source                           = 'not-found'
+        RequiresAdditionalOperationDirectory = $false
+        SourceTrail                      = @($sourceTrail)
+    }
+}
+
 function Invoke-LUnitLabVIEWCli {
     param(
         [Parameter(Mandatory = $true)]
@@ -595,7 +830,11 @@ function Invoke-LUnitLabVIEWCli {
         [string]$ProjectPath,
 
         [Parameter(Mandatory = $true)]
-        [string]$ReportPath
+        [string]$ReportPath,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$AdditionalOperationDirectory
     )
 
     Write-Host "`nExecuting LabVIEWCLI LUnit operation..."
@@ -615,6 +854,10 @@ function Invoke-LUnitLabVIEWCli {
             '-ProjectPath', "$ProjectPath",
             '-ReportPath', "$ReportPath"
         )
+        if (-not [string]::IsNullOrWhiteSpace($AdditionalOperationDirectory)) {
+            Write-Host ("AdditionalOperationDirectory: {0}" -f $AdditionalOperationDirectory)
+            $labviewCliArgs += @('-AdditionalOperationDirectory', $AdditionalOperationDirectory)
+        }
         & $LabVIEWCliPath @labviewCliArgs
         $exitCode = $LASTEXITCODE
     }
@@ -686,6 +929,36 @@ function Invoke-LUnitGcli {
     }
 }
 
+function Resolve-LUnitBackendMode {
+    $rawBackendMode = [Environment]::GetEnvironmentVariable('LVIE_LUNIT_BACKEND')
+    if (-not [string]::IsNullOrWhiteSpace($rawBackendMode)) {
+        $normalizedBackendMode = $rawBackendMode.Trim().ToLowerInvariant()
+        if (@('labviewcli', 'gcli') -contains $normalizedBackendMode) {
+            return [pscustomobject]@{
+                Mode   = $normalizedBackendMode
+                Source = '$env:LVIE_LUNIT_BACKEND'
+            }
+        }
+        Write-Warning ("Ignoring invalid LVIE_LUNIT_BACKEND value '{0}'. Expected 'labviewcli' or 'gcli'." -f $rawBackendMode)
+    }
+
+    $forceGcliRaw = [Environment]::GetEnvironmentVariable('LVIE_FORCE_GCLI_LUNIT')
+    if (-not [string]::IsNullOrWhiteSpace($forceGcliRaw)) {
+        $normalizedForceGcli = $forceGcliRaw.Trim().ToLowerInvariant()
+        if (@('1', 'true', 'yes', 'y', 'on') -contains $normalizedForceGcli) {
+            return [pscustomobject]@{
+                Mode   = 'gcli'
+                Source = '$env:LVIE_FORCE_GCLI_LUNIT'
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Mode   = 'labviewcli'
+        Source = 'default:labviewcli'
+    }
+}
+
 # ------------------------  MAIN SEQUENCE  ----------------------
 function MainSequence {
     Write-Host "`n=== MainSequence ==="
@@ -699,7 +972,7 @@ function MainSequence {
     }
 
     if ($ConnectTimeoutMs -gt 0) {
-        Write-Host ("ConnectTimeoutMs={0} is accepted for compatibility and used only when g-cli fallback is enabled." -f $ConnectTimeoutMs)
+        Write-Host ("ConnectTimeoutMs={0} is accepted for compatibility and used only when g-cli execution is selected." -f $ConnectTimeoutMs)
     }
 
     $gcliFallbackEnabled = $EnableGcliFallback.IsPresent
@@ -707,6 +980,36 @@ function MainSequence {
         Write-Host "g-cli fallback is enabled."
     } else {
         Write-Host "g-cli fallback is disabled (default)."
+    }
+
+    $backendResolution = Resolve-LUnitBackendMode
+    $lunitBackendMode = $backendResolution.Mode
+    Write-Host ("LUnit backend mode: {0} (source: {1})" -f $lunitBackendMode, $backendResolution.Source)
+
+    if ($lunitBackendMode -eq 'gcli') {
+        Write-Host "Forced g-cli backend selected. Skipping LabVIEWCLI LUnit execution path."
+        $gcliResult = Invoke-LUnitGcli `
+            -LabVIEWVersionYear $labviewYear `
+            -Bitness $SupportedBitness `
+            -ProjectPath $AbsoluteProjectPath `
+            -ReportPath $ReportPath `
+            -ConnectTimeoutMs $ConnectTimeoutMs
+
+        if (-not $gcliResult.Attempted) {
+            if ($script:OriginalExitCode -eq 0) {
+                $script:OriginalExitCode = 1
+            }
+            $script:TestsHadFailures = $true
+            Write-Warning "No test execution backend is available. Install g-cli and ensure 'sas_workshops_lib_lunit_for_g_cli' is installed."
+            return
+        }
+
+        $script:OriginalExitCode = $gcliResult.ExitCode
+        if ($script:OriginalExitCode -ne 0) {
+            $script:TestsHadFailures = $true
+            Write-Warning ("g-cli LUnit execution failed (exit code {0}). Ensure 'sas_workshops_lib_lunit_for_g_cli' is installed (apply .github/actions/apply-vipc/runner_dependencies.vipc)." -f $script:OriginalExitCode)
+        }
+        return
     }
 
     $runGcliFallback = $false
@@ -758,27 +1061,59 @@ function MainSequence {
                     return
                 }
             } else {
-                $labviewCliResult = Invoke-LUnitLabVIEWCli `
-                    -LabVIEWCliPath $labviewCliCommand.Source `
-                    -LabVIEWExecutablePath $labviewExecutablePath `
-                    -PortNumber $portResolution.PortNumber `
-                    -ProjectPath $AbsoluteProjectPath `
-                    -ReportPath $ReportPath
-
-                $labviewCliAttempted = $labviewCliResult.Attempted
-                $labviewCliExitCode = $labviewCliResult.ExitCode
-                $script:OriginalExitCode = $labviewCliExitCode
-
-                if ($labviewCliExitCode -ne 0) {
-                    Write-Warning ("LabVIEWCLI LUnit execution failed (exit code {0}). Ensure 'astemes_lib_lunit_cli' is installed (apply .github/actions/apply-vipc/runner_dependencies.vipc)." -f $labviewCliExitCode)
-                    if (Test-ReportHasTestcases -Path $ReportPath) {
-                        Write-Host "LabVIEWCLI produced a usable report despite non-zero exit; g-cli fallback will not run."
+                $operationResolution = Resolve-LUnitOperationDirectory -Bitness $SupportedBitness -LabVIEWCliPath $labviewCliCommand.Source -LabVIEWNumericVersion $labviewNumericVersion
+                if (-not $operationResolution.Found) {
+                    $checkedLocations = if ($operationResolution.SourceTrail -and $operationResolution.SourceTrail.Count -gt 0) {
+                        $operationResolution.SourceTrail -join '; '
                     } else {
-                        if ($gcliFallbackEnabled) {
-                            Write-Warning "LabVIEWCLI did not produce a usable report. Falling back to g-cli."
-                            $runGcliFallback = $true
+                        'none'
+                    }
+
+                    if ($gcliFallbackEnabled) {
+                        Write-Warning ("Unable to resolve LabVIEWCLI LUnit operation directory. Checked: {0}" -f $checkedLocations)
+                        Write-Warning "Ensure 'astemes_lib_lunit_cli' is installed and provides an 'LUnit' operation folder, or set LVIE_LUNIT_OPERATION_DIR_<BITNESS>/LVIE_LUNIT_OPERATION_DIR. Falling back to g-cli."
+                        $runGcliFallback = $true
+                    } else {
+                        $script:OriginalExitCode = 1
+                        $script:TestsHadFailures = $true
+                        Write-Warning ("Unable to resolve LabVIEWCLI LUnit operation directory. Checked: {0}" -f $checkedLocations)
+                        Write-Warning "Ensure 'astemes_lib_lunit_cli' is installed and provides an 'LUnit' operation folder, or set LVIE_LUNIT_OPERATION_DIR_<BITNESS>/LVIE_LUNIT_OPERATION_DIR."
+                        Write-Warning "g-cli fallback is disabled. Re-run with -EnableGcliFallback to allow fallback."
+                        return
+                    }
+                } else {
+                    Write-Host ("LUnit operation root: {0} (source: {1})" -f $operationResolution.OperationRoot, $operationResolution.Source)
+                }
+
+                if (-not $runGcliFallback) {
+                    $additionalOperationDirectory = $null
+                    if ($operationResolution.RequiresAdditionalOperationDirectory) {
+                        $additionalOperationDirectory = $operationResolution.OperationRoot
+                    }
+
+                    $labviewCliResult = Invoke-LUnitLabVIEWCli `
+                        -LabVIEWCliPath $labviewCliCommand.Source `
+                        -LabVIEWExecutablePath $labviewExecutablePath `
+                        -PortNumber $portResolution.PortNumber `
+                        -ProjectPath $AbsoluteProjectPath `
+                        -ReportPath $ReportPath `
+                        -AdditionalOperationDirectory $additionalOperationDirectory
+
+                    $labviewCliAttempted = $labviewCliResult.Attempted
+                    $labviewCliExitCode = $labviewCliResult.ExitCode
+                    $script:OriginalExitCode = $labviewCliExitCode
+
+                    if ($labviewCliExitCode -ne 0) {
+                        Write-Warning ("LabVIEWCLI LUnit execution failed (exit code {0}). Ensure 'astemes_lib_lunit_cli' is installed (apply .github/actions/apply-vipc/runner_dependencies.vipc)." -f $labviewCliExitCode)
+                        if (Test-ReportHasTestcases -Path $ReportPath) {
+                            Write-Host "LabVIEWCLI produced a usable report despite non-zero exit; g-cli fallback will not run."
                         } else {
-                            Write-Warning "LabVIEWCLI did not produce a usable report and g-cli fallback is disabled."
+                            if ($gcliFallbackEnabled) {
+                                Write-Warning "LabVIEWCLI did not produce a usable report. Falling back to g-cli."
+                                $runGcliFallback = $true
+                            } else {
+                                Write-Warning "LabVIEWCLI did not produce a usable report and g-cli fallback is disabled."
+                            }
                         }
                     }
                 }

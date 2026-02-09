@@ -65,6 +65,11 @@ on:
         required: false
         default: false
         type: boolean
+      force_gcli_lunit:
+        description: "Force g-cli as the primary LUnit backend for unit-test jobs"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   run-metadata:
@@ -826,9 +831,62 @@ jobs:
         with:
           cleanup_worktree: 'false'
 
+  devmode-no-labview-smoke:
+    name: DevMode.NoLabVIEW Smoke (LV ${{ matrix.bitness }}-bit)
+    needs: [run-metadata, version-gate, apply-deps-2021-x86]
+    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
+    env:
+      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
+      LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
+      LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
+      LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        bitness: ["64", "32"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Job setup
+        uses: ./.github/actions/lvie-job-setup
+        with:
+          checkout: 'false'
+          bitness: ${{ matrix.bitness }}
+          create_worktree: 'true'
+          worktree_root_mode: runner_temp
+      - name: Run DevMode.NoLabVIEW smoke (LV ${{ matrix.bitness }}-bit)
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & ".\Tooling\Invoke-DevModeNoLabVIEWSmoke.ps1" `
+            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
+            -LabVIEWBitness ${{ matrix.bitness }} `
+            -DevModeNoLabVIEWSmokeDepth full `
+            -ConnectTimeoutMs 180000 `
+            -ProcessTimeoutMs 300000 `
+            -RepoRoot "$env:REPO_ROOT"
+      - name: Upload DevMode.NoLabVIEW smoke artifacts (LV ${{ matrix.bitness }}-bit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devmode-no-labview-smoke-${{ matrix.bitness }}-bit
+          path: ${{ env.REPO_ROOT }}/TestResults/devmode-no-labview-smoke
+          if-no-files-found: warn
+      - name: Job teardown
+        if: always()
+        uses: ./.github/actions/lvie-job-teardown
+        with:
+          revert_dev_mode: 'true'
+          revert_bitness: ${{ matrix.bitness }}
+          close_labview: 'true'
+          close_bitness: ${{ matrix.bitness }}
+
   missing-in-project:
     name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
-    needs: [run-metadata, version-gate, apply-deps-2021-x86]
+    needs: [run-metadata, version-gate, apply-deps-2021-x86, devmode-no-labview-smoke]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -952,10 +1010,29 @@ jobs:
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
+          $backendMode = 'labviewcli'
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ github.event.inputs.force_gcli_lunit }}' -eq 'true') {
+            $backendMode = 'gcli'
+          }
+          "LVIE_LUNIT_BACKEND=$backendMode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $env:LVIE_LUNIT_BACKEND = $backendMode
+          Write-Host ("LUnit backend mode for unit-tests job: {0}" -f $env:LVIE_LUNIT_BACKEND)
+
           & ".github/actions/run-unit-tests/RunUnitTests.ps1" `
             -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
             -SupportedBitness ${{ matrix.bitness }} `
             -ProjectPath "$env:PROJECT_PATH"
+      - name: Summarize unit-test backend mode
+        if: always()
+        shell: pwsh
+        run: |
+          $effectiveBackend = $env:LVIE_LUNIT_BACKEND
+          if ([string]::IsNullOrWhiteSpace($effectiveBackend)) {
+            Write-Warning 'LVIE_LUNIT_BACKEND is not set for this unit-tests job; reporting backend mode as unknown.'
+            $effectiveBackend = 'unknown'
+          }
+          $summaryLine = "- Unit Tests (LV {0}-bit): LUnit backend mode = {1}" -f '${{ matrix.bitness }}', $effectiveBackend
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summaryLine
       - name: Upload unit test report (LV ${{ matrix.bitness }}-bit)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -1559,6 +1636,7 @@ jobs:
       - changes
       - apply-deps-lv-x64
       - apply-deps-2021-x86
+      - devmode-no-labview-smoke
       - missing-in-project
       - unit-tests
       - build-ppl-x64
@@ -1589,6 +1667,7 @@ jobs:
             'changes',
             'apply-deps-lv-x64',
             'apply-deps-2021-x86',
+            'devmode-no-labview-smoke',
             'missing-in-project',
             'unit-tests',
             'build-ppl-x64',
