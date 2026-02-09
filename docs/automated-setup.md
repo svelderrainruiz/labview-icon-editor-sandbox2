@@ -26,7 +26,8 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 - **Prerequisites**:
   1. **LabVIEW 2021 (21.0), both 32-bit and 64-bit**.
   2. **PowerShell 7+** and **Git**.  
-  3. **Apply** `.github\actions\apply-vipc\runner_dependencies.vipc` to **LabVIEW 2021 (21.0), 32-bit & 64-bit**—matching the `apply-deps` matrix in [`../.github/workflows/ci-composite.yml`](../.github/workflows/ci-composite.yml).
+   3. **GitKraken CLI (`gk`)** on PATH (tooling routes git calls through it).
+   4. **Apply** `.github\actions\apply-vipc\runner_dependencies.vipc` to **LabVIEW 2021 (21.0), 32-bit & 64-bit**—matching the `apply-deps` matrix in [`../.github/workflows/ci-composite.yml`](../.github/workflows/ci-composite.yml).
 
 ---
 

@@ -45,6 +45,9 @@ Related config:
 
 ## Local GitHub Auth and Fork Remotes
 
+Tooling expects GitKraken CLI (`gk`) to be available and routes git calls through it.
+If `gk` is missing, scripts will fail fast.
+
 Some tooling fetches GitHub artifacts or queries workflow runs. Configure auth and ensure your fork remotes are correct.
 
 Auth options (either works):
