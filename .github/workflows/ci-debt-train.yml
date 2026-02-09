@@ -29,6 +29,8 @@ jobs:
   analyze:
     name: Analyze CI Debt Run
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
