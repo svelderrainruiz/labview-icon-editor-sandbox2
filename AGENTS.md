@@ -13,9 +13,69 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 - Open a PowerShell terminal at the repo root.
 - Confirm `g-cli` is available:
   - `g-cli --version`
-- If you need to open a PR from the current branch, use:
-  - `pwsh -NoProfile -File .\Tooling\Open-PullRequest.ps1 -BaseBranch develop -OpenInBrowser`
-  - Add `-RequireCleanWorktree` to enforce a clean git status before creating the PR.
+- If you need to open a PR from the current branch, use `gh`:
+  - Default template: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  - Draft PR: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md --draft`
+
+## GitHub Templates and Labels
+- Use issue templates with `gh` (preferred):
+  - Bug report: `gh issue create --template "Bug Report"`
+  - Feature request: `gh issue create --template "Feature request"`
+- Use PR templates with `gh`:
+  - Generic: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  - Bug fix: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
+  - Feature addition: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
+  - Documentation update: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
+  - Infrastructure change: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
+- Web fallback links:
+  - Issues: `https://github.com/ni/labview-icon-editor/issues/new/choose`
+  - Bug form: `https://github.com/ni/labview-icon-editor/issues/new?template=bug_report.yml`
+  - Feature form: `https://github.com/ni/labview-icon-editor/issues/new?template=feature_request.yml`
+  - PR page: `https://github.com/ni/labview-icon-editor/compare`
+
+Label policy:
+- Canonical release labels:
+  - `Version Increment: Major`
+  - `Version Increment: Minor`
+  - `Version Increment: Patch`
+- Canonical issue-type labels:
+  - `Issue group: Bug`
+  - `Type: Enhancement`
+- Compatibility aliases are accepted for two release cycles:
+  - `major` -> `Version Increment: Major`
+  - `minor` -> `Version Increment: Minor`
+  - `patch` -> `Version Increment: Patch`
+  - `bug` -> `Issue group: Bug`
+  - `enhancement` -> `Type: Enhancement`
+- Sync labels from contract (manual workflow):
+  - Dry run: `gh workflow run labels-sync.yml -f dry_run=true -f include_aliases=true`
+  - Apply: `gh workflow run labels-sync.yml -f dry_run=false -f include_aliases=true`
+
+Stale issue policy:
+- Workflow: `.github/workflows/stale-issues.yml`
+- Scope: issues only (PR stale automation is disabled)
+- Thresholds: mark stale at 45 days, auto-close at 14 additional inactive days
+- Exempt labels:
+  - `Workflow: Actively discussing`
+  - `Workflow: NI Approves`
+  - `Workflow: Requires R&D clarification`
+  - `Workflow: Open to contribution`
+  - `Issue group: Added to agenda`
+  - `good first issue`
+- Manual stale candidate query:
+  - ```
+    $cutoff = (Get-Date).AddDays(-45).ToString('yyyy-MM-dd')
+    $query = @(
+      "updated:<$cutoff"
+      '-label:"Workflow: Actively discussing"'
+      '-label:"Workflow: NI Approves"'
+      '-label:"Workflow: Requires R&D clarification"'
+      '-label:"Workflow: Open to contribution"'
+      '-label:"Issue group: Added to agenda"'
+      '-label:"good first issue"'
+    ) -join ' '
+    gh issue list --state open --search $query --limit 200
+    ```
 
 ## pylavi / vi_validate gate
 - The local CI parity run includes a fast LabVIEW file validation step powered by `pylavi` (`vi_validate`) and runs **before** any g-cli/LabVIEW work.

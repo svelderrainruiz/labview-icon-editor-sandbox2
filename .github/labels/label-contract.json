@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "canonical_default": true,
+  "alias_policy": {
+    "window": "two-releases",
+    "remove_after_releases": 2,
+    "notes": "Canonical labels are the default immediately. Alias labels remain supported for two release cycles."
+  },
+  "labels": [
+    {
+      "name": "Version Increment: Major",
+      "color": "f9d0c4",
+      "description": "Change that requires a major semantic version increment, such as breaking API changes.",
+      "category": "release_increment",
+      "status": "canonical",
+      "aliases": [
+        "major"
+      ]
+    },
+    {
+      "name": "Version Increment: Minor",
+      "color": "7242c6",
+      "description": "Change that requires a minor semantic version increment, including non-breaking features.",
+      "category": "release_increment",
+      "status": "canonical",
+      "aliases": [
+        "minor"
+      ]
+    },
+    {
+      "name": "Version Increment: Patch",
+      "color": "6ec2fb",
+      "description": "Change that requires a patch semantic version increment, typically minor bug fixes.",
+      "category": "release_increment",
+      "status": "canonical",
+      "aliases": [
+        "patch"
+      ]
+    },
+    {
+      "name": "Issue group: Bug",
+      "color": "b60205",
+      "description": "Issue that covers a bug.",
+      "category": "issue_type",
+      "status": "canonical",
+      "aliases": [
+        "bug"
+      ]
+    },
+    {
+      "name": "Type: Enhancement",
+      "color": "a2eeef",
+      "description": "New feature or request.",
+      "category": "issue_type",
+      "status": "canonical",
+      "aliases": [
+        "enhancement"
+      ]
+    },
+    {
+      "name": "Workflow: Stale",
+      "color": "fbca04",
+      "description": "Automatically applied to inactive issues pending auto-close.",
+      "category": "workflow",
+      "status": "canonical",
+      "aliases": []
+    }
+  ],
+  "aliases": [
+    {
+      "name": "major",
+      "color": "f9d0c4",
+      "description": "Compatibility alias for Version Increment: Major (deprecated after two release cycles).",
+      "category": "release_increment",
+      "status": "alias",
+      "canonical_name": "Version Increment: Major"
+    },
+    {
+      "name": "minor",
+      "color": "7242c6",
+      "description": "Compatibility alias for Version Increment: Minor (deprecated after two release cycles).",
+      "category": "release_increment",
+      "status": "alias",
+      "canonical_name": "Version Increment: Minor"
+    },
+    {
+      "name": "patch",
+      "color": "6ec2fb",
+      "description": "Compatibility alias for Version Increment: Patch (deprecated after two release cycles).",
+      "category": "release_increment",
+      "status": "alias",
+      "canonical_name": "Version Increment: Patch"
+    },
+    {
+      "name": "bug",
+      "color": "b60205",
+      "description": "Compatibility alias for Issue group: Bug (deprecated after two release cycles).",
+      "category": "issue_type",
+      "status": "alias",
+      "canonical_name": "Issue group: Bug"
+    },
+    {
+      "name": "enhancement",
+      "color": "a2eeef",
+      "description": "Compatibility alias for Type: Enhancement (deprecated after two release cycles).",
+      "category": "issue_type",
+      "status": "alias",
+      "canonical_name": "Type: Enhancement"
+    }
+  ]
+}

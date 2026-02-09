@@ -14,6 +14,10 @@
 - [ ] CI policy/gates/concurrency
 - [ ] Other (describe):
 
+## Version Increment Label
+- [ ] Exactly one canonical release label is applied (`Version Increment: Major`, `Version Increment: Minor`, or `Version Increment: Patch`)
+- [ ] Compatibility aliases are accepted during migration (`major`, `minor`, `patch`) and will be deprecated after two release cycles
+
 ## Risk and Impact
 - Risk level: [ ] Low [ ] Medium [ ] High
 - Primary failure mode(s):
