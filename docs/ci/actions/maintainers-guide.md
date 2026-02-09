@@ -87,8 +87,9 @@ Debug-only/manual validation:
 - Alias retirement is documented but not auto-enforced in this phase.
 - Use `labels-sync.yml` to create/update contract labels from
   `.github/labels/label-contract.json`.
-- For fork operations, pin `gh` to `svelderrainruiz/labview-icon-editor` (or set
-  `GH_REPO`) so metadata commands do not target upstream.
+- Resolve the repository for `gh` commands:
+  - `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+  - `GH_REPO` is optional override when maintainers need to target a specific repo.
 
 ## Label Metadata Automation
 
