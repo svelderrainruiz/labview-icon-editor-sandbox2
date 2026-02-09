@@ -1762,14 +1762,28 @@ try {
 
         foreach ($bitness in $bitnessList) {
             Invoke-Checked -Label ("DevMode.NoLabVIEW smoke ({0}-bit, depth={1})" -f $bitness, $DevModeNoLabVIEWSmokeDepth) -Action {
-                & $smokeScript `
-                    -LabVIEWVersion $LabVIEWVersion `
-                    -LabVIEWBitness $bitness `
-                    -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
-                    -ConnectTimeoutMs $ConnectTimeoutMs `
-                    -ProcessTimeoutMs $ProcessTimeoutMs `
-                    -RepoRoot $repoRoot `
-                    -SkipWorktreeRootCheck:$SkipWorktreeRootCheck
+                $previousLunitBackend = $env:LVIE_LUNIT_BACKEND
+                try {
+                    if ($ForceGcliLunit) {
+                        $env:LVIE_LUNIT_BACKEND = 'gcli'
+                        Write-Host "LUnit backend override for DevMode.NoLabVIEW smoke: gcli"
+                    }
+                    & $smokeScript `
+                        -LabVIEWVersion $LabVIEWVersion `
+                        -LabVIEWBitness $bitness `
+                        -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
+                        -ConnectTimeoutMs $ConnectTimeoutMs `
+                        -ProcessTimeoutMs $ProcessTimeoutMs `
+                        -RepoRoot $repoRoot `
+                        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck
+                }
+                finally {
+                    if ($null -eq $previousLunitBackend) {
+                        Remove-Item Env:LVIE_LUNIT_BACKEND -ErrorAction SilentlyContinue
+                    } else {
+                        $env:LVIE_LUNIT_BACKEND = $previousLunitBackend
+                    }
+                }
             }
 
             $smokeOutput = Join-Path $repoRoot 'TestResults\devmode-no-labview-smoke'

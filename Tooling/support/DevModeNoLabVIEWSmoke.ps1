@@ -61,6 +61,153 @@ function Get-DevModeNoLabVIEWSmokeSuite {
     }
 }
 
+function Resolve-BoolFromEnvValue {
+    [CmdletBinding()]
+    param(
+        [string]$Name,
+        [bool]$Default = $false
+    )
+
+    if (-not (Test-Path "Env:$Name")) {
+        return $Default
+    }
+
+    $raw = (Get-Item "Env:$Name").Value
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        return $Default
+    }
+
+    $normalized = $raw.Trim().ToLowerInvariant()
+    return ($normalized -notin @('0', 'false', 'no', 'off'))
+}
+
+function Get-LabVIEWInstallRootForSmoke {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness
+    )
+
+    $candidates = @()
+    $regPaths = @()
+    if ($Bitness -eq '32') {
+        $candidates += "C:\Program Files (x86)\National Instruments\LabVIEW $Version"
+        $regPaths += "HKLM:\SOFTWARE\WOW6432Node\National Instruments\LabVIEW $Version"
+    } else {
+        $candidates += "C:\Program Files\National Instruments\LabVIEW $Version"
+        $regPaths += "HKLM:\SOFTWARE\National Instruments\LabVIEW $Version"
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -Path $candidate) {
+            return $candidate
+        }
+    }
+
+    foreach ($regPath in $regPaths) {
+        try {
+            $props = Get-ItemProperty -Path $regPath -ErrorAction Stop
+            foreach ($name in @('Path', 'InstallDir', 'InstallPath')) {
+                $value = $props.$name
+                if (-not [string]::IsNullOrWhiteSpace($value) -and (Test-Path -Path $value)) {
+                    return $value
+                }
+            }
+        } catch {
+            continue
+        }
+    }
+
+    return $null
+}
+
+function Test-SmokeDirectoryWriteAccess {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -Path $Path -PathType Container)) {
+        return $false
+    }
+
+    $probe = Join-Path $Path ("lvie-smoke-write-probe-{0}.tmp" -f ([guid]::NewGuid().ToString('N')))
+    try {
+        New-Item -Path $probe -ItemType File -Force | Out-Null
+        Remove-Item -Path $probe -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Resolve-DevModeNoLabVIEWSmokeSuiteForBitness {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('minimal', 'balanced', 'full')]
+        [string]$Depth,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWVersion,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness
+    )
+
+    $requestedSuite = Get-DevModeNoLabVIEWSmokeSuite -Depth $Depth
+    $allowAclDowngrade = Resolve-BoolFromEnvValue -Name 'LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE' -Default (Resolve-BoolFromEnvValue -Name 'LVIE_RUNNER_ACL_WARN_ONLY' -Default $false)
+
+    $installRoot = Get-LabVIEWInstallRootForSmoke -Version $LabVIEWVersion -Bitness $Bitness
+    $iconApiDir = $null
+    $canWriteIconApi = $true
+    if (-not [string]::IsNullOrWhiteSpace($installRoot)) {
+        $iconApiDir = Join-Path $installRoot 'vi.lib\LabVIEW Icon API'
+        if (Test-Path -Path $iconApiDir -PathType Container) {
+            $canWriteIconApi = Test-SmokeDirectoryWriteAccess -Path $iconApiDir
+        }
+    }
+
+    if ($Depth -eq 'minimal' -or $canWriteIconApi) {
+        return [pscustomobject]@{
+            RequestedDepth = $Depth
+            EffectiveDepth = $requestedSuite.Depth
+            Suite          = $requestedSuite
+            AccessPath     = $iconApiDir
+            AccessWritable = $canWriteIconApi
+            AccessReason   = $null
+            Downgraded     = $false
+        }
+    }
+
+    $message = if ($iconApiDir) {
+        "No write access to '$iconApiDir'."
+    } else {
+        "LabVIEW $LabVIEWVersion ($Bitness-bit) install root not found."
+    }
+
+    if (-not $allowAclDowngrade) {
+        throw ("DevMode.NoLabVIEW smoke cannot run at depth '{0}' for {1}-bit. {2} Set LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE=1 to allow minimal-depth fallback." -f $Depth, $Bitness, $message)
+    }
+
+    $minimalSuite = Get-DevModeNoLabVIEWSmokeSuite -Depth 'minimal'
+    return [pscustomobject]@{
+        RequestedDepth = $Depth
+        EffectiveDepth = $minimalSuite.Depth
+        Suite          = $minimalSuite
+        AccessPath     = $iconApiDir
+        AccessWritable = $canWriteIconApi
+        AccessReason   = $message
+        Downgraded     = $true
+    }
+}
+
 function Test-DevModeNoLabVIEWSmokeCoverage {
     [CmdletBinding()]
     param(

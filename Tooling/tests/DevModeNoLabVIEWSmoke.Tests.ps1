@@ -109,3 +109,63 @@ Describe 'Assert-DevModeNoLabVIEWProjectFileClean' {
         } | Should -Throw "'lv_icon_editor.lvproj' must be clean before smoke/parity. Clear it, then rerun."
     }
 }
+
+Describe 'Resolve-DevModeNoLabVIEWSmokeSuiteForBitness' {
+    BeforeEach {
+        $script:prevAclDowngrade = $env:LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE
+        $script:prevWarnOnly = $env:LVIE_RUNNER_ACL_WARN_ONLY
+    }
+
+    AfterEach {
+        if ($null -eq $script:prevAclDowngrade) {
+            Remove-Item Env:LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE -ErrorAction SilentlyContinue
+        } else {
+            $env:LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE = $script:prevAclDowngrade
+        }
+        if ($null -eq $script:prevWarnOnly) {
+            Remove-Item Env:LVIE_RUNNER_ACL_WARN_ONLY -ErrorAction SilentlyContinue
+        } else {
+            $env:LVIE_RUNNER_ACL_WARN_ONLY = $script:prevWarnOnly
+        }
+    }
+
+    It 'keeps requested depth when install path is writable' {
+        Mock Get-LabVIEWInstallRootForSmoke { 'C:\LabVIEW 2021' }
+        Mock Test-Path { $true } -ParameterFilter { $Path -like '*LabVIEW Icon API*' -and $PathType -eq 'Container' }
+        Mock Test-SmokeDirectoryWriteAccess { $true }
+
+        $resolved = Resolve-DevModeNoLabVIEWSmokeSuiteForBitness -Depth full -LabVIEWVersion '2021' -Bitness '32'
+
+        $resolved.RequestedDepth | Should -Be 'full'
+        $resolved.EffectiveDepth | Should -Be 'full'
+        $resolved.Downgraded | Should -BeFalse
+        $resolved.AccessWritable | Should -BeTrue
+    }
+
+    It 'downgrades to minimal when install path is not writable and policy allows downgrade' {
+        $env:LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE = '1'
+        Mock Get-LabVIEWInstallRootForSmoke { 'C:\LabVIEW 2021' }
+        Mock Test-Path { $true } -ParameterFilter { $Path -like '*LabVIEW Icon API*' -and $PathType -eq 'Container' }
+        Mock Test-SmokeDirectoryWriteAccess { $false }
+
+        $resolved = Resolve-DevModeNoLabVIEWSmokeSuiteForBitness -Depth full -LabVIEWVersion '2021' -Bitness '32'
+
+        $resolved.RequestedDepth | Should -Be 'full'
+        $resolved.EffectiveDepth | Should -Be 'minimal'
+        $resolved.Downgraded | Should -BeTrue
+        $resolved.AccessWritable | Should -BeFalse
+        $resolved.AccessReason | Should -Match 'No write access'
+    }
+
+    It 'throws when install path is not writable and downgrade policy is disabled' {
+        $env:LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE = '0'
+        $env:LVIE_RUNNER_ACL_WARN_ONLY = '0'
+        Mock Get-LabVIEWInstallRootForSmoke { 'C:\LabVIEW 2021' }
+        Mock Test-Path { $true } -ParameterFilter { $Path -like '*LabVIEW Icon API*' -and $PathType -eq 'Container' }
+        Mock Test-SmokeDirectoryWriteAccess { $false }
+
+        {
+            Resolve-DevModeNoLabVIEWSmokeSuiteForBitness -Depth full -LabVIEWVersion '2021' -Bitness '32'
+        } | Should -Throw '*Set LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE=1*'
+    }
+}
