@@ -48,6 +48,13 @@ Common entrypoints:
   Example: `runner-cli pylavi summarize --repo-root .`  
   Example: `runner-cli pylavi fetch --repo <owner/name> --branch develop`
   Example (baseline delta): `runner-cli pylavi summarize --path TestResults/agent-logs/pylavi-offenders.latest.json --baseline Tooling/pylavi/pylavi-offenders.baseline.json --fail-on-delta`
+- `agents/ci-debt/Invoke-CiDebtAnalysis.ps1`
+  Analyzes failed GitHub Actions runs and maps incidents to deterministic signatures for Issue #74 remediation.
+  Example: `pwsh -NoProfile -File .\\Tooling\\agents\\ci-debt\\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
+  Fixture-only example: `pwsh -NoProfile -File .\\Tooling\\agents\\ci-debt\\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FixturePath .\\Tooling\\agents\\ci-debt\\fixtures\\run-21840801109.json`
+  Signatures and playbook:
+  - `Tooling/agents/ci-debt/signatures.json`
+  - `Tooling/agents/ci-debt/playbook.md`
 
 Related config:
 - `pylavi/vi-validate.yml`  

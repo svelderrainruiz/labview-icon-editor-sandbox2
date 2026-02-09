@@ -636,18 +636,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Initialize VerifyIEPaths archive folder
+        shell: pwsh
+        run: |
+          New-Item -Path "$env:RUNNER_TEMP\\verify-iepaths" -ItemType Directory -Force | Out-Null
       - name: Job setup
+        id: job_setup
         uses: ./.github/actions/lvie-job-setup
         with:
           checkout: 'false'
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Initialize VerifyIEPaths archive folder
+      - name: Re-initialize VerifyIEPaths archive folder
         shell: pwsh
         run: |
           New-Item -Path "$env:RUNNER_TEMP\\verify-iepaths" -ItemType Directory -Force | Out-Null
       - name: Verify IE Paths (LV ${{ matrix.bitness }}-bit)
+        id: verify_ie_paths
         shell: pwsh
         run: |
           pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:REPO_ROOT\\Tooling\\Invoke-MissingIEFilesFromLVInstall.ps1" `
@@ -660,12 +666,74 @@ jobs:
             -StatusFileArchiveDirectory "$env:RUNNER_TEMP\\verify-iepaths" `
             -EnableDevModeNoLabVIEW `
             -AutoRevertIfEnabled
-      - name: Upload VerifyIEPaths status (on failure)
-        if: failure()
+      - name: Capture VerifyIEPaths diagnostics
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          $archiveRoot = Join-Path $env:RUNNER_TEMP 'verify-iepaths'
+          New-Item -Path $archiveRoot -ItemType Directory -Force | Out-Null
+
+          $jobSetupOutcome = '${{ steps.job_setup.outcome }}'
+          $verifyOutcome = '${{ steps.verify_ie_paths.outcome }}'
+          $classification = ''
+          $summary = ''
+          $hints = New-Object System.Collections.Generic.List[string]
+
+          if ($jobSetupOutcome -ne 'success') {
+            $classification = 'setup-failure'
+            $summary = 'lvie-job-setup failed before Verify IE Paths executed.'
+            if ([string]::IsNullOrWhiteSpace($env:REPO_ROOT)) {
+              $hints.Add('REPO_ROOT was not exported by job setup.') | Out-Null
+            }
+            if (-not (Get-Command gk -ErrorAction SilentlyContinue)) {
+              $hints.Add("GitKraken CLI 'gk' was not detected on PATH.") | Out-Null
+            }
+            if (-not (Test-Path (Join-Path $env:GITHUB_WORKSPACE 'Tooling\\New-CIWorktreeForJob.ps1'))) {
+              $hints.Add('Tooling\\New-CIWorktreeForJob.ps1 was not found.') | Out-Null
+            }
+          } elseif ($verifyOutcome -eq 'failure') {
+            $classification = 'verify-iepaths-failure'
+            $summary = 'Verify IE Paths execution failed after successful job setup.'
+          } else {
+            $classification = 'no-diagnostics-required'
+            $summary = 'No setup or Verify IE Paths failure detected.'
+          }
+
+          $diagnostic = [ordered]@{
+            classification = $classification
+            summary = $summary
+            bitness = '${{ matrix.bitness }}'
+            run_id = '${{ github.run_id }}'
+            run_attempt = '${{ github.run_attempt }}'
+            repository = '${{ github.repository }}'
+            workflow = '${{ github.workflow }}'
+            job_setup_outcome = $jobSetupOutcome
+            verify_ie_paths_outcome = $verifyOutcome
+            repo_root = $env:REPO_ROOT
+            hints = @($hints)
+            captured_utc = (Get-Date).ToUniversalTime().ToString('o')
+          }
+
+          $diagnosticPath = Join-Path $archiveRoot ("verify-iepaths-diagnostics-{0}-bit.json" -f '${{ matrix.bitness }}')
+          $diagnostic | ConvertTo-Json -Depth 8 | Out-File -FilePath $diagnosticPath -Encoding utf8
+          Write-Host ("Wrote Verify IE Paths diagnostics: {0}" -f $diagnosticPath)
+
+          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+            @(
+              "### Verify IE Paths diagnostics (${{ matrix.bitness }}-bit)"
+              "- Classification: $classification"
+              "- Job setup outcome: $jobSetupOutcome"
+              "- Verify step outcome: $verifyOutcome"
+              "- Summary: $summary"
+            ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+      - name: Upload VerifyIEPaths status and diagnostics
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: verify-iepaths-${{ matrix.bitness }}-bit
           path: ${{ runner.temp }}\verify-iepaths
+          if-no-files-found: warn
       - name: Job teardown
         if: always()
         uses: ./.github/actions/lvie-job-teardown
@@ -2034,7 +2102,9 @@ jobs:
           }
           $needs = ConvertFrom-Json -InputObject '${{ toJson(needs) }}'
           $needsProps = $needs.PSObject.Properties
-          $failed = @()
+          $missing = @()
+          $rootCauseFailures = @()
+          $cascaded = @()
 
           $vipStatus = $null
           $vipStatusPath = Join-Path -Path $PWD -ChildPath 'vip-build-status/vip-build.json'
@@ -2046,28 +2116,54 @@ jobs:
             }
           }
 
+          function Get-JobEntryLabel {
+            param(
+              [string]$JobName,
+              [string]$Result,
+              [object]$VipStatusObject
+            )
+
+            if ($JobName -eq 'build-vip' -and $VipStatusObject) {
+              $label = if ($VipStatusObject.reason) { $VipStatusObject.reason } elseif ($VipStatusObject.status) { $VipStatusObject.status } else { $null }
+              if ($label) {
+                return "{0}:{1} ({2})" -f $JobName, $Result, $label
+              }
+            }
+
+            return "{0}:{1}" -f $JobName, $Result
+          }
+
           foreach ($job in $required) {
             $entryProp = $needsProps[$job]
             if (-not $entryProp) {
-              $failed += "$($job):missing"
+              $missing += "$($job):missing"
               continue
             }
             $result = $entryProp.Value.result
             if ($result -ne 'success') {
-              if ($job -eq 'build-vip' -and $vipStatus) {
-                $label = if ($vipStatus.reason) { $vipStatus.reason } elseif ($vipStatus.status) { $vipStatus.status } else { $null }
-                if ($label) {
-                  $failed += "$($job):$result ($label)"
-                } else {
-                  $failed += "$($job):$result"
-                }
+              $entry = Get-JobEntryLabel -JobName $job -Result $result -VipStatusObject $vipStatus
+              if ($result -in @('failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure')) {
+                $rootCauseFailures += $entry
+              } elseif ($result -eq 'skipped') {
+                $cascaded += $entry
               } else {
-                $failed += "$($job):$result"
+                $rootCauseFailures += $entry
               }
             }
           }
-          if ($failed.Count -gt 0) {
-            Write-Error ("Pipeline contract failed: {0}" -f ($failed -join ', '))
+
+          $requiredJobVerdict = if ($missing.Count -eq 0 -and $rootCauseFailures.Count -eq 0 -and $cascaded.Count -eq 0) { 'pass' } else { 'fail' }
+          $rootCauseLabel = if ($rootCauseFailures.Count -gt 0) { $rootCauseFailures -join ', ' } else { '<none>' }
+          $cascadedLabel = if ($cascaded.Count -gt 0) { $cascaded -join ', ' } else { '<none>' }
+          $missingLabel = if ($missing.Count -gt 0) { $missing -join ', ' } else { '<none>' }
+
+          Write-Host ("Required job verdict: {0}" -f $requiredJobVerdict)
+          Write-Host ("Root-cause failures: {0}" -f $rootCauseLabel)
+          Write-Host ("Cascaded/skipped jobs: {0}" -f $cascadedLabel)
+          Write-Host ("Missing required jobs: {0}" -f $missingLabel)
+
+          if ($requiredJobVerdict -eq 'fail') {
+            Write-Error ("Pipeline contract failed: required-job verdict={0}; root-cause failures={1}; cascaded/skipped={2}; missing={3}" -f $requiredJobVerdict, $rootCauseLabel, $cascadedLabel, $missingLabel)
           } else {
             Write-Host 'Pipeline contract satisfied.'
           }
