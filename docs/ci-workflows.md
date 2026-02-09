@@ -132,8 +132,9 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **test** – runs LabVIEW unit tests on Windows in LabVIEW 2021 (32- and 64-bit) after missing-in-project.
   - Each matrix job appends a short `GITHUB_STEP_SUMMARY` line with the effective LUnit backend mode (`labviewcli` or `gcli`).
 - **build-ppl** – uses a matrix to build 32-bit and 64-bit packed libraries, then uses the `rename-file` action to append the bitness to each library’s filename.
+- **build-ppl-linux-container** – builds the Linux container packed library (`lv_icon.lvlibp`) for publish-eligible runs and emits a versioned artifact for prerelease attachment.
 - **build-vip** – Windows/self-hosted VI Package packaging path. This job requires both PPL artifacts (`lv_icon_x86.lvlibp`, `lv_icon_x64.lvlibp`) and runs for pull requests, pushes, and manual dispatch.
-- **publish-prerelease** – upserts GitHub prereleases for eligible runs, attaches required assets, and emits `prerelease-publish-status`.
+- **publish-prerelease** – upserts GitHub prereleases for eligible runs, attaches required assets (including Linux container packed library), and emits `prerelease-publish-status`.
 
 Windows self-hosted build jobs (`build-ppl-*` and `build-vip`) run a `close-labview` step after their build actions finish but before any steps that rename files or upload artifacts, so it is not the final step.
 
