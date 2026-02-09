@@ -18,10 +18,14 @@ Common entrypoints:
 - `Invoke-WorktreeOrchestrator.ps1`  
   Resolves worktree policy/root, builds runner-cli in the selected worktree, and can invoke local CI parity.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -LabVIEWVersion 2021 -EnsureCleanState`
-- `Open-PullRequest.ps1`  
-  Opens a GitHub PR for the current branch using `gh`.  
-  Example: `pwsh -NoProfile -File .\\Tooling\\Open-PullRequest.ps1 -BaseBranch develop -OpenInBrowser`  
-  Options: `-RequireCleanWorktree`, `-Draft`
+- `gh pr create` (recommended for opening PRs)
+  Opens a GitHub PR for the current branch with the desired template.
+  Example: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  Specialized templates:
+  `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
+  `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
+  `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
+  `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
 - `Get-PylaviOffenders.ps1`  
   Summarizes the latest pylavi offenders report for agent handoffs or automation.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Get-PylaviOffenders.ps1`  
@@ -46,6 +50,10 @@ Related config:
   Strict configuration for `vi_validate` (paths, skips, policy). The LabVIEW version is injected at runtime from `.lvversion`.
 - `pylavi/vi-validate-legacy.yml`  
   Legacy scope for `vi_validate` (typically absolute-path checks only).
+
+Release labels:
+- Canonical: `Version Increment: Major`, `Version Increment: Minor`, `Version Increment: Patch`
+- Compatibility aliases (deprecated after two release cycles): `major`, `minor`, `patch`
 
 ## Local GitHub Auth and Fork Remotes
 

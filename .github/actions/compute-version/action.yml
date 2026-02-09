@@ -41,9 +41,33 @@ runs:
       with:
         github-token: ${{ inputs.github_token }}
         script: |
+          const releaseLabelMap = new Map([
+            ['major', 'major'],
+            ['minor', 'minor'],
+            ['patch', 'patch'],
+            ['version increment: major', 'major'],
+            ['version increment: minor', 'minor'],
+            ['version increment: patch', 'patch'],
+          ]);
           const allowed = ['major', 'minor', 'patch'];
           const allowedWithNone = [...allowed, 'none'];
           let bump = 'none';
+
+          function normalizeReleaseLabels(labelNames) {
+            const matches = [];
+            for (const rawName of labelNames) {
+              const raw = String(rawName || '').trim();
+              const normalized = releaseLabelMap.get(raw.toLowerCase());
+              if (normalized) {
+                matches.push({ raw, normalized });
+              }
+            }
+
+            const normalized = [...new Set(matches.map((entry) => entry.normalized))];
+            const matchedRaw = [...new Set(matches.map((entry) => entry.raw))];
+            return { normalized, matchedRaw };
+          }
+
           const override = core.getInput('bump_type_override').trim().toLowerCase();
           if (override) {
             if (!allowedWithNone.includes(override)) {
@@ -55,13 +79,13 @@ runs:
             return;
           }
           if (context.eventName === 'pull_request') {
-            const labels = context.payload.pull_request.labels.map(l => l.name.toLowerCase());
-            const found = labels.filter(l => allowed.includes(l));
-            if (found.length > 1) {
-              core.setFailed(`Conflicting release labels detected: ${found.join(', ')}`);
+            const labels = (context.payload.pull_request.labels || []).map((l) => String(l.name || ''));
+            const found = normalizeReleaseLabels(labels);
+            if (found.normalized.length > 1) {
+              core.setFailed(`Conflicting release labels detected after normalization: ${found.matchedRaw.join(', ')}`);
               return;
             }
-            bump = found[0] || 'patch';
+            bump = found.normalized[0] || 'patch';
           }
           core.setOutput('bump_type', bump);
 

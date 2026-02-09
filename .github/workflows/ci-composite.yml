@@ -156,10 +156,33 @@ jobs:
           FORCE_GCLI_LUNIT: ${{ github.event.inputs.force_gcli_lunit || 'false' }}
         with:
           script: |
-            const allowed = ['major', 'minor', 'patch'];
+            const releaseLabelMap = new Map([
+              ['major', 'major'],
+              ['minor', 'minor'],
+              ['patch', 'patch'],
+              ['version increment: major', 'major'],
+              ['version increment: minor', 'minor'],
+              ['version increment: patch', 'patch'],
+            ]);
             const publishInput = (process.env.PUBLISH_PRERELEASE || 'false').toLowerCase() === 'true';
             const forceGcliLunitInput = (process.env.FORCE_GCLI_LUNIT || 'false').toLowerCase() === 'true';
             const releasePriorityMode = context.eventName === 'workflow_dispatch' && forceGcliLunitInput;
+
+            function normalizeReleaseLabels(labelNames) {
+              const matches = [];
+              for (const rawName of labelNames) {
+                const raw = String(rawName || '').trim();
+                const normalized = releaseLabelMap.get(raw.toLowerCase());
+                if (normalized) {
+                  matches.push({ raw, normalized });
+                }
+              }
+
+              return {
+                normalized: [...new Set(matches.map((entry) => entry.normalized))],
+                raw: [...new Set(matches.map((entry) => entry.raw))],
+              };
+            }
 
             async function findMergedPrTargetingDevelop() {
               const response = await github.rest.repos.listPullRequestsAssociatedWithCommit({
@@ -174,19 +197,19 @@ jobs:
             }
 
             function deriveBumpFromLabels(pr) {
-              const labels = (pr.labels || []).map((l) => String(l.name || '').toLowerCase());
-              const found = [...new Set(labels.filter((l) => allowed.includes(l)))];
-              if (found.length > 1) {
+              const labels = (pr.labels || []).map((l) => String(l.name || ''));
+              const found = normalizeReleaseLabels(labels);
+              if (found.normalized.length > 1) {
                 return {
                   conflict: true,
-                  conflictLabels: found.join(', '),
+                  conflictLabels: found.raw.join(', '),
                   bumpTypeOverride: '',
                 };
               }
               return {
                 conflict: false,
                 conflictLabels: '',
-                bumpTypeOverride: found[0] || 'patch',
+                bumpTypeOverride: found.normalized[0] || 'patch',
               };
             }
 

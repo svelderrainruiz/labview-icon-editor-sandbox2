@@ -7,6 +7,13 @@
 - Why this change is needed:
 - Out of scope:
 
+# Version Increment Label
+- [ ] I applied exactly one canonical release label:
+  - `Version Increment: Major`
+  - `Version Increment: Minor`
+  - `Version Increment: Patch`
+- Compatibility aliases are accepted during migration (deprecated after two release cycles): `major`, `minor`, `patch`
+
 # Checklist
 If any item is incomplete, mark this PR as draft and note the gap.
 
