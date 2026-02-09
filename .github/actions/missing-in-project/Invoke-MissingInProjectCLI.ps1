@@ -108,17 +108,35 @@ function Test-AllowNoLabVIEWIconApiGap {
         return $false
     }
 
-    $expectedPrefixes = @(
-        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\vi.lib\LabVIEW Icon API\",
-        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\resource\plugins\NIIconEditor\"
+    $labviewRoot = "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\"
+    $relevantMissingLines = @(
+        $MissingLines |
+            ForEach-Object { [string]$_ } |
+            ForEach-Object { $_.Trim().Trim('"') } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Where-Object { $_ -match '^[A-Za-z]:\\' } |
+            Where-Object { $_.StartsWith($labviewRoot, [System.StringComparison]::OrdinalIgnoreCase) }
     )
-    foreach ($line in $MissingLines) {
+
+    if ($relevantMissingLines.Count -eq 0) {
+        return $false
+    }
+
+    $expectedPrefixes = @(
+        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\vi.lib\LabVIEW Icon API",
+        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\resource\plugins\NIIconEditor"
+    )
+
+    foreach ($line in $relevantMissingLines) {
         if ([string]::IsNullOrWhiteSpace($line)) {
             return $false
         }
         $matchesExpectedPrefix = $false
         foreach ($expectedPrefix in $expectedPrefixes) {
-            if ($line.StartsWith($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            if (
+                $line.Equals($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+                $line.StartsWith($expectedPrefix + '\', [System.StringComparison]::OrdinalIgnoreCase)
+            ) {
                 $matchesExpectedPrefix = $true
                 break
             }
