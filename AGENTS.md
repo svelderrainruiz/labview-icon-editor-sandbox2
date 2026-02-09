@@ -13,27 +13,39 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 - Open a PowerShell terminal at the repo root.
 - Confirm `g-cli` is available:
   - `g-cli --version`
-- Pin `gh` to the fork for this shell:
-  - `$env:GH_REPO='svelderrainruiz/labview-icon-editor'`
+- Resolve the current repository for `gh` commands:
+  - `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+  - `GH_REPO` is an optional override.
 - If you need to open a PR from the current branch, use `gh`:
-  - Default template: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
-  - Draft PR: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md --draft`
+  - Default template: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  - Draft PR: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md --draft`
+
+## Repo-Agnostic Issue/Discussion Policy
+- Issue and discussion actions operate on the repository currently being worked in.
+- Use this command before issue/PR/workflow operations:
+  - `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+- Examples:
+  - Create issue: `gh issue create --repo $repo --template "Bug Report"`
+  - Create PR: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  - List issues: `gh issue list --repo $repo --limit 50`
+  - Run workflow: `gh workflow run labels-sync.yml --repo $repo -f dry_run=true -f include_aliases=true`
 
 ## GitHub Templates and Labels
 - Use issue templates with `gh` (preferred):
-  - Bug report: `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Bug Report"`
-  - Feature request: `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Feature request"`
+  - Bug report: `gh issue create --repo $repo --template "Bug Report"`
+  - Feature request: `gh issue create --repo $repo --template "Feature request"`
 - Use PR templates with `gh`:
-  - Generic: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
-  - Bug fix: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
-  - Feature addition: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
-  - Documentation update: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
-  - Infrastructure change: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
+  - Generic: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  - Bug fix: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
+  - Feature addition: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
+  - Documentation update: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
+  - Infrastructure change: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
 - Web fallback links:
-  - Issues: `https://github.com/svelderrainruiz/labview-icon-editor/issues/new/choose`
-  - Bug form: `https://github.com/svelderrainruiz/labview-icon-editor/issues/new?template=bug_report.yml`
-  - Feature form: `https://github.com/svelderrainruiz/labview-icon-editor/issues/new?template=feature_request.yml`
-  - PR page: `https://github.com/svelderrainruiz/labview-icon-editor/compare`
+  - Resolve repository URL: `$repoUrl = gh repo view --repo $repo --json url --jq .url`
+  - Issues: `"$repoUrl/issues/new/choose"`
+  - Bug form: `"$repoUrl/issues/new?template=bug_report.yml"`
+  - Feature form: `"$repoUrl/issues/new?template=feature_request.yml"`
+  - PR page: `"$repoUrl/compare"`
 
 Label policy:
 - Canonical release labels:
@@ -50,8 +62,8 @@ Label policy:
   - `bug` -> `Issue group: Bug`
   - `enhancement` -> `Type: Enhancement`
 - Sync labels from contract (manual workflow):
-  - Dry run: `gh workflow run labels-sync.yml --repo svelderrainruiz/labview-icon-editor -f dry_run=true -f include_aliases=true`
-  - Apply: `gh workflow run labels-sync.yml --repo svelderrainruiz/labview-icon-editor -f dry_run=false -f include_aliases=true`
+  - Dry run: `gh workflow run labels-sync.yml --repo $repo -f dry_run=true -f include_aliases=true`
+  - Apply: `gh workflow run labels-sync.yml --repo $repo -f dry_run=false -f include_aliases=true`
 
 Stale issue policy:
 - Workflow: `.github/workflows/stale-issues.yml`
@@ -76,17 +88,17 @@ Stale issue policy:
       '-label:"Issue group: Added to agenda"'
       '-label:"good first issue"'
     ) -join ' '
-    gh issue list --repo svelderrainruiz/labview-icon-editor --state open --search $query --limit 200
+    gh issue list --repo $repo --state open --search $query --limit 200
     ```
 
 Metadata quick-checks:
 - Unlabeled PRs (no normalized release label):
-  - `gh pr list --repo svelderrainruiz/labview-icon-editor --state open --search "-label:'Version Increment: Major' -label:'Version Increment: Minor' -label:'Version Increment: Patch' -label:major -label:minor -label:patch"`
+  - `gh pr list --repo $repo --state open --search "-label:'Version Increment: Major' -label:'Version Increment: Minor' -label:'Version Increment: Patch' -label:major -label:minor -label:patch"`
 - Unlabeled issues:
-  - `gh issue list --repo svelderrainruiz/labview-icon-editor --state open --search "no:label" --limit 200`
+  - `gh issue list --repo $repo --state open --search "no:label" --limit 200`
 - Alias-only issue types:
   - ```
-    $items = gh issue list --repo svelderrainruiz/labview-icon-editor --state open --limit 200 --json number,title,labels | ConvertFrom-Json
+    $items = gh issue list --repo $repo --state open --limit 200 --json number,title,labels | ConvertFrom-Json
     $items | Where-Object {
       ($_.labels.name -contains 'enhancement' -or $_.labels.name -contains 'bug') -and
       -not ($_.labels.name -contains 'Type: Enhancement' -or $_.labels.name -contains 'Issue group: Bug')

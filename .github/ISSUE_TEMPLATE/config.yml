@@ -6,7 +6,7 @@ contact_links:
     about: "Let us help you if you hit a roadblock!"
 
   - name: 📖 Read the Docs
-    url: https://github.com/ni/labview-icon-editor#labview-icon-editor
+    url: https://ni.github.io/labview-icon-editor/
     about: "Check the documentation for common questions before opening an issue."
 
 issue_templates:
