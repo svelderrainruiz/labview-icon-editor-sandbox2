@@ -148,6 +148,9 @@ jobs:
       bump_conflict: ${{ steps.ctx.outputs.bump_conflict }}
       bump_conflict_labels: ${{ steps.ctx.outputs.bump_conflict_labels }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - id: ctx
         name: Resolve publish eligibility and bump override
         uses: actions/github-script@v7
@@ -156,33 +159,18 @@ jobs:
           FORCE_GCLI_LUNIT: ${{ github.event.inputs.force_gcli_lunit || 'false' }}
         with:
           script: |
-            const releaseLabelMap = new Map([
-              ['major', 'major'],
-              ['minor', 'minor'],
-              ['patch', 'patch'],
-              ['version increment: major', 'major'],
-              ['version increment: minor', 'minor'],
-              ['version increment: patch', 'patch'],
-            ]);
+            const path = require('path');
+            const {
+              loadLabelContract,
+              buildReleaseLabelMap,
+              normalizeLabels,
+            } = require(path.join(process.env.GITHUB_WORKSPACE || process.cwd(), '.github', 'scripts', 'label-metadata.js'));
+            const contractPath = path.join(process.env.GITHUB_WORKSPACE || process.cwd(), '.github', 'labels', 'label-contract.json');
+            const labelContract = loadLabelContract(contractPath);
+            const releaseLabelMap = buildReleaseLabelMap(labelContract);
             const publishInput = (process.env.PUBLISH_PRERELEASE || 'false').toLowerCase() === 'true';
             const forceGcliLunitInput = (process.env.FORCE_GCLI_LUNIT || 'false').toLowerCase() === 'true';
             const releasePriorityMode = context.eventName === 'workflow_dispatch' && forceGcliLunitInput;
-
-            function normalizeReleaseLabels(labelNames) {
-              const matches = [];
-              for (const rawName of labelNames) {
-                const raw = String(rawName || '').trim();
-                const normalized = releaseLabelMap.get(raw.toLowerCase());
-                if (normalized) {
-                  matches.push({ raw, normalized });
-                }
-              }
-
-              return {
-                normalized: [...new Set(matches.map((entry) => entry.normalized))],
-                raw: [...new Set(matches.map((entry) => entry.raw))],
-              };
-            }
 
             async function findMergedPrTargetingDevelop() {
               const response = await github.rest.repos.listPullRequestsAssociatedWithCommit({
@@ -198,11 +186,11 @@ jobs:
 
             function deriveBumpFromLabels(pr) {
               const labels = (pr.labels || []).map((l) => String(l.name || ''));
-              const found = normalizeReleaseLabels(labels);
+              const found = normalizeLabels(labels, releaseLabelMap);
               if (found.normalized.length > 1) {
                 return {
                   conflict: true,
-                  conflictLabels: found.raw.join(', '),
+                  conflictLabels: found.matchedRaw.join(', '),
                   bumpTypeOverride: '',
                 };
               }

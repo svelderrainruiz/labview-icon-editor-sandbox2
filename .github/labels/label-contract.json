@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "canonical_default": true,
   "alias_policy": {
     "window": "two-releases",
@@ -13,6 +13,7 @@
       "description": "Change that requires a major semantic version increment, such as breaking API changes.",
       "category": "release_increment",
       "status": "canonical",
+      "bump_type": "major",
       "aliases": [
         "major"
       ]
@@ -23,6 +24,7 @@
       "description": "Change that requires a minor semantic version increment, including non-breaking features.",
       "category": "release_increment",
       "status": "canonical",
+      "bump_type": "minor",
       "aliases": [
         "minor"
       ]
@@ -33,6 +35,7 @@
       "description": "Change that requires a patch semantic version increment, typically minor bug fixes.",
       "category": "release_increment",
       "status": "canonical",
+      "bump_type": "patch",
       "aliases": [
         "patch"
       ]
@@ -43,6 +46,7 @@
       "description": "Issue that covers a bug.",
       "category": "issue_type",
       "status": "canonical",
+      "issue_type": "bug",
       "aliases": [
         "bug"
       ]
@@ -53,6 +57,7 @@
       "description": "New feature or request.",
       "category": "issue_type",
       "status": "canonical",
+      "issue_type": "enhancement",
       "aliases": [
         "enhancement"
       ]
@@ -64,6 +69,60 @@
       "category": "workflow",
       "status": "canonical",
       "aliases": []
+    },
+    {
+      "name": "Workflow: Actively discussing",
+      "color": "1d76db",
+      "description": "Issue is actively discussed and excluded from stale auto-close.",
+      "category": "workflow",
+      "status": "canonical",
+      "stale_exempt": true,
+      "aliases": []
+    },
+    {
+      "name": "Workflow: NI Approves",
+      "color": "0e8a16",
+      "description": "Issue has NI approval and is excluded from stale auto-close.",
+      "category": "workflow",
+      "status": "canonical",
+      "stale_exempt": true,
+      "aliases": []
+    },
+    {
+      "name": "Workflow: Requires R&D clarification",
+      "color": "fbca04",
+      "description": "Issue needs R&D clarification and is excluded from stale auto-close.",
+      "category": "workflow",
+      "status": "canonical",
+      "stale_exempt": true,
+      "aliases": []
+    },
+    {
+      "name": "Workflow: Open to contribution",
+      "color": "5319e7",
+      "description": "Issue is open to community contribution and excluded from stale auto-close.",
+      "category": "workflow",
+      "status": "canonical",
+      "stale_exempt": true,
+      "aliases": []
+    },
+    {
+      "name": "Issue group: Added to agenda",
+      "color": "c2e0c6",
+      "description": "Issue has been added to the agenda and is excluded from stale auto-close.",
+      "category": "issue_group",
+      "status": "canonical",
+      "stale_exempt": true,
+      "aliases": []
+    },
+    {
+      "name": "good first issue",
+      "color": "7057ff",
+      "description": "Good for newcomers.",
+      "category": "triage",
+      "status": "canonical",
+      "stale_exempt": true,
+      "aliases": []
     }
   ],
   "aliases": [
@@ -73,6 +132,7 @@
       "description": "Compatibility alias for Version Increment: Major (deprecated after two release cycles).",
       "category": "release_increment",
       "status": "alias",
+      "bump_type": "major",
       "canonical_name": "Version Increment: Major"
     },
     {
@@ -81,6 +141,7 @@
       "description": "Compatibility alias for Version Increment: Minor (deprecated after two release cycles).",
       "category": "release_increment",
       "status": "alias",
+      "bump_type": "minor",
       "canonical_name": "Version Increment: Minor"
     },
     {
@@ -89,6 +150,7 @@
       "description": "Compatibility alias for Version Increment: Patch (deprecated after two release cycles).",
       "category": "release_increment",
       "status": "alias",
+      "bump_type": "patch",
       "canonical_name": "Version Increment: Patch"
     },
     {
@@ -97,6 +159,7 @@
       "description": "Compatibility alias for Issue group: Bug (deprecated after two release cycles).",
       "category": "issue_type",
       "status": "alias",
+      "issue_type": "bug",
       "canonical_name": "Issue group: Bug"
     },
     {
@@ -105,6 +168,7 @@
       "description": "Compatibility alias for Type: Enhancement (deprecated after two release cycles).",
       "category": "issue_type",
       "status": "alias",
+      "issue_type": "enhancement",
       "canonical_name": "Type: Enhancement"
     }
   ]
