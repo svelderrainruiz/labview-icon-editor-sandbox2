@@ -8,6 +8,12 @@ This playbook is the deterministic remediation guide used by CI debt analysis.
 - Fix: Keep `gk` optional by default and use system `git` fallback unless `LVIE_REQUIRE_GITKRAKEN_CLI=1`.
 - Prevention: `CI Debt Policy Gate / Root Cause Contract` rejects strict-only `gk` assumptions in critical scripts.
 
+## Signature: `powershell-lint.new-issues`
+- Symptom: `PowerShell Lint` reports newly introduced PSScriptAnalyzer findings.
+- Detection rule: Lint log contains `New PSScriptAnalyzer issues detected` / baseline failure fragments.
+- Fix: Rename/refactor offending functions or code paths to satisfy analyzer rules, then rerun lint.
+- Prevention: Keep analyzer-clean changes in PRs and update baseline only through approved baseline update flow.
+
 ## Signature: `verify-iepaths.setup-failed`
 - Symptom: `Verify IE Paths Gate` fails during setup and no clear reason is surfaced.
 - Detection rule: Setup/fallback/exit fragments detected in the gate job log.

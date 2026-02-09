@@ -42,24 +42,23 @@ function Resolve-CiDebtRepoRoot {
 }
 
 function Resolve-CiDebtRepoName {
-    param([string]$RepoOverride)
+    param(
+        [string]$RepoOverride,
+        [string]$RepoRoot
+    )
 
-    if (-not [string]::IsNullOrWhiteSpace($RepoOverride)) {
-        return $RepoOverride.Trim()
+    $resolverScript = Join-Path $RepoRoot 'Tooling\Resolve-GitHubRepo.ps1'
+    if (-not (Test-Path -Path $resolverScript)) {
+        throw "Repository resolver script not found at $resolverScript"
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:GH_REPO)) {
-        return $env:GH_REPO.Trim()
+    $resolved = if (-not [string]::IsNullOrWhiteSpace($RepoOverride)) {
+        & $resolverScript -Repo $RepoOverride -RepoRoot $RepoRoot
+    } else {
+        & $resolverScript -RepoRoot $RepoRoot
     }
-
-    $gh = Get-Command gh -ErrorAction SilentlyContinue
-    if (-not $gh) {
-        throw "Unable to resolve repository: gh CLI not found and GH_REPO not set."
-    }
-
-    $resolved = gh repo view --json nameWithOwner --jq .nameWithOwner 2>$null
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resolved)) {
-        throw "Unable to resolve repository via gh repo view."
+        throw "Unable to resolve repository via Tooling/Resolve-GitHubRepo.ps1."
     }
 
     return $resolved.Trim()
@@ -81,7 +80,7 @@ function Resolve-CiDebtOutPath {
     return Join-Path $RepoRoot ("TestResults\agent-logs\ci-debt\{0}" -f $fileName)
 }
 
-function Ensure-CiDebtParentDirectory {
+function Initialize-CiDebtParentDirectory {
     param([string]$Path)
     $parent = Split-Path -Path $Path -Parent
     if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -Path $parent)) {
@@ -89,7 +88,7 @@ function Ensure-CiDebtParentDirectory {
     }
 }
 
-function Load-CiDebtSignatures {
+function Get-CiDebtSignatureTable {
     param([string]$Path)
 
     if (-not (Test-Path -Path $Path)) {
@@ -273,13 +272,13 @@ function New-CiDebtMarkdown {
     $lines.Add('') | Out-Null
 
     $signatureIds = @($Incidents | ForEach-Object { $_.id })
-    $hasLint = $signatureIds -contains 'powershell-lint.gk-missing'
+    $hasLint = ($signatureIds -contains 'powershell-lint.gk-missing') -or ($signatureIds -contains 'powershell-lint.new-issues')
     $hasVerify = $signatureIds -contains 'verify-iepaths.setup-failed'
     $hasPipeline = $signatureIds -contains 'pipeline-contract.cascade-failure'
 
     $lines.Add('### Issue #74 Checklist') | Out-Null
     $lines.Add('') | Out-Null
-    $lines.Add(("{0} Lint fix (powershell-lint.gk-missing)" -f ($(if ($hasLint) { '[ ]' } else { '[x]' })))) | Out-Null
+    $lines.Add(("{0} Lint fix (powershell-lint.*)" -f ($(if ($hasLint) { '[ ]' } else { '[x]' })))) | Out-Null
     $lines.Add(("{0} Verify IE Paths 64/32 fix (verify-iepaths.setup-failed)" -f ($(if ($hasVerify) { '[ ]' } else { '[x]' })))) | Out-Null
     $lines.Add(("{0} Pipeline Contract fix (pipeline-contract.cascade-failure)" -f ($(if ($hasPipeline) { '[ ]' } else { '[x]' })))) | Out-Null
     $lines.Add(("{0} Hardening/tests updated for new signatures" -f ($(if ($UnknownCount -gt 0) { '[ ]' } else { '[x]' })))) | Out-Null
@@ -324,13 +323,13 @@ function Invoke-CiDebtAnalysis {
     )
 
     $repoRoot = Resolve-CiDebtRepoRoot
-    $repoName = Resolve-CiDebtRepoName -RepoOverride $Repo
+    $repoName = Resolve-CiDebtRepoName -RepoOverride $Repo -RepoRoot $repoRoot
     $resolvedSignaturePath = if (-not [string]::IsNullOrWhiteSpace($SignaturePath)) {
         $SignaturePath
     } else {
         Join-Path $repoRoot 'Tooling\agents\ci-debt\signatures.json'
     }
-    $signatures = Load-CiDebtSignatures -Path $resolvedSignaturePath
+    $signatures = Get-CiDebtSignatureTable -Path $resolvedSignaturePath
 
     $runPayload = if (-not [string]::IsNullOrWhiteSpace($FixturePath)) {
         Get-CiDebtRunFromFixture -Path $FixturePath
@@ -403,8 +402,8 @@ function Invoke-CiDebtAnalysis {
     $runIdentifier = [long]$run.databaseId
     $resolvedJson = Resolve-CiDebtOutPath -RepoRoot $repoRoot -RunIdentifier $runIdentifier -OutPath $OutJson -Extension 'json'
     $resolvedMarkdown = Resolve-CiDebtOutPath -RepoRoot $repoRoot -RunIdentifier $runIdentifier -OutPath $OutMarkdown -Extension 'md'
-    Ensure-CiDebtParentDirectory -Path $resolvedJson
-    Ensure-CiDebtParentDirectory -Path $resolvedMarkdown
+    Initialize-CiDebtParentDirectory -Path $resolvedJson
+    Initialize-CiDebtParentDirectory -Path $resolvedMarkdown
 
     $analysis = [ordered]@{
         schema_version = '1.0'

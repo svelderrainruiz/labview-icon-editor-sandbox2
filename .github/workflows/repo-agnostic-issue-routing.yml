@@ -22,3 +22,8 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File .\Tooling\Test-RepoAgnosticIssueRouting.ps1
+
+      - name: Run repository resolver tests
+        shell: pwsh
+        run: |
+          Invoke-Pester -Path .\Tooling\tests\ResolveGitHubRepo.Tests.ps1 -Output Detailed

@@ -76,6 +76,11 @@ $rules = @(
         Id = 'fixed-repo-flag-fork'
         Pattern = '--repo\s+svelderrainruiz/labview-icon-editor'
         Message = 'Fixed --repo target is not allowed. Resolve current repository first and use --repo $repo.'
+    },
+    [pscustomobject]@{
+        Id = 'gh-repo-view-auto-resolution'
+        Pattern = 'gh repo view --json nameWithOwner --jq \.nameWithOwner'
+        Message = 'gh repo view auto-resolution is not allowed. Use Tooling/Resolve-GitHubRepo.ps1.'
     }
 )
 

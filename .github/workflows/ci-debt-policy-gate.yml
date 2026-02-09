@@ -36,3 +36,14 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\agents\ci-debt\Test-CiDebtPolicyGate.ps1"
+
+      - name: Validate repo-agnostic issue/discussion routing guard
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Test-RepoAgnosticIssueRouting.ps1"
+
+      - name: Run repository resolver tests
+        shell: pwsh
+        run: |
+          $testPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling\tests\ResolveGitHubRepo.Tests.ps1'
+          Invoke-Pester -Path $testPath -Output Detailed

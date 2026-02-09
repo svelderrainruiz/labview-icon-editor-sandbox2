@@ -14,8 +14,8 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 - Confirm `g-cli` is available:
   - `g-cli --version`
 - Resolve the current repository for `gh` commands:
-  - `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
-  - `GH_REPO` is an optional override.
+  - `$repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1`
+  - `GH_REPO` is an optional override and takes precedence when set.
 - If you need to open a PR from the current branch, use `gh`:
   - Default template: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
   - Draft PR: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md --draft`
@@ -23,7 +23,7 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 ## Repo-Agnostic Issue/Discussion Policy
 - Issue and discussion actions operate on the repository currently being worked in.
 - Use this command before issue/PR/workflow operations:
-  - `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+  - `$repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1`
 - Examples:
   - Create issue: `gh issue create --repo $repo --template "Bug Report"`
   - Create PR: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
@@ -41,7 +41,7 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
   - Documentation update: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
   - Infrastructure change: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
 - Web fallback links:
-  - Resolve repository URL: `$repoUrl = gh repo view --repo $repo --json url --jq .url`
+  - Resolve repository URL: `$repoUrl = gh repo view $repo --json url --jq .url`
   - Issues: `"$repoUrl/issues/new/choose"`
   - Bug form: `"$repoUrl/issues/new?template=bug_report.yml"`
   - Feature form: `"$repoUrl/issues/new?template=feature_request.yml"`
