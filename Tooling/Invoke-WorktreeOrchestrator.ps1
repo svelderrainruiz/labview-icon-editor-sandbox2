@@ -35,13 +35,6 @@
     Arguments forwarded to the run script.
 #>
 
-$gitKrakenScript = Join-Path $PSScriptRoot 'support\GitKrakenCli.ps1'
-if (-not (Test-Path -Path $gitKrakenScript)) {
-    throw "GitKraken CLI helper not found at $gitKrakenScript"
-}
-. $gitKrakenScript
-Enable-GitKrakenGitShim -Require | Out-Null
-
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]

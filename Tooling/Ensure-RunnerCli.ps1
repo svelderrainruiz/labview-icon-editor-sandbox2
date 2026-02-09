@@ -41,12 +41,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$gitKrakenScript = Join-Path $PSScriptRoot 'support\GitKrakenCli.ps1'
-if (-not (Test-Path -Path $gitKrakenScript)) {
-    throw "GitKraken CLI helper not found at $gitKrakenScript"
-}
-. $gitKrakenScript
-Enable-GitKrakenGitShim -Require | Out-Null
 $requireEnabled = $Require.IsPresent -or ($env:LVIE_REQUIRE_RUNNER_CLI -eq '1')
 $skipBuildEnabled = $SkipBuild.IsPresent -or ($env:LVIE_RUNNER_CLI_SKIP_BUILD -eq '1')
 $skipDownloadEnabled = $SkipDownload.IsPresent -or ($env:LVIE_RUNNER_CLI_SKIP_DOWNLOAD -eq '1')
@@ -94,34 +88,6 @@ function Resolve-BranchName {
     } catch {
         return $null
     }
-    return $null
-}
-
-function Resolve-RepoSlug {
-    param(
-        [string]$RepoValue,
-        [string]$RepoRootResolved
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($RepoValue)) {
-        return $RepoValue
-    }
-    if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_REPOSITORY)) {
-        return $env:GITHUB_REPOSITORY
-    }
-
-    try {
-        $url = git -C $RepoRootResolved config --get remote.origin.url 2>$null
-    } catch {
-        $url = $null
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($url)) {
-        if ($url -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(\.git)?$') {
-            return "{0}/{1}" -f $Matches['owner'], $Matches['repo']
-        }
-    }
-
     return $null
 }
 
@@ -315,7 +281,7 @@ if (-not $resolvedPath -and -not $skipBuildEnabled -and -not $buildAttempted) {
 }
 
 if (-not $resolvedPath -and -not $skipDownloadEnabled) {
-    $repoValue = Resolve-RepoSlug -RepoValue $Repo -RepoRootResolved $repoRootResolved
+    $repoValue = if ($Repo) { $Repo } else { $env:GITHUB_REPOSITORY }
     $branchValue = Resolve-BranchName -RepoRootResolved $repoRootResolved -BranchOverride $Branch
     $downloaded = Get-RunnerCliArtifact -RepoValue $repoValue -BranchValue $branchValue -Runtime $runtime
     if ($downloaded) {

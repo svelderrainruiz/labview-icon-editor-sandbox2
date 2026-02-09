@@ -13,9 +13,6 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 - Open a PowerShell terminal at the repo root.
 - Confirm `g-cli` is available:
   - `g-cli --version`
-- If you need to open a PR from the current branch, use:
-  - `pwsh -NoProfile -File .\Tooling\Open-PullRequest.ps1 -BaseBranch develop -OpenInBrowser`
-  - Add `-RequireCleanWorktree` to enforce a clean git status before creating the PR.
 
 ## pylavi / vi_validate gate
 - The local CI parity run includes a fast LabVIEW file validation step powered by `pylavi` (`vi_validate`) and runs **before** any g-cli/LabVIEW work.
