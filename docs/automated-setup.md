@@ -26,7 +26,8 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 - **Prerequisites**:
   1. **LabVIEW 2021 (21.0), both 32-bit and 64-bit**.
   2. **PowerShell 7+** and **Git**.  
-  3. **Apply** `.github\actions\apply-vipc\runner_dependencies.vipc` to **LabVIEW 2021 (21.0), 32-bit & 64-bit**—matching the `apply-deps` matrix in [`../.github/workflows/ci-composite.yml`](../.github/workflows/ci-composite.yml).
+   3. **GitKraken CLI (`gk`)** on PATH (tooling routes git calls through it).
+   4. **Apply** `.github\actions\apply-vipc\runner_dependencies.vipc` to **LabVIEW 2021 (21.0), 32-bit & 64-bit**—matching the `apply-deps` matrix in [`../.github/workflows/ci-composite.yml`](../.github/workflows/ci-composite.yml).
 
 ---
 
@@ -38,6 +39,13 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
    `<LabVIEW>\vi.lib\LabVIEW Icon API`
 
 2. **Clone** the [Icon Editor](https://github.com/ni/labview-icon-editor.git) to your development location.
+   If you are working from a fork, set `origin` to your fork and add `upstream` to the main repo:
+   ```powershell
+   git remote set-url origin https://github.com/<your-user>/labview-icon-editor.git
+   git remote add upstream https://github.com/ni/labview-icon-editor.git
+   ```
+   You can verify with `pwsh -NoProfile -File .\Tooling\Test-ForkRemotes.ps1`.
+   The script also performs a non-interactive connectivity check; set `LVIE_SKIP_REMOTE_CONNECTIVITY_CHECK=1` to skip when offline.
 
 3. **Apply** dependencies:  
    `.github\actions\apply-vipc\runner_dependencies.vipc` to **LabVIEW 2021 (21.0), 32-bit & 64-bit**.
