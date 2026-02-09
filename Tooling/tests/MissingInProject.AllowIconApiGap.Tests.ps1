@@ -19,8 +19,12 @@ BeforeAll {
         throw 'Failed to locate Test-AllowNoLabVIEWIconApiGap function definition.'
     }
 
-    Invoke-Expression $resolveBoolMatch.Value
-    Invoke-Expression $allowGapMatch.Value
+    $functionHarnessPath = Join-Path $TestDrive 'MissingInProject-AllowGap.Functions.ps1'
+    Set-Content -Path $functionHarnessPath -Value @(
+        $resolveBoolMatch.Value
+        $allowGapMatch.Value
+    ) -Encoding utf8
+    . $functionHarnessPath
 }
 
 Describe 'Test-AllowNoLabVIEWIconApiGap' {
@@ -85,4 +89,3 @@ Describe 'Test-AllowNoLabVIEWIconApiGap' {
         Test-AllowNoLabVIEWIconApiGap -MissingLines $missing -Arch '64' -LabVIEWYear '2021' | Should -BeFalse
     }
 }
-

@@ -126,6 +126,11 @@ function Test-AllowNoLabVIEWIconApiGap {
         "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\vi.lib\LabVIEW Icon API",
         "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\resource\plugins\NIIconEditor"
     )
+    $expectedExactPluginFiles = @(
+        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\resource\plugins\lv_icon.vi",
+        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\resource\plugins\lv_icon.lvlibp",
+        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\resource\plugins\lv_icon.ship"
+    )
 
     foreach ($line in $relevantMissingLines) {
         if ([string]::IsNullOrWhiteSpace($line)) {
@@ -139,6 +144,14 @@ function Test-AllowNoLabVIEWIconApiGap {
             ) {
                 $matchesExpectedPrefix = $true
                 break
+            }
+        }
+        if (-not $matchesExpectedPrefix) {
+            foreach ($expectedExactFile in $expectedExactPluginFiles) {
+                if ($line.Equals($expectedExactFile, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $matchesExpectedPrefix = $true
+                    break
+                }
             }
         }
         if (-not $matchesExpectedPrefix) {
