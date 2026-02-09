@@ -3,6 +3,11 @@
 This folder contains PowerShell scripts used for local CI parity, packaging, and developer workflows.
 
 Common entrypoints:
+- `Resolve-GitHubRepo.ps1`
+  Resolves the current GitHub repository as `owner/name` without relying on `gh repo view` auto-resolution.
+  Precedence: `-Repo` argument, `GH_REPO` env var, then `origin` remote URL.
+  Example: `pwsh -NoProfile -File .\\Tooling\\Resolve-GitHubRepo.ps1`
+  Optional shell hygiene: `pwsh -NoProfile -File .\\Tooling\\Resolve-GitHubRepo.ps1 -SetGhDefault`
 - `Run-ViValidate.ps1`  
   Runs the fast pylavi `vi_validate` gate only. Uses `.lvversion` as the canonical LabVIEW version.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Run-ViValidate.ps1`  
@@ -20,7 +25,8 @@ Common entrypoints:
   Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -LabVIEWVersion 2021 -EnsureCleanState`
 - `gh pr create` (recommended for opening PRs)
   Opens a GitHub PR for the current branch with the desired template.
-  Resolve repo: `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+  Resolve repo: `$repo = pwsh -NoProfile -File .\\Tooling\\Resolve-GitHubRepo.ps1`
+  `GH_REPO` is an optional override and takes precedence when set.
   Example: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
   Specialized templates:
   `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
@@ -71,8 +77,8 @@ Issue-type labels:
 
 ## Local GitHub Auth and Fork Remotes
 
-Tooling expects GitKraken CLI (`gk`) to be available and routes git calls through it.
-If `gk` is missing, scripts will fail fast.
+Most tooling can fall back to system `git` when GitKraken CLI (`gk`) is missing.
+Set `LVIE_REQUIRE_GITKRAKEN_CLI=1` only when a call path must require `gk`.
 
 Some tooling fetches GitHub artifacts or queries workflow runs. Configure auth and ensure your fork remotes are correct.
 

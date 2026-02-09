@@ -5,8 +5,7 @@
       "id": "powershell-lint.gk-missing",
       "job": "PowerShell Lint",
       "containsAny": [
-        "GitKraken CLI 'gk' not found",
-        "Enable-GitKrakenGitShim -Require",
+        "GitKraken CLI 'gk' not found. Install it or add it to PATH.",
         "GitKraken CLI helper not found"
       ],
       "classification": "fatal-tool-dependency",
@@ -14,6 +13,21 @@
       "recommendedActions": [
         "Make gk optional by default and fall back to system git unless explicitly required.",
         "Use LVIE_REQUIRE_GITKRAKEN_CLI=1 only on call paths that truly require gk behavior."
+      ],
+      "preventiveCheck": "CI Debt Policy Gate / Root Cause Contract"
+    },
+    {
+      "id": "powershell-lint.new-issues",
+      "job": "PowerShell Lint",
+      "containsAny": [
+        "New PSScriptAnalyzer issues detected:",
+        "PSScriptAnalyzer detected new issues. Update baseline or fix the findings."
+      ],
+      "classification": "lint-regression",
+      "severity": "high",
+      "recommendedActions": [
+        "Fix newly introduced PSScriptAnalyzer findings in modified scripts.",
+        "Only update Tooling/PSScriptAnalyzerBaseline.json via approved baseline update workflow."
       ],
       "preventiveCheck": "CI Debt Policy Gate / Root Cause Contract"
     },

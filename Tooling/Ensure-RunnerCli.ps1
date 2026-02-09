@@ -46,7 +46,11 @@ if (-not (Test-Path -Path $gitKrakenScript)) {
     throw "GitKraken CLI helper not found at $gitKrakenScript"
 }
 . $gitKrakenScript
-Enable-GitKrakenGitShim -Require | Out-Null
+$requireGitKraken = $env:LVIE_REQUIRE_GITKRAKEN_CLI -eq '1'
+$gitKrakenEnabled = Enable-GitKrakenGitShim -Require:$requireGitKraken
+if (-not $gitKrakenEnabled) {
+    Write-Warning "GitKraken CLI 'gk' not found. Using system git. Set LVIE_REQUIRE_GITKRAKEN_CLI=1 to enforce gk."
+}
 $requireEnabled = $Require.IsPresent -or ($env:LVIE_REQUIRE_RUNNER_CLI -eq '1')
 $skipBuildEnabled = $SkipBuild.IsPresent -or ($env:LVIE_RUNNER_CLI_SKIP_BUILD -eq '1')
 $skipDownloadEnabled = $SkipDownload.IsPresent -or ($env:LVIE_RUNNER_CLI_SKIP_DOWNLOAD -eq '1')

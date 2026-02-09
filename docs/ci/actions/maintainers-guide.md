@@ -88,8 +88,8 @@ Debug-only/manual validation:
 - Use `labels-sync.yml` to create/update contract labels from
   `.github/labels/label-contract.json`.
 - Resolve the repository for `gh` commands:
-  - `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
-  - `GH_REPO` is optional override when maintainers need to target a specific repo.
+  - `$repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1`
+  - `GH_REPO` is optional override and takes precedence when maintainers need to target a specific repo.
 
 ## Label Metadata Automation
 
