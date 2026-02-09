@@ -7,6 +7,7 @@
     Executes the key LabVIEW steps from ci-composite.yml locally:
     - Verify IE Paths gate (version 32/64)
     - Apply VIPC dependencies (version 32/64)
+    - DevMode.NoLabVIEW smoke (version 32/64)
     - Missing-in-project checks (version 32/64)
     - Unit tests (version 32/64)
     - Build PPLs (version 32/64) + rename
@@ -35,11 +36,20 @@
 .PARAMETER SkipVipc
     Skip applying VIPC dependencies.
 
+.PARAMETER SkipDevModeNoLabVIEWSmoke
+    Skip DevMode.NoLabVIEW smoke tests.
+
+.PARAMETER DevModeNoLabVIEWSmokeDepth
+    Smoke depth: minimal, balanced, or full.
+
 .PARAMETER SkipMissingInProject
     Skip missing-in-project checks.
 
 .PARAMETER SkipUnitTests
     Skip unit tests.
+
+.PARAMETER ForceGcliLunit
+    Force g-cli as the primary LUnit backend for unit tests.
 
 .PARAMETER SkipBuildPpl
     Skip PPL builds.
@@ -153,8 +163,15 @@ param(
     [switch]$SkipVerifyIEPaths,
     [switch]$EnsureCleanState,
     [switch]$SkipVipc,
+    [switch]$SkipDevModeNoLabVIEWSmoke,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('minimal', 'balanced', 'full')]
+    [string]$DevModeNoLabVIEWSmokeDepth = 'balanced',
+
     [switch]$SkipMissingInProject,
     [switch]$SkipUnitTests,
+    [switch]$ForceGcliLunit,
     [switch]$SkipBuildPpl,
     [switch]$SkipBuildVip,
 
@@ -382,6 +399,24 @@ function Resolve-RepoRoot {
         }
     }
     return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
+}
+
+function Assert-CleanProjectFileForSmoke {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $false)]
+        [string]$ProjectRelativePath = 'lv_icon_editor.lvproj'
+    )
+
+    $smokeHelperPath = Join-Path $RepoRoot 'Tooling\support\DevModeNoLabVIEWSmoke.ps1'
+    if (-not (Test-Path -Path $smokeHelperPath -PathType Leaf)) {
+        throw "Smoke helper not found at $smokeHelperPath"
+    }
+
+    . $smokeHelperPath
+    Assert-DevModeNoLabVIEWProjectFileClean -RepoRoot $RepoRoot -ProjectRelativePath $ProjectRelativePath
 }
 
 function Get-RepoHeadSha {
@@ -1591,7 +1626,7 @@ Initialize-CsvHeader -Path $script:RunHistoryPath -Header 'timestamp,status,dura
 Initialize-CsvHeader -Path $script:StepHistoryPath -Header 'timestamp,step,status,duration_seconds'
 $env:LABVIEW_CLOSE_METRICS_PATH = $script:CloseHistoryPath
 $runLog = Join-Path $logRoot "ci-local-$runTimestamp.log"
-$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -EnsureCleanState:$EnsureCleanState -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -SkipViValidate:$SkipViValidate -ViValidateConfigPath $ViValidateConfigPath -ViValidateProfile $ViValidateProfile -ViValidateReportOnly:$ViValidateReportOnly -ViValidateSkipVersionGate:$ViValidateSkipVersionGate -ViValidateOnly:$ViValidateOnly -UseLabVIEWDevMode:$UseLabVIEWDevMode -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled"
+$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -EnsureCleanState:$EnsureCleanState -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -ForceGcliLunit:$ForceGcliLunit -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -SkipViValidate:$SkipViValidate -ViValidateConfigPath $ViValidateConfigPath -ViValidateProfile $ViValidateProfile -ViValidateReportOnly:$ViValidateReportOnly -ViValidateSkipVersionGate:$ViValidateSkipVersionGate -ViValidateOnly:$ViValidateOnly -UseLabVIEWDevMode:$UseLabVIEWDevMode -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled"
 $script:TranscriptStarted = $false
 try {
     Start-Transcript -Path $runLog -Append | Out-Null
@@ -1715,6 +1750,35 @@ try {
 
     }
 
+    if (-not $SkipDevModeNoLabVIEWSmoke) {
+        Assert-CleanProjectFileForSmoke -RepoRoot $repoRoot -ProjectRelativePath 'lv_icon_editor.lvproj'
+
+        $smokeDir = Join-Path $artifactsRoot 'devmode-no-labview-smoke'
+        New-Item -Path $smokeDir -ItemType Directory -Force | Out-Null
+        $smokeScript = Join-Path $repoRoot 'Tooling/Invoke-DevModeNoLabVIEWSmoke.ps1'
+        if (-not (Test-Path -Path $smokeScript -PathType Leaf)) {
+            throw "DevMode.NoLabVIEW smoke script not found: $smokeScript"
+        }
+
+        foreach ($bitness in $bitnessList) {
+            Invoke-Checked -Label ("DevMode.NoLabVIEW smoke ({0}-bit, depth={1})" -f $bitness, $DevModeNoLabVIEWSmokeDepth) -Action {
+                & $smokeScript `
+                    -LabVIEWVersion $LabVIEWVersion `
+                    -LabVIEWBitness $bitness `
+                    -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
+                    -ConnectTimeoutMs $ConnectTimeoutMs `
+                    -ProcessTimeoutMs $ProcessTimeoutMs `
+                    -RepoRoot $repoRoot `
+                    -SkipWorktreeRootCheck:$SkipWorktreeRootCheck
+            }
+
+            $smokeOutput = Join-Path $repoRoot 'TestResults\devmode-no-labview-smoke'
+            if (Test-Path -Path $smokeOutput) {
+                Copy-Item -Path (Join-Path $smokeOutput '*') -Destination $smokeDir -Force -Recurse -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
     if (-not $SkipMissingInProject) {
         $missingDir = Join-Path $artifactsRoot 'missing-in-project'
         New-Item -Path $missingDir -ItemType Directory -Force | Out-Null
@@ -1769,10 +1833,24 @@ try {
                 Invoke-EnableDevModeWithRecovery -Bitness $bitness -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -Context 'unit tests'
 
                 Invoke-Checked -Label "Run unit tests ($bitness-bit)" -Action {
+                    $previousLunitBackend = $env:LVIE_LUNIT_BACKEND
+                    try {
+                        if ($ForceGcliLunit) {
+                            $env:LVIE_LUNIT_BACKEND = 'gcli'
+                            Write-Host "LUnit backend override for parity unit tests: gcli"
+                        }
                     & (Join-Path $repoRoot '.github/actions/run-unit-tests/RunUnitTests.ps1') `
                         -LabVIEWVersion $LabVIEWVersion `
                         -SupportedBitness $bitness `
                         -ProjectPath (Join-Path $repoRoot 'lv_icon_editor.lvproj')
+                    }
+                    finally {
+                        if ($null -eq $previousLunitBackend) {
+                            Remove-Item Env:LVIE_LUNIT_BACKEND -ErrorAction SilentlyContinue
+                        } else {
+                            $env:LVIE_LUNIT_BACKEND = $previousLunitBackend
+                        }
+                    }
                 }
             }
             finally {

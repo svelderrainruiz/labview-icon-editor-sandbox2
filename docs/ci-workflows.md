@@ -1,6 +1,6 @@
 # Local CI/CD Workflows
 
-**Last updated:** 2026-02-08
+**Last updated:** 2026-02-09
 
 Quick link: `.github/workflows/runner-cli.yml` (Runner CLI consolidated workflow).
 
@@ -76,6 +76,7 @@ This document is the canonical source for release/publication policy.
 - Normative contract: [VI Package Pre-Release Requirements](vip-prerelease-requirements.md).
 - Auto publish contract: prerelease publication runs for `push` events on `develop` when the pushed SHA is associated with a merged pull request targeting `develop`.
 - Manual publish contract: `workflow_dispatch` supports explicit prerelease backfill with `publish_prerelease=true` and SHA validation.
+- LUnit escape hatch: `workflow_dispatch` also supports `force_gcli_lunit=true` to force g-cli in unit-test jobs while exercising release paths.
 - Asset contract: published prereleases attach `.vip`, release notes, `gcli-logs`, and `vip-build-status` assets from the same CI run.
 - Branch trigger reality for `ci-composite.yml`: `push` and `pull_request` run on `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*`, plus `workflow_dispatch`.
 
@@ -124,10 +125,12 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **pylavi-validate** – report-only LabVIEW file validation using `vi_validate` (strict + legacy profiles) with `.lvversion`-synced version gating and optional baseline/delta reporting.
 - **changes** – checks out the repository and detects `.vipc` file changes to determine if dependencies need to be applied.
 - **apply-deps** – installs VIPC dependencies for multiple LabVIEW versions and bitnesses **only when** the `changes` job reports `.vipc` modifications (`if: needs.changes.outputs.vipc == 'true'`).
+- **devmode-no-labview-smoke** – required per-bitness (`64`, `32`) no-LabVIEW smoke gate (full depth) that fails on test failures or fully skipped integration smoke.
 - **prerelease-context** – computes prerelease publish eligibility, reason, and merged-PR bump override context.
 - **version** – computes the semantic version and build number using commit count and PR labels.
-- **missing-in-project-check** – verifies every source file is referenced in the `.lvproj`.
-- **test** – runs LabVIEW unit tests on Windows in LabVIEW 2021 (32- and 64-bit).
+- **missing-in-project-check** – verifies every source file is referenced in the `.lvproj` (runs after the smoke gate).
+- **test** – runs LabVIEW unit tests on Windows in LabVIEW 2021 (32- and 64-bit) after missing-in-project.
+  - Each matrix job appends a short `GITHUB_STEP_SUMMARY` line with the effective LUnit backend mode (`labviewcli` or `gcli`).
 - **build-ppl** – uses a matrix to build 32-bit and 64-bit packed libraries, then uses the `rename-file` action to append the bitness to each library’s filename.
 - **build-vip** – Windows/self-hosted VI Package packaging path. This job requires both PPL artifacts (`lv_icon_x86.lvlibp`, `lv_icon_x64.lvlibp`) and runs for pull requests, pushes, and manual dispatch.
 - **publish-prerelease** – upserts GitHub prereleases for eligible runs, attaches required assets, and emits `prerelease-publish-status`.

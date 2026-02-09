@@ -30,6 +30,10 @@ runs:
 
         $enableFallbackRaw = "${{ inputs.enable_gcli_fallback }}"
         $enableFallback = @('1','true','yes','y','on') -contains $enableFallbackRaw.Trim().ToLowerInvariant()
+        $backendRaw = "${{ inputs.lunit_backend }}"
+        if (-not [string]::IsNullOrWhiteSpace($backendRaw)) {
+          $env:LVIE_LUNIT_BACKEND = $backendRaw.Trim()
+        }
 
         $scriptArgs = @(
           '-LabVIEWVersion', $lvVersion,
@@ -55,6 +59,10 @@ inputs:
     description: 'Set true/1/yes to allow g-cli fallback when LabVIEWCLI LUnit cannot run.'
     required: false
     default: 'false'
+  lunit_backend:
+    description: 'LUnit backend selection: labviewcli (default) or gcli.'
+    required: false
+    default: 'labviewcli'
 
 
 
