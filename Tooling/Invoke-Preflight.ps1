@@ -8,6 +8,13 @@
     and optionally cleans known output folders before/after a run.
 #>
 
+$gitKrakenScript = Join-Path ($PSScriptRoot ? $PSScriptRoot : (Split-Path -Parent $PSCommandPath)) 'support\GitKrakenCli.ps1'
+if (-not (Test-Path -Path $gitKrakenScript)) {
+    throw "GitKraken CLI helper not found at $gitKrakenScript"
+}
+. $gitKrakenScript
+Enable-GitKrakenGitShim -Require | Out-Null
+
 function Convert-BoundParametersToArgumentList {
     param(
         [hashtable]$BoundParameters
@@ -274,6 +281,15 @@ function Invoke-Preflight {
     )
 
     $resolvedRepoRoot = Resolve-RepoRoot -RepoRoot $RepoRoot
+
+    $remoteCheckScript = Join-Path $resolvedRepoRoot 'Tooling\Test-ForkRemotes.ps1'
+    if ($env:GITHUB_ACTIONS -ne 'true' -and (Test-Path -Path $remoteCheckScript)) {
+        try {
+            & $remoteCheckScript -RepoRoot $resolvedRepoRoot | Out-Null
+        } catch {
+            Write-Warning ("Fork remote check failed: {0}" -f $_.Exception.Message)
+        }
+    }
 
     $contractScript = Join-Path $resolvedRepoRoot 'Tooling\support\RunnerContract.ps1'
     if (Test-Path -Path $contractScript) {

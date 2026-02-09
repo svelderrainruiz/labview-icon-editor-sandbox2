@@ -18,6 +18,10 @@ Common entrypoints:
 - `Invoke-WorktreeOrchestrator.ps1`  
   Resolves worktree policy/root, builds runner-cli in the selected worktree, and can invoke local CI parity.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -LabVIEWVersion 2021 -EnsureCleanState`
+- `Open-PullRequest.ps1`  
+  Opens a GitHub PR for the current branch using `gh`.  
+  Example: `pwsh -NoProfile -File .\\Tooling\\Open-PullRequest.ps1 -BaseBranch develop -OpenInBrowser`  
+  Options: `-RequireCleanWorktree`, `-Draft`
 - `Get-PylaviOffenders.ps1`  
   Summarizes the latest pylavi offenders report for agent handoffs or automation.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Get-PylaviOffenders.ps1`  
@@ -42,3 +46,26 @@ Related config:
   Strict configuration for `vi_validate` (paths, skips, policy). The LabVIEW version is injected at runtime from `.lvversion`.
 - `pylavi/vi-validate-legacy.yml`  
   Legacy scope for `vi_validate` (typically absolute-path checks only).
+
+## Local GitHub Auth and Fork Remotes
+
+Tooling expects GitKraken CLI (`gk`) to be available and routes git calls through it.
+If `gk` is missing, scripts will fail fast.
+
+Some tooling fetches GitHub artifacts or queries workflow runs. Configure auth and ensure your fork remotes are correct.
+
+Auth options (either works):
+- `GH_TOKEN` or `GITHUB_TOKEN` with `actions:read` for artifact fetches.
+- `gh` CLI login (`gh auth status`) for commands that use `gh`.
+
+Fork remotes:
+- Ensure `origin` points to your fork and `upstream` points to `ni/labview-icon-editor`.
+- Run `pwsh -NoProfile -File .\Tooling\Test-ForkRemotes.ps1` to warn when `origin` still points to upstream and to validate non-interactive fetch connectivity.
+- Set `LVIE_SKIP_REMOTE_CONNECTIVITY_CHECK=1` to skip the connectivity checks when working offline.
+
+Example fork setup:
+```powershell
+git remote set-url origin https://github.com/<your-user>/labview-icon-editor.git
+git remote add upstream https://github.com/ni/labview-icon-editor.git
+git remote -v
+```
