@@ -770,7 +770,7 @@ try {
                     $statusInfo.RawStatus
                 }
 
-                if ($devModeRelaxedChecks) {
+                if ($devModeRequested) {
                     $unexpected = @()
                     if ($statusInfo.MissingPaths -and $statusInfo.MissingPaths.Count -gt 0) {
                         $unexpected = $statusInfo.MissingPaths | Where-Object {
