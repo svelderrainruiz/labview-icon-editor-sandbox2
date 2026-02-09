@@ -215,7 +215,10 @@ function Get-IniLibraryPathList {
         return @()
     }
 
-    return ($value -split ';' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    return ($value -split ';' |
+            ForEach-Object { $_.Trim().Trim('"') } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Where-Object { -not (Test-IsInvalidLibraryPathToken -PathValue $_) })
 }
 
 function Format-IniPath {
@@ -232,6 +235,28 @@ function Format-IniPath {
     }
 
     return $PathValue
+}
+
+function Test-IsInvalidLibraryPathToken {
+    param(
+        [string]$PathValue
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+        return $true
+    }
+
+    $trimmed = $PathValue.Trim().Trim('"')
+    if ([string]::IsNullOrWhiteSpace($trimmed)) {
+        return $true
+    }
+
+    # Ignore obvious corruption fragments such as bare drive roots (e.g. C:\).
+    if ($trimmed -match '^[A-Za-z]:\\?$') {
+        return $true
+    }
+
+    return $false
 }
 
 function Set-IniLibraryPath {
@@ -261,23 +286,34 @@ function Set-IniLibraryPath {
         }
     }
 
-    $repoRootNormalized = Resolve-PathValue -PathValue $RepoRoot
-    $existingNormalized = @{}
+    $normalizedPaths = @()
+    $seen = @{}
     foreach ($pathValue in $paths) {
-        $normalized = Resolve-PathValue -PathValue $pathValue
-        if ($normalized) {
-            $existingNormalized[$normalized.ToLowerInvariant()] = $pathValue
+        if (Test-IsInvalidLibraryPathToken -PathValue $pathValue) {
+            Write-Warning ("Ignoring invalid Localhost.LibraryPaths entry in {0}: '{1}'" -f $IniPath, $pathValue)
+            continue
         }
+
+        $normalized = Resolve-PathValue -PathValue $pathValue
+        $candidate = if ($normalized) { $normalized } else { $pathValue.Trim() }
+        $key = $candidate.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+        $seen[$key] = $true
+        $normalizedPaths += $candidate
     }
 
+    $repoRootNormalized = Resolve-PathValue -PathValue $RepoRoot
     if ($repoRootNormalized) {
         $key = $repoRootNormalized.ToLowerInvariant()
-        if (-not $existingNormalized.ContainsKey($key)) {
-            $paths += $repoRootNormalized
+        if (-not $seen.ContainsKey($key)) {
+            $normalizedPaths += $repoRootNormalized
+            $seen[$key] = $true
         }
     }
 
-    $formatted = $paths | ForEach-Object { Format-IniPath -PathValue $_ } | Where-Object { $_ }
+    $formatted = $normalizedPaths | ForEach-Object { Format-IniPath -PathValue $_ } | Where-Object { $_ }
     $newLine = if ($formatted.Count -gt 0) {
         "Localhost.LibraryPaths={0}" -f ($formatted -join ';')
     } else {
