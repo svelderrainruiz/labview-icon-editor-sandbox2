@@ -304,6 +304,7 @@
 			<Item Name="lv_icon.vit" Type="VI" URL="../resource/plugins/lv_icon.vit"/>
 			<Item Name="lv_IconEditor.lvlib" Type="Library" URL="../resource/plugins/lv_IconEditor.lvlib"/>
 			<Item Name="SAMPLE_lv_icon.vi" Type="VI" URL="../resource/plugins/SAMPLE_lv_icon.vi"/>
+			<Item Name="lv_icon_launcher.vi" Type="VI" URL="../resource/plugins/lv_icon_launcher.vi"/>
 		</Item>
 		<Item Name="Tooling" Type="Folder">
 			<Item Name="support" Type="Folder">
@@ -313,10 +314,13 @@
 				<Item Name="Prompt to Confirm Archival.vi" Type="VI" URL="../Tooling/support/Prompt to Confirm Archival.vi"/>
 				<Item Name="Set LibraryPaths to Include Icon Editor.vi" Type="VI" URL="../Tooling/support/Set LibraryPaths to Include Icon Editor.vi"/>
 				<Item Name="Add dev dist if present.vi" Type="VI" URL="../Tooling/support/Add dev dist if present.vi"/>
+				<Item Name="API Paths.vi" Type="VI" URL="../Tooling/support/API Paths.vi"/>
+				<Item Name="PPL Paths.vi" Type="VI" URL="../Tooling/support/PPL Paths.vi"/>
+				<Item Name="Set Path in Launcher.vi" Type="VI" URL="../Tooling/support/Set Path in Launcher.vi"/>
 			</Item>
 			<Item Name="Force Icon Editor to Unload.vi" Type="VI" URL="../Tooling/Force Icon Editor to Unload.vi"/>
 			<Item Name="Pre Build Icon Editor PPL.vi" Type="VI" URL="../Tooling/Pre Build Icon Editor PPL.vi"/>
-			<Item Name="Prepare LV to Use Icon Editor Source.vi" Type="VI" URL="../Tooling/Prepare LV to Use Icon Editor Source.vi"/>
+			<Item Name="Set Run Icon Editor from Source.vi" Type="VI" URL="../Tooling/Set Run Icon Editor from Source.vi"/>
 			<Item Name="Remove Icon Editor Settings.vi" Type="VI" URL="../Tooling/Remove Icon Editor Settings.vi"/>
 		</Item>
 		<Item Name="vi.lib/LabVIEW Icon API" Type="Folder">
