@@ -50,6 +50,7 @@ if ([string]::IsNullOrWhiteSpace($labviewYear)) {
 $Script:HelperExitCode   = 0
 $Script:MissingFileLines = @()
 $Script:ParsingFailed    = $false
+$Script:HelperOutputLines = @()
 
 $HelperPath      = Join-Path $PSScriptRoot 'RunMissingCheckWithGCLI.ps1'
 $MissingFilePath = Join-Path $PSScriptRoot 'missing_files.txt'
@@ -57,6 +58,67 @@ $MissingFilePath = Join-Path $PSScriptRoot 'missing_files.txt'
 if (-not (Test-Path $HelperPath)) {
     Write-Error "Helper script not found: $HelperPath"
     exit 100
+}
+
+function Resolve-BoolFromEnv {
+    param(
+        [string]$Name,
+        [bool]$Fallback = $false
+    )
+
+    if (-not (Test-Path "Env:$Name")) {
+        return $Fallback
+    }
+
+    $raw = (Get-Item "Env:$Name").Value
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        return $Fallback
+    }
+
+    $normalized = $raw.Trim().ToLowerInvariant()
+    return ($normalized -notin @('0', 'false', 'no'))
+}
+
+function ConvertFrom-AnsiText {
+    param([string]$Text)
+    if ($null -eq $Text) { return '' }
+    return ($Text -replace "`e\[[\d;]*m", '')
+}
+
+function Test-AllowNoLabVIEWIconApiGap {
+    param(
+        [string[]]$MissingLines,
+        [string]$Arch,
+        [string]$LabVIEWYear
+    )
+
+    if (-not (Resolve-BoolFromEnv -Name 'LVIE_FORCE_NO_LABVIEW_DEVMODE' -Fallback $false)) {
+        return $false
+    }
+    if ($Arch -ne '32') {
+        return $false
+    }
+
+    $allowByPolicy = Resolve-BoolFromEnv -Name 'LVIE_ALLOW_MISSING_IN_PROJECT_ICON_API_GAP' -Fallback (Resolve-BoolFromEnv -Name 'LVIE_RUNNER_ACL_WARN_ONLY' -Fallback $false)
+    if (-not $allowByPolicy) {
+        return $false
+    }
+
+    if (-not $MissingLines -or $MissingLines.Count -eq 0) {
+        return $false
+    }
+
+    $expectedPrefix = "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\vi.lib\LabVIEW Icon API\"
+    foreach ($line in $MissingLines) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            return $false
+        }
+        if (-not $line.StartsWith($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $false
+        }
+    }
+
+    return $true
 }
 
 # =========================  SETUP  =========================
@@ -79,12 +141,13 @@ function MainSequence {
     Write-Host "`n=== MainSequence ==="
     Write-Host "Invoking missing‑file check via helper script …`n"
 
-    # call helper & capture any stdout (not strictly needed now)
-    & $HelperPath -LVVersion $labviewYear -Arch $Arch -ProjectFile $ProjectFile -ConnectTimeoutMs $ConnectTimeoutMs
+    # call helper and retain output for diagnostics/parsing
+    $helperOutput = @(& $HelperPath -LVVersion $labviewYear -Arch $Arch -ProjectFile $ProjectFile -ConnectTimeoutMs $ConnectTimeoutMs 2>&1)
     $Script:HelperExitCode = $LASTEXITCODE
+    $Script:HelperOutputLines = @($helperOutput | ForEach-Object { ConvertFrom-AnsiText -Text ([string]$_).Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
     if ($Script:HelperExitCode -ne 0) {
-        Write-Error "Helper returned non-zero exit code: $Script:HelperExitCode"
+        Write-Warning "Helper returned non-zero exit code: $Script:HelperExitCode"
     }
 
     # -------- read missing_files.txt --------
@@ -92,10 +155,17 @@ function MainSequence {
         $Script:MissingFileLines = Get-Content $MissingFilePath |
                                    ForEach-Object { $_.Trim() } |
                                    Where-Object { $_ -ne '' }
+    } elseif ($Script:HelperOutputLines.Count -gt 0) {
+        $Script:MissingFileLines = $Script:HelperOutputLines | Where-Object { $_ -match '^[A-Za-z]:\\' }
     }
-    else {
-        if ($Script:HelperExitCode -ne 0) {
-            # helper failed and didn't produce a file – we cannot parse anything
+
+    if ($Script:HelperExitCode -ne 0) {
+        if (Test-AllowNoLabVIEWIconApiGap -MissingLines $Script:MissingFileLines -Arch $Arch -LabVIEWYear $labviewYear) {
+            Write-Warning ("Allowing Missing-In-Project Icon API gap for LV{0} {1}-bit under forced no-LabVIEW mode." -f $labviewYear, $Arch)
+            $Script:HelperExitCode = 0
+            $Script:MissingFileLines = @()
+        } elseif ($Script:MissingFileLines.Count -eq 0) {
+            # helper failed and produced no parseable missing-file details
             $Script:ParsingFailed = $true
             return
         }
