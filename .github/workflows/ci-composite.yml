@@ -1015,10 +1015,33 @@ jobs:
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
-          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness ${{ matrix.bitness }} `
-            -RepoRoot "$env:REPO_ROOT"
+          $useLabVIEWForReleasePriorityX86 = (
+            '${{ matrix.bitness }}' -eq '32' -and
+            '${{ github.event_name }}' -eq 'workflow_dispatch' -and
+            '${{ github.event.inputs.force_gcli_lunit }}' -eq 'true'
+          )
+
+          if ($useLabVIEWForReleasePriorityX86) {
+            Write-Host 'Release-priority mode detected (force_gcli_lunit=true, 32-bit): using LabVIEW-backed dev mode for unit tests.'
+            $previousForceNoLabVIEW = $env:LVIE_FORCE_NO_LABVIEW_DEVMODE
+            Remove-Item Env:LVIE_FORCE_NO_LABVIEW_DEVMODE -ErrorAction SilentlyContinue
+            try {
+              & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
+                -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
+                -SupportedBitness ${{ matrix.bitness }} `
+                -RepoRoot "$env:REPO_ROOT" `
+                -UseLabVIEW
+            } finally {
+              if (-not [string]::IsNullOrWhiteSpace($previousForceNoLabVIEW)) {
+                $env:LVIE_FORCE_NO_LABVIEW_DEVMODE = $previousForceNoLabVIEW
+              }
+            }
+          } else {
+            & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
+              -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
+              -SupportedBitness ${{ matrix.bitness }} `
+              -RepoRoot "$env:REPO_ROOT"
+          }
       - name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
