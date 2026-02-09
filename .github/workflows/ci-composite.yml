@@ -1426,9 +1426,121 @@ jobs:
           close_labview: 'true'
           close_bitness: 64
 
+  build-ppl-linux-container:
+    name: Build Linux Container Packed Library
+    needs: [run-metadata, prerelease-context, version]
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.asset-meta.outputs.artifact_name }}
+      asset_name: ${{ steps.asset-meta.outputs.asset_name }}
+    steps:
+      - id: asset-meta
+        name: Resolve Linux packed library artifact names
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.version.outputs.VERSION }}'
+          if [[ -z "$version" ]]; then
+            echo "Version output is required to name Linux packed library asset." >&2
+            exit 1
+          fi
+
+          asset_name="lv_icon_linux_${version}.lvlibp"
+          artifact_name="lv_icon_linux_container"
+
+          echo "asset_name=$asset_name" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Skip Linux packed library build when publish intent is disabled
+        if: ${{ needs.prerelease-context.outputs.should_publish != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Skipping Linux packed library build because prerelease publish intent is disabled."
+          echo "- Linux packed library build: skipped (prerelease publish disabled)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout code
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Pull LabVIEW Linux image
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        shell: bash
+        env:
+          LV_RELEASE: 2026q1
+        run: |
+          set -euo pipefail
+          image="nationalinstruments/labview:${LV_RELEASE}-linux"
+          echo "Using image: ${image}"
+          docker pull "${image}"
+          echo "LABVIEW_LINUX_IMAGE=${image}" >> "$GITHUB_ENV"
+
+      - name: Build Linux packed library via LabVIEWCLI container parity script
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x Tooling/container-parity/runlabview-linux.sh Tooling/container-parity/devmode-linux.sh
+
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -e WORKSPACE_ROOT=/workspace \
+            -e TARGET_DIR=/workspace/Test/Templates \
+            -e "CONTAINER_PARITY_EXCLUDE_FILES=Polymorphic Template.vi" \
+            -e "CONTAINER_PARITY_BUILD_SPEC=true" \
+            -e "CONTAINER_PARITY_BUILD_SPEC_NAME=Editor Packed Library" \
+            -e "CONTAINER_PARITY_TARGET_NAME=My Computer" \
+            -e "CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH=resource/plugins/lv_icon.lvlibp" \
+            -e "CONTAINER_PARITY_LABVIEW_VERSION=2026" \
+            "$LABVIEW_LINUX_IMAGE" \
+            bash -lc "chmod +x /workspace/Tooling/container-parity/runlabview-linux.sh /workspace/Tooling/container-parity/devmode-linux.sh && /workspace/Tooling/container-parity/runlabview-linux.sh"
+
+      - id: prepare-linux-ppl
+        name: Prepare Linux packed library release asset
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_path="${GITHUB_WORKSPACE}/resource/plugins/lv_icon.lvlibp"
+          if [[ ! -f "$source_path" ]]; then
+            echo "Expected Linux packed library not found: $source_path" >&2
+            exit 1
+          fi
+
+          asset_name='${{ steps.asset-meta.outputs.asset_name }}'
+          if [[ -z "$asset_name" ]]; then
+            echo "Linux packed library asset_name output is empty." >&2
+            exit 1
+          fi
+
+          dest_dir="${RUNNER_TEMP}/prerelease-linux-ppl"
+          mkdir -p "$dest_dir"
+          dest_path="${dest_dir}/${asset_name}"
+          cp "$source_path" "$dest_path"
+
+          bytes="$(wc -c < "$dest_path" | xargs)"
+          echo "Prepared Linux packed library release asset: $dest_path ($bytes bytes)"
+          echo "asset_path=$dest_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux packed library artifact
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.asset-meta.outputs.artifact_name }}
+          path: ${{ steps.prepare-linux-ppl.outputs.asset_path }}
+          if-no-files-found: error
+
+      - name: Upload Linux container logs
+        if: ${{ always() && needs.prerelease-context.outputs.should_publish == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-container-ppl-logs
+          path: TestResults/container-parity/linux/logs
+          if-no-files-found: warn
+
   publish-prerelease:
     name: Publish Pre-Release
-    needs: [run-metadata, prerelease-context, version, build-vip]
+    needs: [run-metadata, prerelease-context, version, build-vip, build-ppl-linux-container]
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -1474,6 +1586,14 @@ jobs:
           name: vip-build-status
           path: ${{ runner.temp }}/prerelease-assets/vip-build-status
 
+      - name: Download Linux packed library artifact
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-ppl-linux-container.outputs.artifact_name }}
+          path: ${{ runner.temp }}/prerelease-assets/linux-ppl
+
       - id: publish
         name: Publish prerelease and write status
         shell: pwsh
@@ -1493,6 +1613,7 @@ jobs:
           $tag = '${{ needs.version.outputs.VERSION }}'
           $expectedVipFileName = '${{ needs.build-vip.outputs.vip_file_name }}'
           $expectedReleaseNotesFileName = '${{ needs.build-vip.outputs.release_notes_file_name }}'
+          $expectedLinuxPackedLibraryFileName = '${{ needs.build-ppl-linux-container.outputs.asset_name }}'
 
           $publishStatus = 'skipped'
           $releaseUrl = ''
@@ -1509,6 +1630,9 @@ jobs:
               if ([string]::IsNullOrWhiteSpace($expectedReleaseNotesFileName)) {
                 throw 'Required build-vip output missing: release_notes_file_name.'
               }
+              if ([string]::IsNullOrWhiteSpace($expectedLinuxPackedLibraryFileName)) {
+                throw 'Required build-ppl-linux-container output missing: asset_name.'
+              }
 
               $vipFiles = Get-ChildItem -Path (Join-Path $assetRoot 'vip') -Filter $expectedVipFileName -File -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName
               if (-not $vipFiles) { throw ("Required asset missing: expected VIP file '{0}'." -f $expectedVipFileName) }
@@ -1520,6 +1644,10 @@ jobs:
 
               $vipStatusFile = Get-ChildItem -Path (Join-Path $assetRoot 'vip-build-status') -Filter vip-build.json -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
               if (-not $vipStatusFile) { throw 'Required asset missing: vip-build-status/vip-build.json.' }
+
+              $linuxPackedLibraryFiles = Get-ChildItem -Path (Join-Path $assetRoot 'linux-ppl') -Filter $expectedLinuxPackedLibraryFileName -File -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName
+              if (-not $linuxPackedLibraryFiles) { throw ("Required asset missing: expected Linux packed library '{0}'." -f $expectedLinuxPackedLibraryFileName) }
+              $linuxPackedLibraryFile = $linuxPackedLibraryFiles[0]
 
               $gcliDir = Join-Path $assetRoot 'gcli-logs'
               if (-not (Test-Path $gcliDir)) { throw 'Required asset missing: gcli-logs artifact.' }
@@ -1570,13 +1698,13 @@ jobs:
               $releaseUrl = [string]$release.html_url
               $releaseId = [string]$release.id
 
-              & gh release upload $tag $vipFile.FullName $notesFile.FullName $gcliZip $vipStatusFile.FullName --clobber
+              & gh release upload $tag $vipFile.FullName $notesFile.FullName $gcliZip $vipStatusFile.FullName $linuxPackedLibraryFile.FullName --clobber
               if ($LASTEXITCODE -ne 0) {
                 throw "Failed to upload release assets for tag '$tag'."
               }
 
               $publishStatus = 'published'
-              $attachedAssets = @($vipFile.Name, $notesFile.Name, (Split-Path -Path $gcliZip -Leaf), $vipStatusFile.Name)
+              $attachedAssets = @($vipFile.Name, $notesFile.Name, (Split-Path -Path $gcliZip -Leaf), $vipStatusFile.Name, $linuxPackedLibraryFile.Name)
             }
           } catch {
             $publishStatus = 'failed'
@@ -1597,7 +1725,7 @@ jobs:
               release_url = $releaseUrl
               release_id = $releaseId
               merged_pr_number = $mergedPrNumber
-              required_assets = @('vip', 'release_notes', 'gcli-logs', 'vip-build-status')
+              required_assets = @('vip', 'release_notes', 'gcli-logs', 'vip-build-status', 'linux-packed-library')
               attached_assets = $attachedAssets
               error = $errorMessage
               generated_utc = (Get-Date).ToUniversalTime().ToString('o')
@@ -1641,6 +1769,7 @@ jobs:
       - unit-tests
       - build-ppl-x64
       - build-ppl-x86
+      - build-ppl-linux-container
       - build-vip
       - publish-prerelease
       - version
@@ -1672,6 +1801,7 @@ jobs:
             'unit-tests',
             'build-ppl-x64',
             'build-ppl-x86',
+            'build-ppl-linux-container',
             'build-vip',
             'publish-prerelease',
             'version',
