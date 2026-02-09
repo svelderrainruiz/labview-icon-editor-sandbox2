@@ -735,9 +735,15 @@ try {
         throw "VerifyIEPaths.vi timed out after $ProcessTimeoutMs ms."
     }
     if ($result.ExitCode -ne 0) {
-        $allowGcliExit = $IgnoreGcliExitCode -or $devModeRelaxedChecks
+        $allowGcliExit = $IgnoreGcliExitCode -or $devModeRequested
         if ($allowGcliExit) {
-            $reason = if ($IgnoreGcliExitCode) { 'IgnoreGcliExitCode is set' } else { 'development mode is enabled' }
+            $reason = if ($IgnoreGcliExitCode) {
+                'IgnoreGcliExitCode is set'
+            } elseif ($devModeRelaxedChecks) {
+                'development mode is enabled'
+            } else {
+                'development mode was requested'
+            }
             Write-Warning ("VerifyIEPaths.vi returned exit code {0}; continuing because {1}." -f $result.ExitCode, $reason)
         } else {
             throw "VerifyIEPaths.vi failed with exit code $($result.ExitCode)."
