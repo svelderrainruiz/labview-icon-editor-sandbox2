@@ -58,6 +58,21 @@ normalize_path_for_compare() {
   printf '%s' "${value,,}"
 }
 
+is_invalid_library_path_token() {
+  local value
+  value="$(trim "$1")"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="$(trim "$value")"
+  if [[ -z "$value" ]]; then
+    return 0
+  fi
+  if [[ "$value" =~ ^[A-Za-z]:\\?$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
 flatten_icon_api_layout() {
   shopt -s dotglob nullglob
   local current="$ICON_API_DIR"
@@ -82,23 +97,75 @@ read_library_paths() {
   fi
 
   local line
-  line="$(grep -i -m1 '^[[:space:]]*localhost\.librarypaths[[:space:]]*=' "$INI_PATH" || true)"
-  if [[ -z "$line" ]]; then
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    local value="${line#*=}"
+    IFS=';' read -r -a raw_paths <<< "$value"
+    for item in "${raw_paths[@]}"; do
+      local cleaned
+      cleaned="$(trim "$item")"
+      cleaned="${cleaned%\"}"
+      cleaned="${cleaned#\"}"
+      cleaned="$(trim "$cleaned")"
+      if is_invalid_library_path_token "$cleaned"; then
+        continue
+      fi
+      if [[ -n "$cleaned" ]]; then
+        printf '%s\n' "$cleaned"
+      fi
+    done
+  done < <(grep -i '^[[:space:]]*localhost\.librarypaths[[:space:]]*=' "$INI_PATH" || true)
+}
+
+library_path_key_count() {
+  if [[ ! -f "$INI_PATH" ]]; then
+    printf '0'
     return
   fi
+  grep -i -c '^[[:space:]]*localhost\.librarypaths[[:space:]]*=' "$INI_PATH" || true
+}
 
-  local value="${line#*=}"
-  IFS=';' read -r -a raw_paths <<< "$value"
-  for item in "${raw_paths[@]}"; do
-    local cleaned
-    cleaned="$(trim "$item")"
-    cleaned="${cleaned%\"}"
-    cleaned="${cleaned#\"}"
-    cleaned="$(trim "$cleaned")"
-    if [[ -n "$cleaned" ]]; then
-      printf '%s\n' "$cleaned"
-    fi
-  done
+library_path_entry_count() {
+  local count=0
+  while IFS= read -r _line; do
+    ((count += 1))
+  done < <(read_library_paths)
+  printf '%s' "$count"
+}
+
+is_workspace_library_path_only() {
+  local target_key
+  target_key="$(normalize_path_for_compare "$WORKSPACE_ROOT")"
+  mapfile -t paths < <(read_library_paths)
+  if [[ ${#paths[@]} -ne 1 ]]; then
+    return 1
+  fi
+  if [[ "$(normalize_path_for_compare "${paths[0]}")" != "$target_key" ]]; then
+    return 1
+  fi
+  if [[ "$(library_path_key_count)" -ne 1 ]]; then
+    return 1
+  fi
+  return 0
+}
+
+is_library_path_absent() {
+  if [[ "$(library_path_key_count)" -ne 0 ]]; then
+    return 1
+  fi
+  if [[ "$(library_path_entry_count)" -ne 0 ]]; then
+    return 1
+  fi
+  return 0
+}
+
+write_single_library_path() {
+  local target="$1"
+  write_library_paths "$target"
+}
+
+clear_library_paths() {
+  write_library_paths
 }
 
 write_library_paths() {
@@ -111,20 +178,15 @@ write_library_paths() {
   local set_line="0"
   local newline=""
   if [[ ${#paths[@]} -gt 0 ]]; then
-    set_line="1"
-    local serialized=()
-    for value in "${paths[@]}"; do
+    local value="${paths[0]}"
+    if [[ -n "$value" ]]; then
+      set_line="1"
       if [[ "$value" == *" "* ]]; then
-        serialized+=("\"$value\"")
+        newline="Localhost.LibraryPaths=\"$value\""
       else
-        serialized+=("$value")
+        newline="Localhost.LibraryPaths=$value"
       fi
-    done
-    local joined
-    IFS=';'
-    joined="${serialized[*]}"
-    IFS=$' \t\n'
-    newline="Localhost.LibraryPaths=$joined"
+    fi
   fi
 
   local tmp
@@ -148,58 +210,6 @@ write_library_paths() {
     }
   ' "$INI_PATH" > "$tmp"
   mv "$tmp" "$INI_PATH"
-}
-
-add_library_path() {
-  local target="$1"
-  local target_key
-  target_key="$(normalize_path_for_compare "$target")"
-  mapfile -t paths < <(read_library_paths)
-
-  local exists=0
-  for value in "${paths[@]}"; do
-    if [[ "$(normalize_path_for_compare "$value")" == "$target_key" ]]; then
-      exists=1
-      break
-    fi
-  done
-
-  if [[ "$exists" -eq 0 ]]; then
-    paths+=("$target")
-  fi
-
-  write_library_paths "${paths[@]}"
-}
-
-remove_library_path() {
-  local target="$1"
-  local target_key
-  target_key="$(normalize_path_for_compare "$target")"
-  mapfile -t paths < <(read_library_paths)
-
-  local remaining=()
-  for value in "${paths[@]}"; do
-    if [[ "$(normalize_path_for_compare "$value")" != "$target_key" ]]; then
-      remaining+=("$value")
-    fi
-  done
-
-  write_library_paths "${remaining[@]}"
-}
-
-contains_library_path() {
-  local target="$1"
-  local target_key
-  target_key="$(normalize_path_for_compare "$target")"
-  mapfile -t paths < <(read_library_paths)
-
-  for value in "${paths[@]}"; do
-    if [[ "$(normalize_path_for_compare "$value")" == "$target_key" ]]; then
-      return 0
-    fi
-  done
-
-  return 1
 }
 
 require_command() {
@@ -239,14 +249,14 @@ enable_mode() {
     exit 1
   fi
 
-  add_library_path "$WORKSPACE_ROOT"
+  write_single_library_path "$WORKSPACE_ROOT"
 
   local issues=()
   if [[ ! -f "$SHIP_PATH" || -f "$LVLIBP_PATH" || -d "$ICON_API_DIR" || ! -f "$ICON_API_ZIP" ]]; then
     issues+=("install files did not reach enabled state")
   fi
-  if ! contains_library_path "$WORKSPACE_ROOT"; then
-    issues+=("Localhost.LibraryPaths does not include workspace root")
+  if ! is_workspace_library_path_only; then
+    issues+=("Localhost.LibraryPaths must contain exactly one workspace-root path entry")
   fi
   if [[ ${#issues[@]} -gt 0 ]]; then
     echo "ERROR: Dev mode enable verification failed: ${issues[*]}" >&2
@@ -284,14 +294,14 @@ revert_mode() {
     exit 1
   fi
 
-  remove_library_path "$WORKSPACE_ROOT"
+  clear_library_paths
 
   local issues=()
   if [[ ! -f "$LVLIBP_PATH" || -f "$SHIP_PATH" || ! -d "$ICON_API_DIR" || -f "$ICON_API_ZIP" ]]; then
     issues+=("install files did not reach disabled state")
   fi
-  if contains_library_path "$WORKSPACE_ROOT"; then
-    issues+=("Localhost.LibraryPaths still includes workspace root")
+  if ! is_library_path_absent; then
+    issues+=("Localhost.LibraryPaths token must be absent after revert")
   fi
   if [[ ${#issues[@]} -gt 0 ]]; then
     echo "ERROR: Dev mode revert verification failed: ${issues[*]}" >&2

@@ -51,7 +51,10 @@ Describe 'Dev mode (no LabVIEW) scripts' {
             (Test-Path -Path (Join-Path $installRoot 'vi.lib\LabVIEW Icon API.zip')) | Should -Be $true
             (Test-Path -Path (Join-Path $installRoot 'resource\plugins\lv_icon.ship')) | Should -Be $true
             (Test-Path -Path (Join-Path $installRoot 'resource\plugins\lv_icon.lvlibp')) | Should -Be $false
-            (Get-Content -Path $iniPath -Raw) | Should -Match ([regex]::Escape($repoRoot))
+            $lineAfterEnable = Get-Content -Path $iniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' } | Select-Object -First 1
+            $lineAfterEnable | Should -Match ([regex]::Escape($repoRoot))
+            $lineAfterEnable | Should -Not -Match ([regex]::Escape('C:\keep'))
+            ($lineAfterEnable.Split(';').Count) | Should -Be 1
 
             Disable-DevModeNoLabVIEW -Bitness '64' -RepoRoot $repoRoot -LabVIEWYear '2021'
 
@@ -59,16 +62,15 @@ Describe 'Dev mode (no LabVIEW) scripts' {
             (Test-Path -Path (Join-Path $installRoot 'vi.lib\LabVIEW Icon API.zip')) | Should -Be $false
             (Test-Path -Path (Join-Path $installRoot 'resource\plugins\lv_icon.lvlibp')) | Should -Be $true
             (Test-Path -Path (Join-Path $installRoot 'resource\plugins\lv_icon.ship')) | Should -Be $false
-            $iniContents = Get-Content -Path $iniPath -Raw
-            $iniContents | Should -Match ([regex]::Escape('C:\keep'))
-            $iniContents | Should -Not -Match ([regex]::Escape($repoRoot))
+            $lineAfterRevert = Get-Content -Path $iniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' } | Select-Object -First 1
+            $lineAfterRevert | Should -BeNullOrEmpty
         }
         finally {
             Remove-Item -Path $root -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 
-    It 'sanitizes corrupted Localhost.LibraryPaths tokens while preserving valid entries' {
+    It 'sanitizes corrupted and multi-value Localhost.LibraryPaths tokens to repo-only strict mode' {
         $root = Join-Path $env:TEMP ("lvie-devmode-ini-" + [guid]::NewGuid().ToString('N'))
         $repoRoot = Join-Path $root 'repo'
         New-Item -ItemType Directory -Path $repoRoot -Force | Out-Null
@@ -82,15 +84,45 @@ Describe 'Dev mode (no LabVIEW) scripts' {
             Set-IniLibraryPath -IniPath $iniPath -RepoRoot $repoRoot
             $lineAfterSet = Get-Content -Path $iniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' } | Select-Object -First 1
             $lineAfterSet | Should -Match ([regex]::Escape($repoRoot))
-            $lineAfterSet | Should -Match ([regex]::Escape('C:\keep'))
+            $lineAfterSet | Should -Not -Match ([regex]::Escape('C:\keep'))
             $lineAfterSet | Should -Not -Match '(?i)(^|;)\s*[A-Za-z]:\\\s*(;|$)'
-            ($lineAfterSet.ToLowerInvariant().Split(';') | Where-Object { $_ -match [regex]::Escape($repoRoot.ToLowerInvariant()) }).Count | Should -Be 1
+            ($lineAfterSet.Split(';').Count) | Should -Be 1
 
-            Remove-IniLibraryPath -IniPath $iniPath -RepoRoot $repoRoot
+            Remove-IniLibraryPath -IniPath $iniPath
             $lineAfterRevert = Get-Content -Path $iniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' } | Select-Object -First 1
-            $lineAfterRevert | Should -Match ([regex]::Escape('C:\keep'))
-            $lineAfterRevert | Should -Not -Match ([regex]::Escape($repoRoot))
-            $lineAfterRevert | Should -Not -Match '(?i)(^|;)\s*[A-Za-z]:\\\s*(;|$)'
+            $lineAfterRevert | Should -BeNullOrEmpty
+        }
+        finally {
+            Remove-Item -Path $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'normalizes duplicate and case-insensitive Localhost.LibraryPaths keys to one path on enable and zero on revert' {
+        $root = Join-Path $env:TEMP ("lvie-devmode-dup-" + [guid]::NewGuid().ToString('N'))
+        $repoRoot = Join-Path $root 'repo'
+        New-Item -ItemType Directory -Path $repoRoot -Force | Out-Null
+        $installRoot = New-TestInstall -Root $root
+        $iniPath = Join-Path $installRoot 'LabVIEW.ini'
+        $iniBody = @(
+            'Other=1'
+            'Localhost.LibraryPaths=C:\first'
+            'LOCALHOST.LIBRARYPATHS=C:\second;C:\'
+            'localhost.librarypaths='
+        ) -join "`n"
+        Set-Content -Path $iniPath -Value $iniBody -Encoding ascii
+
+        Mock -CommandName Get-LabVIEWInstallRoot -MockWith { return $installRoot }
+
+        try {
+            Set-IniLibraryPath -IniPath $iniPath -RepoRoot $repoRoot
+            $keyLinesAfterSet = @(Get-Content -Path $iniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' })
+            $keyLinesAfterSet.Count | Should -Be 1
+            $keyLinesAfterSet[0] | Should -Match ([regex]::Escape($repoRoot))
+            ($keyLinesAfterSet[0].Split(';').Count) | Should -Be 1
+
+            Remove-IniLibraryPath -IniPath $iniPath
+            $keyLinesAfterRevert = @(Get-Content -Path $iniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' })
+            $keyLinesAfterRevert.Count | Should -Be 0
         }
         finally {
             Remove-Item -Path $root -Recurse -Force -ErrorAction SilentlyContinue
