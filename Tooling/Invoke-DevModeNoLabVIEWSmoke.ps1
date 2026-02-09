@@ -164,6 +164,143 @@ function Format-SmokeSummary {
     return ,$lines
 }
 
+function ConvertTo-SmokePesterResult {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [object]$RawResult
+    )
+
+    $rawTests = @()
+    if ($RawResult -and $RawResult.PSObject.Properties.Name -contains 'Tests') {
+        $rawTests = @($RawResult.Tests)
+    } elseif ($RawResult -and $RawResult.PSObject.Properties.Name -contains 'TestResult') {
+        $rawTests = @($RawResult.TestResult)
+    }
+
+    $normalizedTests = @()
+    foreach ($test in $rawTests) {
+        $filePath = $null
+        if ($test -and $test.PSObject.Properties.Name -contains 'ScriptBlock' -and $test.ScriptBlock) {
+            if ($test.ScriptBlock.PSObject.Properties.Name -contains 'File') {
+                $filePath = [string]$test.ScriptBlock.File
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($filePath)) {
+            foreach ($candidate in @('Path', 'Filename', 'File', 'ScriptName')) {
+                if ($test -and $test.PSObject.Properties.Name -contains $candidate) {
+                    $value = [string]$test.$candidate
+                    if (-not [string]::IsNullOrWhiteSpace($value)) {
+                        $filePath = $value
+                        break
+                    }
+                }
+            }
+        }
+
+        $resultName = 'Unknown'
+        if ($test -and $test.PSObject.Properties.Name -contains 'Result') {
+            $value = [string]$test.Result
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                $resultName = $value
+            }
+        } elseif ($test -and $test.PSObject.Properties.Name -contains 'Passed') {
+            $resultName = if ([bool]$test.Passed) { 'Passed' } else { 'Failed' }
+        }
+
+        $normalizedTests += [pscustomobject]@{
+            ScriptBlock = [pscustomobject]@{
+                File = $filePath
+            }
+            Result = $resultName
+        }
+    }
+
+    $totalCount = if ($RawResult -and $RawResult.PSObject.Properties.Name -contains 'TotalCount') { [int]$RawResult.TotalCount } else { $normalizedTests.Count }
+    $passedCount = if ($RawResult -and $RawResult.PSObject.Properties.Name -contains 'PassedCount') {
+        [int]$RawResult.PassedCount
+    } else {
+        (@($normalizedTests | Where-Object { $_.Result -eq 'Passed' })).Count
+    }
+    $failedCount = if ($RawResult -and $RawResult.PSObject.Properties.Name -contains 'FailedCount') {
+        [int]$RawResult.FailedCount
+    } else {
+        (@($normalizedTests | Where-Object { $_.Result -eq 'Failed' })).Count
+    }
+    $skippedCount = if ($RawResult -and $RawResult.PSObject.Properties.Name -contains 'SkippedCount') {
+        [int]$RawResult.SkippedCount
+    } else {
+        (@($normalizedTests | Where-Object { $_.Result -in @('Skipped', 'Pending', 'NotRun') })).Count
+    }
+    $inconclusiveCount = if ($RawResult -and $RawResult.PSObject.Properties.Name -contains 'InconclusiveCount') {
+        [int]$RawResult.InconclusiveCount
+    } else {
+        (@($normalizedTests | Where-Object { $_.Result -eq 'Inconclusive' })).Count
+    }
+
+    return [pscustomobject]@{
+        TotalCount        = $totalCount
+        PassedCount       = $passedCount
+        FailedCount       = $failedCount
+        SkippedCount      = $skippedCount
+        InconclusiveCount = $inconclusiveCount
+        Tests             = @($normalizedTests)
+    }
+}
+
+function Invoke-DevModeNoLabVIEWSmokePester {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$SuitePaths,
+
+        [Parameter(Mandatory = $true)]
+        [string]$XmlPath
+    )
+
+    $invokePester = Get-Command Invoke-Pester -ErrorAction SilentlyContinue
+    if (-not $invokePester) {
+        throw "Invoke-Pester command is not available. Install Pester 4+ before running DevMode.NoLabVIEW smoke."
+    }
+
+    $hasConfigurationApi = ($invokePester.Parameters.ContainsKey('Configuration') -and (Get-Command New-PesterConfiguration -ErrorAction SilentlyContinue))
+    if ($hasConfigurationApi) {
+        $configuration = New-PesterConfiguration
+        $configuration.Run.Path = @($SuitePaths)
+        $configuration.Run.PassThru = $true
+        $configuration.Output.Verbosity = 'Detailed'
+        $configuration.TestResult.Enabled = $true
+        $configuration.TestResult.OutputFormat = 'NUnitXml'
+        $configuration.TestResult.OutputPath = $XmlPath
+
+        $rawResult = Invoke-Pester -Configuration $configuration
+        return (ConvertTo-SmokePesterResult -RawResult $rawResult)
+    }
+
+    Write-Warning "New-PesterConfiguration is unavailable. Falling back to legacy Invoke-Pester invocation."
+    $legacyParams = @{
+        PassThru = $true
+    }
+    if ($invokePester.Parameters.ContainsKey('Script')) {
+        $legacyParams['Script'] = @($SuitePaths)
+    } elseif ($invokePester.Parameters.ContainsKey('Path')) {
+        $legacyParams['Path'] = @($SuitePaths)
+    } else {
+        throw "Invoke-Pester does not expose Script or Path parameters. Cannot execute smoke suite."
+    }
+
+    if ($invokePester.Parameters.ContainsKey('OutputFile')) {
+        $legacyParams['OutputFile'] = $XmlPath
+    }
+    if ($invokePester.Parameters.ContainsKey('OutputFormat')) {
+        $legacyParams['OutputFormat'] = 'NUnitXml'
+    }
+
+    $legacyResult = Invoke-Pester @legacyParams
+    return (ConvertTo-SmokePesterResult -RawResult $legacyResult)
+}
+
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
 $preflightScript = Join-Path $repoRoot 'Tooling\Invoke-Preflight.ps1'
 $preflight = $null
@@ -263,15 +400,7 @@ try {
         $xmlPath = Join-Path $resultsRoot ("pester-devmode-no-labview-smoke-{0}-{1}-bit-{2}.xml" -f $LabVIEWVersion, $bitness, $timestamp)
         $summaryPath = Join-Path $resultsRoot ("summary-{0}-bit-{1}.txt" -f $bitness, $timestamp)
 
-        $configuration = New-PesterConfiguration
-        $configuration.Run.Path = @($suitePaths)
-        $configuration.Run.PassThru = $true
-        $configuration.Output.Verbosity = 'Detailed'
-        $configuration.TestResult.Enabled = $true
-        $configuration.TestResult.OutputFormat = 'NUnitXml'
-        $configuration.TestResult.OutputPath = $xmlPath
-
-        $result = Invoke-Pester -Configuration $configuration
+        $result = Invoke-DevModeNoLabVIEWSmokePester -SuitePaths $suitePaths -XmlPath $xmlPath
         $coverage = Test-DevModeNoLabVIEWSmokeCoverage -PesterResult $result -Suite $suite
         $summaryLines = Format-SmokeSummary -Bitness $bitness -Depth $DevModeNoLabVIEWSmokeDepth -SuitePaths $suitePaths -PesterResult $result -CoverageResult $coverage -XmlPath $xmlPath
         Set-Content -Path $summaryPath -Value $summaryLines -Encoding ascii
