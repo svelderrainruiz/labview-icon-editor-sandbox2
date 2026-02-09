@@ -105,6 +105,24 @@ Metadata quick-checks:
     } | Select-Object number,title,@{Name='labels';Expression={ $_.labels.name -join ', ' }}
     ```
 
+## CI Debt Training (Issue #74)
+- Canonical signatures are stored in:
+  - `Tooling/agents/ci-debt/signatures.json`
+- Remediation notes are stored in:
+  - `Tooling/agents/ci-debt/playbook.md`
+- Analyze a specific CI run:
+  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
+- Use fixture-only local validation (no live API calls):
+  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FixturePath .\Tooling\agents\ci-debt\fixtures\run-21840801109.json`
+- Enforce unknown-signature failures during training:
+  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FailOnUnknown`
+- Run training workflow manually:
+  - `gh workflow run ci-debt-train.yml --repo $repo -f run_id=21840801109 -f issue_number=74 -f post_comment=true`
+- Run policy gate manually:
+  - `gh workflow run ci-debt-policy-gate.yml --repo $repo -f mode=warn`
+- Local policy check:
+  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Test-CiDebtPolicyGate.ps1 -Mode warn`
+
 ## pylavi / vi_validate gate
 - The local CI parity run includes a fast LabVIEW file validation step powered by `pylavi` (`vi_validate`) and runs **before** any g-cli/LabVIEW work.
 - The gate uses `.lvversion` as the canonical LabVIEW version and passes it to `vi_validate --eq` automatically.
