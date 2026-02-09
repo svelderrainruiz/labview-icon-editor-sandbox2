@@ -32,7 +32,8 @@ Describe 'RunUnitTests port resolution' {
             if (-not $functionAst) {
                 throw "Function '$functionName' not found in RunUnitTests.ps1"
             }
-            Invoke-Expression $functionAst.Extent.Text
+            $functionScriptBlock = [ScriptBlock]::Create($functionAst.Extent.Text)
+            . $functionScriptBlock
         }
     }
 
