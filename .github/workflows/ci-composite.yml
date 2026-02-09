@@ -857,6 +857,19 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
+      - name: Resolve LUnit backend mode for smoke job
+        shell: pwsh
+        run: |
+          $backendMode = 'labviewcli'
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ github.event.inputs.force_gcli_lunit }}' -eq 'true') {
+            $backendMode = 'gcli'
+          }
+          "LVIE_LUNIT_BACKEND=$backendMode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $env:LVIE_LUNIT_BACKEND = $backendMode
+          Write-Host ("LUnit backend mode for smoke job: {0}" -f $backendMode)
+          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- DevMode smoke (LV {0}-bit): LUnit backend mode = {1}" -f '${{ matrix.bitness }}', $backendMode)
+          }
       - name: Run DevMode.NoLabVIEW smoke (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}

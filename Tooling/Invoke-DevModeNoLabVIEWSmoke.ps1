@@ -249,6 +249,47 @@ function ConvertTo-SmokePesterResult {
     }
 }
 
+function Import-DevModeSmokePester {
+    [CmdletBinding()]
+    param(
+        [version]$MinimumVersion = [version]'5.0.0'
+    )
+
+    $loadedPester = Get-Module -Name Pester
+    if ($loadedPester -and $loadedPester.Version -lt $MinimumVersion) {
+        Remove-Module -Name Pester -Force -ErrorAction SilentlyContinue
+    }
+
+    $available = @(Get-Module -ListAvailable -Name Pester | Sort-Object Version -Descending)
+    $candidate = @($available | Where-Object { $_.Version -ge $MinimumVersion } | Select-Object -First 1)
+
+    if (-not $candidate -or $candidate.Count -eq 0) {
+        Write-Host ("Pester >= {0} not found. Attempting install in CurrentUser scope..." -f $MinimumVersion)
+        try {
+            $repo = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+            if ($repo -and $repo.InstallationPolicy -ne 'Trusted') {
+                Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+            }
+            Install-Module -Name Pester -MinimumVersion $MinimumVersion -Scope CurrentUser -Force -AllowClobber -SkipPublisherCheck
+        } catch {
+            throw ("Unable to install Pester >= {0}. Install it manually (Install-Module Pester -Scope CurrentUser). Error: {1}" -f $MinimumVersion, $_.Exception.Message)
+        }
+
+        $available = @(Get-Module -ListAvailable -Name Pester | Sort-Object Version -Descending)
+        $candidate = @($available | Where-Object { $_.Version -ge $MinimumVersion } | Select-Object -First 1)
+        if (-not $candidate -or $candidate.Count -eq 0) {
+            throw ("Pester >= {0} is required for DevMode.NoLabVIEW smoke tests." -f $MinimumVersion)
+        }
+    }
+
+    Import-Module -Name $candidate[0].Path -Force -ErrorAction Stop | Out-Null
+    if (-not (Get-Command -Name New-PesterConfiguration -ErrorAction SilentlyContinue)) {
+        throw ("Loaded Pester {0} but New-PesterConfiguration is unavailable. Ensure Pester >= {1}." -f $candidate[0].Version, $MinimumVersion)
+    }
+
+    return $candidate[0].Version.ToString()
+}
+
 function Invoke-DevModeNoLabVIEWSmokePester {
     [CmdletBinding()]
     param(
@@ -259,46 +300,16 @@ function Invoke-DevModeNoLabVIEWSmokePester {
         [string]$XmlPath
     )
 
-    $invokePester = Get-Command Invoke-Pester -ErrorAction SilentlyContinue
-    if (-not $invokePester) {
-        throw "Invoke-Pester command is not available. Install Pester 4+ before running DevMode.NoLabVIEW smoke."
-    }
+    $configuration = New-PesterConfiguration
+    $configuration.Run.Path = @($SuitePaths)
+    $configuration.Run.PassThru = $true
+    $configuration.Output.Verbosity = 'Detailed'
+    $configuration.TestResult.Enabled = $true
+    $configuration.TestResult.OutputFormat = 'NUnitXml'
+    $configuration.TestResult.OutputPath = $XmlPath
 
-    $hasConfigurationApi = ($invokePester.Parameters.ContainsKey('Configuration') -and (Get-Command New-PesterConfiguration -ErrorAction SilentlyContinue))
-    if ($hasConfigurationApi) {
-        $configuration = New-PesterConfiguration
-        $configuration.Run.Path = @($SuitePaths)
-        $configuration.Run.PassThru = $true
-        $configuration.Output.Verbosity = 'Detailed'
-        $configuration.TestResult.Enabled = $true
-        $configuration.TestResult.OutputFormat = 'NUnitXml'
-        $configuration.TestResult.OutputPath = $XmlPath
-
-        $rawResult = Invoke-Pester -Configuration $configuration
-        return (ConvertTo-SmokePesterResult -RawResult $rawResult)
-    }
-
-    Write-Warning "New-PesterConfiguration is unavailable. Falling back to legacy Invoke-Pester invocation."
-    $legacyParams = @{
-        PassThru = $true
-    }
-    if ($invokePester.Parameters.ContainsKey('Script')) {
-        $legacyParams['Script'] = @($SuitePaths)
-    } elseif ($invokePester.Parameters.ContainsKey('Path')) {
-        $legacyParams['Path'] = @($SuitePaths)
-    } else {
-        throw "Invoke-Pester does not expose Script or Path parameters. Cannot execute smoke suite."
-    }
-
-    if ($invokePester.Parameters.ContainsKey('OutputFile')) {
-        $legacyParams['OutputFile'] = $XmlPath
-    }
-    if ($invokePester.Parameters.ContainsKey('OutputFormat')) {
-        $legacyParams['OutputFormat'] = 'NUnitXml'
-    }
-
-    $legacyResult = Invoke-Pester @legacyParams
-    return (ConvertTo-SmokePesterResult -RawResult $legacyResult)
+    $rawResult = Invoke-Pester -Configuration $configuration
+    return (ConvertTo-SmokePesterResult -RawResult $rawResult)
 }
 
 $repoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
@@ -347,19 +358,13 @@ if ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
 
 Assert-DevModeNoLabVIEWProjectFileClean -RepoRoot $repoRoot -ProjectRelativePath 'lv_icon_editor.lvproj'
 
-$suite = Get-DevModeNoLabVIEWSmokeSuite -Depth $DevModeNoLabVIEWSmokeDepth
-$suiteTests = @($suite.Tests)
-if (-not $suiteTests -or $suiteTests.Count -eq 0) {
-    throw "DevMode.NoLabVIEW smoke suite '$DevModeNoLabVIEWSmokeDepth' is empty."
-}
+$pesterVersion = Import-DevModeSmokePester
+Write-Host ("Using Pester {0} for DevMode.NoLabVIEW smoke." -f $pesterVersion)
 
-$suitePaths = @()
-foreach ($test in $suiteTests) {
-    $fullPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $test.Path))
-    if (-not (Test-Path -Path $fullPath -PathType Leaf)) {
-        throw "Smoke test file not found: $fullPath"
-    }
-    $suitePaths += $fullPath
+$requestedSuite = Get-DevModeNoLabVIEWSmokeSuite -Depth $DevModeNoLabVIEWSmokeDepth
+$requestedSuiteTests = @($requestedSuite.Tests)
+if (-not $requestedSuiteTests -or $requestedSuiteTests.Count -eq 0) {
+    throw "DevMode.NoLabVIEW smoke suite '$DevModeNoLabVIEWSmokeDepth' is empty."
 }
 
 $resultsRoot = Join-Path $repoRoot 'TestResults\devmode-no-labview-smoke'
@@ -394,20 +399,49 @@ try {
     }
 
     foreach ($bitness in $bitnesses) {
-        Write-Host ("Running DevMode.NoLabVIEW smoke ({0}-bit, depth={1})..." -f $bitness, $DevModeNoLabVIEWSmokeDepth)
+        $suiteResolution = Resolve-DevModeNoLabVIEWSmokeSuiteForBitness `
+            -Depth $DevModeNoLabVIEWSmokeDepth `
+            -LabVIEWVersion $LabVIEWVersion `
+            -Bitness $bitness
+        $effectiveSuite = $suiteResolution.Suite
+        $effectiveDepth = $suiteResolution.EffectiveDepth
+        $suiteTests = @($effectiveSuite.Tests)
+        if (-not $suiteTests -or $suiteTests.Count -eq 0) {
+            throw "DevMode.NoLabVIEW smoke suite '$effectiveDepth' is empty for $bitness-bit."
+        }
+
+        $suitePaths = @()
+        foreach ($test in $suiteTests) {
+            $fullPath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $test.Path))
+            if (-not (Test-Path -Path $fullPath -PathType Leaf)) {
+                throw "Smoke test file not found: $fullPath"
+            }
+            $suitePaths += $fullPath
+        }
+
+        if ($suiteResolution.Downgraded) {
+            Write-Warning ("DevMode.NoLabVIEW smoke depth downgraded for {0}-bit: requested={1}, effective={2}. {3}" -f $bitness, $DevModeNoLabVIEWSmokeDepth, $effectiveDepth, $suiteResolution.AccessReason)
+        }
+
+        Write-Host ("Running DevMode.NoLabVIEW smoke ({0}-bit, requested depth={1}, effective depth={2})..." -f $bitness, $DevModeNoLabVIEWSmokeDepth, $effectiveDepth)
         $env:LABVIEW_BITNESS = $bitness
 
         $xmlPath = Join-Path $resultsRoot ("pester-devmode-no-labview-smoke-{0}-{1}-bit-{2}.xml" -f $LabVIEWVersion, $bitness, $timestamp)
         $summaryPath = Join-Path $resultsRoot ("summary-{0}-bit-{1}.txt" -f $bitness, $timestamp)
 
         $result = Invoke-DevModeNoLabVIEWSmokePester -SuitePaths $suitePaths -XmlPath $xmlPath
-        $coverage = Test-DevModeNoLabVIEWSmokeCoverage -PesterResult $result -Suite $suite
-        $summaryLines = Format-SmokeSummary -Bitness $bitness -Depth $DevModeNoLabVIEWSmokeDepth -SuitePaths $suitePaths -PesterResult $result -CoverageResult $coverage -XmlPath $xmlPath
+        $coverage = Test-DevModeNoLabVIEWSmokeCoverage -PesterResult $result -Suite $effectiveSuite
+        $summaryLines = Format-SmokeSummary -Bitness $bitness -Depth $effectiveDepth -SuitePaths $suitePaths -PesterResult $result -CoverageResult $coverage -XmlPath $xmlPath
         Set-Content -Path $summaryPath -Value $summaryLines -Encoding ascii
 
         $runSummary = [pscustomobject]@{
             Bitness        = $bitness
-            Depth          = $DevModeNoLabVIEWSmokeDepth
+            RequestedDepth = $DevModeNoLabVIEWSmokeDepth
+            EffectiveDepth = $effectiveDepth
+            Downgraded     = [bool]$suiteResolution.Downgraded
+            AccessPath     = $suiteResolution.AccessPath
+            AccessWritable = $suiteResolution.AccessWritable
+            AccessReason   = $suiteResolution.AccessReason
             TotalCount     = $result.TotalCount
             PassedCount    = $result.PassedCount
             FailedCount    = $result.FailedCount
@@ -450,7 +484,8 @@ $summaryPayload = [pscustomobject]@{
     TimestampUtc = (Get-Date).ToUniversalTime().ToString('o')
     LabVIEWVersion = $LabVIEWVersion
     LabVIEWBitness = $LabVIEWBitness
-    Depth = $DevModeNoLabVIEWSmokeDepth
+    RequestedDepth = $DevModeNoLabVIEWSmokeDepth
+    PesterVersion = $pesterVersion
     Results = @($runSummaries)
     Failures = @($failures)
 }
@@ -460,7 +495,8 @@ $summaryText = @(
     "DevMode.NoLabVIEW smoke gate",
     "LabVIEWVersion: $LabVIEWVersion",
     "BitnessInput: $LabVIEWBitness",
-    "Depth: $DevModeNoLabVIEWSmokeDepth",
+    "RequestedDepth: $DevModeNoLabVIEWSmokeDepth",
+    "PesterVersion: $pesterVersion",
     "ResultCount: $($runSummaries.Count)",
     "FailureCount: $($failures.Count)",
     "SummaryJson: $summaryJsonPath"
@@ -472,11 +508,15 @@ if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
     $summaryLines += '### DevMode.NoLabVIEW Smoke'
     $summaryLines += ''
     $summaryLines += "- Version: $LabVIEWVersion"
-    $summaryLines += "- Depth: $DevModeNoLabVIEWSmokeDepth"
+    $summaryLines += "- Requested depth: $DevModeNoLabVIEWSmokeDepth"
+    $summaryLines += "- Pester: $pesterVersion"
     $summaryLines += "- Result count: $($runSummaries.Count)"
     $summaryLines += "- Failures: $($failures.Count)"
     foreach ($entry in $runSummaries) {
-        $summaryLines += "- $($entry.Bitness)-bit: total=$($entry.TotalCount), failed=$($entry.FailedCount), skipped=$($entry.SkippedCount), coverage=$($entry.CoveragePassed)"
+        $summaryLines += "- $($entry.Bitness)-bit: requested=$($entry.RequestedDepth), effective=$($entry.EffectiveDepth), total=$($entry.TotalCount), failed=$($entry.FailedCount), skipped=$($entry.SkippedCount), coverage=$($entry.CoveragePassed)"
+        if ($entry.Downgraded) {
+            $summaryLines += "  - downgraded because: $($entry.AccessReason)"
+        }
     }
     if ($failures.Count -gt 0) {
         $summaryLines += ''
@@ -493,5 +533,5 @@ if ($failures.Count -gt 0) {
     throw "DevMode.NoLabVIEW smoke gate failed. $joinedFailures"
 }
 
-Write-Host ("DevMode.NoLabVIEW smoke gate passed (depth={0}, bitness={1})." -f $DevModeNoLabVIEWSmokeDepth, ($bitnesses -join ','))
+Write-Host ("DevMode.NoLabVIEW smoke gate passed (requested depth={0}, bitness={1})." -f $DevModeNoLabVIEWSmokeDepth, ($bitnesses -join ','))
 Write-Host ("Smoke artifacts: {0}" -f $resultsRoot)

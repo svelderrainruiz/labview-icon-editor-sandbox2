@@ -125,7 +125,7 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **pylavi-validate** – report-only LabVIEW file validation using `vi_validate` (strict + legacy profiles) with `.lvversion`-synced version gating and optional baseline/delta reporting.
 - **changes** – checks out the repository and detects `.vipc` file changes to determine if dependencies need to be applied.
 - **apply-deps** – installs VIPC dependencies for multiple LabVIEW versions and bitnesses **only when** the `changes` job reports `.vipc` modifications (`if: needs.changes.outputs.vipc == 'true'`).
-- **devmode-no-labview-smoke** – required per-bitness (`64`, `32`) no-LabVIEW smoke gate (full depth) that fails on test failures or fully skipped integration smoke.
+- **devmode-no-labview-smoke** – required per-bitness (`64`, `32`) no-LabVIEW smoke gate (full depth) that fails on test failures or fully skipped integration smoke. For runners with known ACL limitations, set `LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE=1` (or `LVIE_RUNNER_ACL_WARN_ONLY=1`) to allow an explicit downgrade to `minimal` depth with warning telemetry.
 - **prerelease-context** – computes prerelease publish eligibility, reason, and merged-PR bump override context.
 - **version** – computes the semantic version and build number using commit count and PR labels.
 - **missing-in-project-check** – verifies every source file is referenced in the `.lvproj` (runs after the smoke gate).
