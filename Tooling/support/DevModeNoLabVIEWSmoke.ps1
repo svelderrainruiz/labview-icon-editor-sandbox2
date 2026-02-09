@@ -188,7 +188,7 @@ function Get-GitStatusLinesForPath {
     return $lines
 }
 
-function Test-ProjectFileCleanFromStatusLines {
+function Test-ProjectFileCleanFromStatus {
     [CmdletBinding()]
     param(
         [AllowNull()]
@@ -227,7 +227,7 @@ function Assert-DevModeNoLabVIEWProjectFileClean {
         Get-GitStatusLinesForPath -RepoRoot $RepoRoot -ProjectRelativePath $ProjectRelativePath
     }
 
-    if (-not (Test-ProjectFileCleanFromStatusLines -StatusLines $lines)) {
+    if (-not (Test-ProjectFileCleanFromStatus -StatusLines $lines)) {
         throw "'$ProjectRelativePath' must be clean before smoke/parity. Clear it, then rerun."
     }
 }
