@@ -87,6 +87,26 @@ Debug-only/manual validation:
 - Alias retirement is documented but not auto-enforced in this phase.
 - Use `labels-sync.yml` to create/update contract labels from
   `.github/labels/label-contract.json`.
+- For fork operations, pin `gh` to `svelderrainruiz/labview-icon-editor` (or set
+  `GH_REPO`) so metadata commands do not target upstream.
+
+## Label Metadata Automation
+
+- Daily audit workflow: `.github/workflows/label-metadata-audit.yml`
+  - Reports unlabeled PRs/issues, alias-only usage, conflicts, and missing stale
+    exempt labels.
+  - Uploads JSON artifact: `label-metadata-audit`.
+- Event normalization workflow: `.github/workflows/label-metadata-normalize.yml`
+  - Triggered by `pull_request_target` and `issues` events.
+  - Defaults to `warn` mode before enforcement date; supports manual
+    `workflow_dispatch` override (`mode=warn|enforce`).
+  - Adds canonical labels when alias-only labels are found and applies default
+    release/type labels when missing.
+- Enforcement gate: `.github/workflows/label-metadata-gate.yml`
+  - Required PR context name: `Label Metadata Gate / PR Release Label Contract`.
+  - PR rule: exactly one normalized release bump family (`major|minor|patch`).
+  - Issue rule: exactly one normalized issue type family (`bug|enhancement`);
+    aliases are accepted during transition.
 
 ## Pull Request Review Checklist
 
