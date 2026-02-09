@@ -182,7 +182,11 @@ function Grant-ModifyAccess {
         $icaclsArgs += '/T'
     }
 
-    & icacls @icaclsArgs | Out-Null
+    $icaclsOutput = & icacls @icaclsArgs
+    if ($LASTEXITCODE -ne 0) {
+        $outputText = if ($icaclsOutput) { ($icaclsOutput -join ' ') } else { '<no output>' }
+        throw ("icacls failed with exit code {0}: {1}" -f $LASTEXITCODE, $outputText)
+    }
 }
 
 $resolvedWorkRoot = if ($WorkRoot) { $WorkRoot } else { $env:LVIE_RUNNER_WORK_ROOT }
