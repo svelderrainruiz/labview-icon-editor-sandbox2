@@ -108,12 +108,22 @@ function Test-AllowNoLabVIEWIconApiGap {
         return $false
     }
 
-    $expectedPrefix = "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\vi.lib\LabVIEW Icon API\"
+    $expectedPrefixes = @(
+        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\vi.lib\LabVIEW Icon API\",
+        "C:\Program Files (x86)\National Instruments\LabVIEW $LabVIEWYear\resource\plugins\NIIconEditor\"
+    )
     foreach ($line in $MissingLines) {
         if ([string]::IsNullOrWhiteSpace($line)) {
             return $false
         }
-        if (-not $line.StartsWith($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $matchesExpectedPrefix = $false
+        foreach ($expectedPrefix in $expectedPrefixes) {
+            if ($line.StartsWith($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $matchesExpectedPrefix = $true
+                break
+            }
+        }
+        if (-not $matchesExpectedPrefix) {
             return $false
         }
     }
@@ -161,7 +171,7 @@ function MainSequence {
 
     if ($Script:HelperExitCode -ne 0) {
         if (Test-AllowNoLabVIEWIconApiGap -MissingLines $Script:MissingFileLines -Arch $Arch -LabVIEWYear $labviewYear) {
-            Write-Warning ("Allowing Missing-In-Project Icon API gap for LV{0} {1}-bit under forced no-LabVIEW mode." -f $labviewYear, $Arch)
+            Write-Warning ("Allowing Missing-In-Project NI Icon resource gap for LV{0} {1}-bit under forced no-LabVIEW mode (LabVIEW Icon API / NIIconEditor)." -f $labviewYear, $Arch)
             $Script:HelperExitCode = 0
             $Script:MissingFileLines = @()
         } elseif ($Script:MissingFileLines.Count -eq 0) {
