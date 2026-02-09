@@ -133,7 +133,8 @@ $criticalScripts = @(
     'Tooling/New-CIWorktree.ps1',
     'Tooling/New-CIWorktreeForJob.ps1',
     'Tooling/Invoke-MissingIEFilesFromLVInstall.ps1',
-    'Tooling/Invoke-Preflight.ps1'
+    'Tooling/Invoke-Preflight.ps1',
+    'Tooling/Ensure-RunnerCli.ps1'
 )
 
 foreach ($scriptPath in $criticalScripts) {
