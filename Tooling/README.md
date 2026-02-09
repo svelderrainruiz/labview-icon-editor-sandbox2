@@ -42,3 +42,23 @@ Related config:
   Strict configuration for `vi_validate` (paths, skips, policy). The LabVIEW version is injected at runtime from `.lvversion`.
 - `pylavi/vi-validate-legacy.yml`  
   Legacy scope for `vi_validate` (typically absolute-path checks only).
+
+## Local GitHub Auth and Fork Remotes
+
+Some tooling fetches GitHub artifacts or queries workflow runs. Configure auth and ensure your fork remotes are correct.
+
+Auth options (either works):
+- `GH_TOKEN` or `GITHUB_TOKEN` with `actions:read` for artifact fetches.
+- `gh` CLI login (`gh auth status`) for commands that use `gh`.
+
+Fork remotes:
+- Ensure `origin` points to your fork and `upstream` points to `ni/labview-icon-editor`.
+- Run `pwsh -NoProfile -File .\Tooling\Test-ForkRemotes.ps1` to warn when `origin` still points to upstream and to validate non-interactive fetch connectivity.
+- Set `LVIE_SKIP_REMOTE_CONNECTIVITY_CHECK=1` to skip the connectivity checks when working offline.
+
+Example fork setup:
+```powershell
+git remote set-url origin https://github.com/<your-user>/labview-icon-editor.git
+git remote add upstream https://github.com/ni/labview-icon-editor.git
+git remote -v
+```
