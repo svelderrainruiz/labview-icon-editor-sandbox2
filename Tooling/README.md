@@ -18,6 +18,9 @@ Common entrypoints:
 - `Invoke-WorktreeOrchestrator.ps1`  
   Resolves worktree policy/root, builds runner-cli in the selected worktree, and can invoke local CI parity.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -LabVIEWVersion 2021 -EnsureCleanState`
+- `Open-PullRequest.ps1`  
+  Opens a GitHub PR for the current branch using `gh`.  
+  Example: `pwsh -NoProfile -File .\\Tooling\\Open-PullRequest.ps1 -BaseBranch develop`
 - `Get-PylaviOffenders.ps1`  
   Summarizes the latest pylavi offenders report for agent handoffs or automation.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Get-PylaviOffenders.ps1`  

@@ -24,12 +24,6 @@
 
 .PARAMETER Draft
     Create the PR as a draft.
-
-.PARAMETER RequireCleanWorktree
-    Fail if the working tree has uncommitted changes.
-
-.PARAMETER OpenInBrowser
-    Open the created pull request in the default browser.
 #>
 [CmdletBinding()]
 param(
@@ -48,11 +42,7 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$Body,
 
-    [switch]$Draft,
-
-    [switch]$RequireCleanWorktree,
-
-    [switch]$OpenInBrowser
+    [switch]$Draft
 )
 
 $ErrorActionPreference = 'Stop'
@@ -97,32 +87,11 @@ function Confirm-GhReady {
     }
 }
 
-function Test-CleanWorktree {
-    param([string]$RepoRootResolved)
-
-    $status = & git -C $RepoRootResolved status --porcelain 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "git status failed: $status"
-    }
-    return [string]::IsNullOrWhiteSpace(($status | Out-String).Trim())
-}
-
 $repoRootResolved = Resolve-RepoRoot -PathOverride $RepoRoot
 Confirm-GhReady
 
 if ([string]::IsNullOrWhiteSpace($HeadBranch)) {
     $HeadBranch = (git -C $repoRootResolved rev-parse --abbrev-ref HEAD).Trim()
-}
-
-if ($HeadBranch -eq $BaseBranch) {
-    throw "Head branch '$HeadBranch' matches base branch '$BaseBranch'. Check out a feature branch before opening a PR."
-}
-
-if ($RequireCleanWorktree.IsPresent) {
-    $isClean = Test-CleanWorktree -RepoRootResolved $repoRootResolved
-    if (-not $isClean) {
-        throw 'Working tree has uncommitted changes. Commit or stash before opening a PR.'
-    }
 }
 
 $ghArgs = @('pr', 'create', '--base', $BaseBranch, '--head', $HeadBranch)
@@ -146,13 +115,6 @@ try {
     & gh @ghArgs
     if ($LASTEXITCODE -ne 0) {
         throw "gh pr create failed with exit code $LASTEXITCODE."
-    }
-
-    if ($OpenInBrowser.IsPresent) {
-        & gh pr view --web
-        if ($LASTEXITCODE -ne 0) {
-            throw "gh pr view --web failed with exit code $LASTEXITCODE."
-        }
     }
 } finally {
     Pop-Location
