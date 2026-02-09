@@ -78,7 +78,7 @@ VR-PUB-007: The status file in VR-PUB-006 shall be uploaded as artifact `prerele
 
 ## 5. Asset Contract (Core)
 
-VR-AST-001: Required prerelease assets shall include the built `.vip`, versioned release-notes markdown file, `gcli-logs`, `vip-build-status` evidence, and Linux container packed library (`.lvlibp`) asset.
+VR-AST-001: Required prerelease assets shall include the built `.vip`, versioned release-notes markdown file, `gcli-logs`, `vip-build-status` evidence, Linux container packed library (`.lvlibp`) asset, and Windows container packed library (`.lvlibp`) asset.
 VR-AST-002: Missing required assets shall fail eligible publish runs.
 VR-AST-003: Reruns shall replace same-named assets on the existing prerelease.
 VR-AST-004: Build-vip job outputs shall expose at least VIP artifact name and release-notes artifact name for publish job consumption.
