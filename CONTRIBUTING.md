@@ -9,7 +9,8 @@ This repo follows a typical fork-and-pull model on [GitHub](https://github.com/n
 We welcome both code and non-code contributions. Here are some ways to help:
 
 For command examples below, resolve your current repository once:
-- `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+- `$repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1`
+- `GH_REPO` is an optional override and takes precedence when set.
 
 - 🐛 **Bug Reports:** We can’t catch every issue. If you find a bug, first search issues in the current repository (`gh issue list --repo $repo --state open --limit 200`). If not reported, open a new issue with the bug template (`gh issue create --repo $repo --template "Bug Report"`).
 - 💬 **Q&A and Feedback:** Participate in discussions. If you have an idea for a new feature or changes, open Discussions in the current repository (Discussions tab) or join the community on [Discord](https://discord.gg/q4d3ggrFVA).
