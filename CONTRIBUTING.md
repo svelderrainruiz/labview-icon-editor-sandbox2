@@ -8,9 +8,12 @@ This repo follows a typical fork-and-pull model on [GitHub](https://github.com/n
 
 We welcome both code and non-code contributions. Here are some ways to help:
 
-- 🐛 **Bug Reports:** We can’t catch every issue. If you find a bug, first search the [issues list](https://github.com/ni/labview-icon-editor/issues) to see if it’s already reported. If not, [open a new issue](https://github.com/ni/labview-icon-editor/issues/new/choose) describing the problem so we can address it.
-- 💬 **Q&A and Feedback:** Participate in discussions! If you have an idea for a new feature or changes, start a conversation on our [GitHub Discussions board](https://github.com/ni/labview-icon-editor/discussions/new?category=ideas) or join the community on [Discord](https://discord.gg/q4d3ggrFVA). Your feedback on planned features (see the [New Features discussions](https://github.com/ni/labview-icon-editor/discussions/categories/new-features)) is valuable.
-- 🎬 **Tackle “Good First Issues”:** Check out issues labeled [**Good first issue**](https://github.com/ni/labview-icon-editor/labels/good%20first%20issue). These are entry-level tasks that are great for new contributors. You can comment on an issue to be assigned and start working on it.
+For command examples below, resolve your current repository once:
+- `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+
+- 🐛 **Bug Reports:** We can’t catch every issue. If you find a bug, first search issues in the current repository (`gh issue list --repo $repo --state open --limit 200`). If not reported, open a new issue with the bug template (`gh issue create --repo $repo --template "Bug Report"`).
+- 💬 **Q&A and Feedback:** Participate in discussions. If you have an idea for a new feature or changes, open Discussions in the current repository (Discussions tab) or join the community on [Discord](https://discord.gg/q4d3ggrFVA).
+- 🎬 **Tackle “Good First Issues”:** Check out issues labeled **good first issue** in the current repository (`gh issue list --repo $repo --label "good first issue"`). These are entry-level tasks that are great for new contributors.
 - ✏️ **Improve Documentation:** Contributing to docs is just as important as code. If you spot outdated or unclear documentation, feel free to propose changes. Our documentation is in this repo and the companion [documentation site](https://ni.github.io/labview-icon-editor/) (you can use the “Edit this page” link on the docs site).
 
 All interactions should be respectful and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -27,7 +30,7 @@ All interactions should be respectful and follow our [Code of Conduct](CODE_OF_C
 4. **Follow Workflow:** We use a branching strategy where official development happens on feature branches and merges go first into `develop`, then through pre-release branches (e.g. `release-alpha`, `release-beta`, `release-rc`) before merging into `main` for the final release. External contributors will typically collaborate on feature branches created by NI maintainers (once an issue is approved and labeled "Open to contribution"). If you’re working on a fork, you can still develop on your own branch and submit a PR to the appropriate branch in the main repo.
 5. **Write and Test Code:** Make your changes in LabVIEW. If you’ve applied the dependencies and run the `Tooling\Prepare LV to Use Icon Editor Source.vi` (or used the PowerShell scripts to set development mode), you can open `lv_icon_editor.lvproj` and begin editing the VIs. We encourage writing or updating tests if applicable (see `Test` folder or ask maintainers how to run tests – we have a CLI script `RunUnitTests.ps1` that uses the included testing framework).
 6. **Commit Guidelines:** Commit messages should be clear. Please **sign off** your commits (this adds a `Signed-off-by:` line to your commit message, indicating you agree to the Developer Certificate of Origin). If using Git from command line, `git commit -s` will do this. Ensure each commit builds and passes tests.
-7. **Submit a Pull Request:** Push your branch to your fork and open a PR against this repository. In the PR description, clearly explain the purpose of the change, what was changed, and reference any issue it addresses (e.g., “Closes #123”). Include any relevant testing steps or screenshots. For this fork, pin `gh` commands to `--repo svelderrainruiz/labview-icon-editor`. You can use the default PR template with `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md` or a specialized template under `.github/PULL_REQUEST_TEMPLATE/`. A good PR description has:
+7. **Submit a Pull Request:** Push your branch to your fork and open a PR against this repository. In the PR description, clearly explain the purpose of the change, what was changed, and reference any issue it addresses (e.g., “Closes #123”). Include any relevant testing steps or screenshots. Use the default PR template with `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md` or a specialized template under `.github/PULL_REQUEST_TEMPLATE/`. A good PR description has:
    - **Purpose** – Why is this change being made?
    - **Changes Made** – What did you do? 
    - **Issue Reference** – Link the issue number if one exists.
@@ -42,7 +45,7 @@ All interactions should be respectful and follow our [Code of Conduct](CODE_OF_C
 
 ## Feature Requests & Enhancements
 
-If you have an idea for a new feature or a significant change, please start by creating a discussion in the [**New Features** category](https://github.com/ni/labview-icon-editor/discussions/categories/new-features) rather than directly opening an issue or PR. In your discussion post, describe the problem your idea would solve or the use-case it would enable. The core team and community can then provide feedback and determine if it aligns with the project’s goals. 
+If you have an idea for a new feature or a significant change, start with a discussion in the current repository (Discussions tab) rather than directly opening an issue or PR. In your discussion post, describe the problem your idea would solve or the use-case it would enable. The core team and community can then provide feedback and determine if it aligns with the project’s goals. 
 
 After discussion, if the idea is accepted for development, the maintainers will label an issue for it (and often create a feature branch as described in the workflow above). You can then proceed to implement the feature on that branch via a pull request.
 
@@ -66,9 +69,9 @@ Be patient and responsive during the review. We might ask you to make changes �
 
 When opening an issue (bug report or documentation issue), please provide as much detail as possible to help us understand and reproduce the problem:
 
-- Prefer issue templates via `gh` on this fork:
-  - `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Bug Report"`
-  - `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Feature request"`
+- Prefer issue templates via `gh` in the current repository:
+  - `gh issue create --repo $repo --template "Bug Report"`
+  - `gh issue create --repo $repo --template "Feature request"`
 
 - **Title:** A clear, concise title that summarizes the issue.
 - **Description:** Explain the issue in detail. For a bug, describe what happens and what you expected to happen instead.

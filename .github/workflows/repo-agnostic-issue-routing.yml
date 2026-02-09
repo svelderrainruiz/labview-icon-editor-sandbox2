@@ -1,0 +1,24 @@
+name: Repo-Agnostic Issue Routing
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Repo-Agnostic Issue/Discussion Routing
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate repo-agnostic issue/discussion routing
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File .\Tooling\Test-RepoAgnosticIssueRouting.ps1

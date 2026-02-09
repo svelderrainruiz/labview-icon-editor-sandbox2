@@ -20,16 +20,16 @@ Common entrypoints:
   Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -LabVIEWVersion 2021 -EnsureCleanState`
 - `gh pr create` (recommended for opening PRs)
   Opens a GitHub PR for the current branch with the desired template.
-  Fork-safe default: `$env:GH_REPO='svelderrainruiz/labview-icon-editor'`
-  Example: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  Resolve repo: `$repo = if ($env:GH_REPO) { $env:GH_REPO } else { gh repo view --json nameWithOwner --jq .nameWithOwner }`
+  Example: `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
   Specialized templates:
-  `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
-  `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
-  `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
-  `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
+  `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
+  `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
+  `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
+  `gh pr create --repo $repo --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
 - `gh issue create` (recommended for template-driven issues)
-  Bug report: `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Bug Report"`
-  Feature request: `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Feature request"`
+  Bug report: `gh issue create --repo $repo --template "Bug Report"`
+  Feature request: `gh issue create --repo $repo --template "Feature request"`
 - `Get-PylaviOffenders.ps1`  
   Summarizes the latest pylavi offenders report for agent handoffs or automation.  
   Example: `pwsh -NoProfile -File .\\Tooling\\Get-PylaviOffenders.ps1`  
