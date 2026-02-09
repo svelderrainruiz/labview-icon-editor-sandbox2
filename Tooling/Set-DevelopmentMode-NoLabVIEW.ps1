@@ -7,7 +7,7 @@
     Performs file-system and INI edits to mirror the dev-mode state:
     - zips vi.lib\LabVIEW Icon API to LabVIEW Icon API.zip
     - renames resource\plugins\lv_icon.lvlibp to lv_icon.ship
-    - adds RepoRoot to Localhost.LibraryPaths in LabVIEW.ini
+    - sets Localhost.LibraryPaths to a single RepoRoot entry in LabVIEW.ini
     This is intended for local testing; revert should use the LabVIEW-based workflow.
 
 .PARAMETER LabVIEWVersion
@@ -196,7 +196,7 @@ function Resolve-IconApiFolderLayout {
     return $changed
 }
 
-function Get-IniLibraryPathList {
+function Get-IniLibraryPathLine {
     param(
         [string]$IniPath
     )
@@ -205,20 +205,33 @@ function Get-IniLibraryPathList {
         return @()
     }
 
-    $line = Get-Content -Path $IniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' } | Select-Object -First 1
-    if (-not $line) {
+    return @(Get-Content -Path $IniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' })
+}
+
+function Get-IniLibraryPathList {
+    param(
+        [string]$IniPath
+    )
+
+    $lines = Get-IniLibraryPathLine -IniPath $IniPath
+    if (-not $lines -or $lines.Count -eq 0) {
         return @()
     }
 
-    $value = $line -replace '(?i)^\s*localhost\.librarypaths\s*=\s*', ''
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        return @()
+    $paths = @()
+    foreach ($line in $lines) {
+        $value = $line -replace '(?i)^\s*localhost\.librarypaths\s*=\s*', ''
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            continue
+        }
+
+        $paths += ($value -split ';' |
+                   ForEach-Object { $_.Trim().Trim('"') } |
+                   Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+                   Where-Object { -not (Test-IsInvalidLibraryPathToken -PathValue $_) })
     }
 
-    return ($value -split ';' |
-            ForEach-Object { $_.Trim().Trim('"') } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-            Where-Object { -not (Test-IsInvalidLibraryPathToken -PathValue $_) })
+    return $paths
 }
 
 function Format-IniPath {
@@ -270,61 +283,20 @@ function Set-IniLibraryPath {
         $lines = Get-Content -Path $IniPath
     }
 
-    $lineIndex = $null
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        if ($lines[$i] -match '(?i)^\s*localhost\.librarypaths\s*=') {
-            $lineIndex = $i
-            break
-        }
-    }
-
-    $paths = @()
-    if ($null -ne $lineIndex) {
-        $raw = $lines[$lineIndex] -replace '(?i)^\s*localhost\.librarypaths\s*=\s*', ''
-        if (-not [string]::IsNullOrWhiteSpace($raw)) {
-            $paths = @($raw -split ';' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        }
-    }
-
-    $normalizedPaths = @()
-    $seen = @{}
-    foreach ($pathValue in $paths) {
-        if (Test-IsInvalidLibraryPathToken -PathValue $pathValue) {
-            Write-Warning ("Ignoring invalid Localhost.LibraryPaths entry in {0}: '{1}'" -f $IniPath, $pathValue)
-            continue
-        }
-
-        $normalized = Resolve-PathValue -PathValue $pathValue
-        $candidate = if ($normalized) { $normalized } else { $pathValue.Trim() }
-        $key = $candidate.ToLowerInvariant()
-        if ($seen.ContainsKey($key)) {
-            continue
-        }
-        $seen[$key] = $true
-        $normalizedPaths += $candidate
-    }
-
     $repoRootNormalized = Resolve-PathValue -PathValue $RepoRoot
-    if ($repoRootNormalized) {
-        $key = $repoRootNormalized.ToLowerInvariant()
-        if (-not $seen.ContainsKey($key)) {
-            $normalizedPaths += $repoRootNormalized
-            $seen[$key] = $true
-        }
+    if (-not $repoRootNormalized) {
+        throw "RepoRoot could not be normalized for Localhost.LibraryPaths: $RepoRoot"
     }
 
-    $formatted = $normalizedPaths | ForEach-Object { Format-IniPath -PathValue $_ } | Where-Object { $_ }
-    $newLine = if ($formatted.Count -gt 0) {
-        "Localhost.LibraryPaths={0}" -f ($formatted -join ';')
-    } else {
-        "Localhost.LibraryPaths=$RepoRoot"
-    }
+    $formatted = Format-IniPath -PathValue $repoRootNormalized
+    $newLine = "Localhost.LibraryPaths=$formatted"
 
-    if ($null -ne $lineIndex) {
-        $lines[$lineIndex] = $newLine
-    } else {
-        $lines += $newLine
-    }
+    # Enforce strict contract: remove all existing key lines and write exactly one repo path entry.
+    $lines = @($lines | Where-Object { $_ -notmatch '(?i)^\s*localhost\.librarypaths\s*=' })
+    $lines += $newLine
+
+    # Trim trailing blank duplicates introduced by array coercion edge cases.
+    $lines = @($lines | ForEach-Object { $_ } )
 
     $targetDir = Split-Path -Path $IniPath -Parent
     if (-not (Test-Path -Path $targetDir)) {
@@ -334,26 +306,33 @@ function Set-IniLibraryPath {
     Set-Content -Path $IniPath -Value $lines -Encoding ascii
 }
 
-function Test-LibraryPathContainsRepoRoot {
+function Test-LibraryPathRepoOnly {
     param(
         [string]$IniPath,
         [string]$RepoRoot
     )
 
+    $keyLines = Get-IniLibraryPathLine -IniPath $IniPath
+    if ($keyLines.Count -ne 1) {
+        return $false
+    }
+
+    $paths = @(Get-IniLibraryPathList -IniPath $IniPath)
+    if ($paths.Count -ne 1) {
+        return $false
+    }
+
     $repoRootNormalized = Resolve-PathValue -PathValue $RepoRoot
     if (-not $repoRootNormalized) {
         return $false
     }
-    $repoKey = $repoRootNormalized.ToLowerInvariant()
 
-    foreach ($pathValue in (Get-IniLibraryPathList -IniPath $IniPath)) {
-        $candidate = Resolve-PathValue -PathValue $pathValue
-        if ($candidate -and $candidate.ToLowerInvariant() -eq $repoKey) {
-            return $true
-        }
+    $candidate = Resolve-PathValue -PathValue $paths[0]
+    if (-not $candidate) {
+        return $false
     }
 
-    return $false
+    return ($candidate.ToLowerInvariant() -eq $repoRootNormalized.ToLowerInvariant())
 }
 
 function Test-IEDevModeEnabled {
@@ -421,8 +400,8 @@ function Enable-DevModeNoLabVIEW {
 
     try {
         $preEnabled = Test-IEDevModeEnabled -LabVIEWInstallRoot $installRoot
-        $preHasRepo = Test-LibraryPathContainsRepoRoot -IniPath $iniPath -RepoRoot $RepoRoot
-        if ($preEnabled -and $preHasRepo) {
+        $preRepoOnly = Test-LibraryPathRepoOnly -IniPath $iniPath -RepoRoot $RepoRoot
+        if ($preEnabled -and $preRepoOnly) {
             $entry.actualState = 'enabled'
             $entry.status = 'skipped'
             $entry.notes += 'Dev mode already enabled.'
@@ -475,15 +454,15 @@ function Enable-DevModeNoLabVIEW {
 
         $issues = @()
         $postEnabled = Test-IEDevModeEnabled -LabVIEWInstallRoot $installRoot
-        $postHasRepo = Test-LibraryPathContainsRepoRoot -IniPath $iniPath -RepoRoot $RepoRoot
+        $postRepoOnly = Test-LibraryPathRepoOnly -IniPath $iniPath -RepoRoot $RepoRoot
         if (-not $postEnabled) {
             $issues += 'Install files did not reflect dev-mode state.'
         }
-        if (-not $postHasRepo) {
-            $issues += 'Localhost.LibraryPaths does not include repo root.'
+        if (-not $postRepoOnly) {
+            $issues += 'Localhost.LibraryPaths must contain exactly one repo-root path entry.'
         }
 
-        $entry.actualState = if ($postEnabled -and $postHasRepo) { 'enabled' } else { 'partial' }
+        $entry.actualState = if ($postEnabled -and $postRepoOnly) { 'enabled' } else { 'partial' }
         if ($issues.Count -gt 0) {
             $entry.status = 'failed'
             $entry.error = ("Dev mode enable (no LabVIEW) failed: {0}" -f ($issues -join ' '))

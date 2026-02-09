@@ -66,9 +66,11 @@ Runs `RestoreSetupLVSource.vi` to unzip the LabVIEW Icon API, restore `lv_icon.s
 
 ## Set_Development_Mode.ps1
 Configures the repository for development by invoking `Prepare_LabVIEW_source.ps1` for both bitnesses. Accepts `-ConnectTimeoutMs` and `-ProcessTimeoutMs` to pass through to g-cli.
+In no-LabVIEW mode, automation enforces a strict `Localhost.LibraryPaths` contract: exactly one entry is written, and it is the repo root/workspace path.
 
 ## RevertDevelopmentMode.ps1
 Undoes development mode by invoking `RestoreSetupLVSource.ps1` for both bitnesses. Helpful when leaving development or before distributing a build. Accepts `-ConnectTimeoutMs` and `-ProcessTimeoutMs` to pass through to g-cli.
+In no-LabVIEW mode, automation removes `Localhost.LibraryPaths` entirely (zero entries) rather than preserving pre-existing custom values.
 
 ## RunUnitTests.ps1
 Runs unit tests through LabVIEWCLI (`-OperationName LUnit`) and outputs a table of results. Requires an explicit `.lvproj` path via `-ProjectPath`. Optional g-cli fallback can be enabled with `-EnableGcliFallback`. The script resolves LabVIEWCLI `-PortNumber` from `LVIE_LUNIT_PORT_<BITNESS>`, then `LVIE_LUNIT_PORT`, then `LabVIEW.ini` (`server.tcp.port`), then default `3363`. Ensure `astemes_lib_lunit` and `astemes_lib_lunit_cli` are installed for LabVIEWCLI mode; install `sas_workshops_lib_lunit_for_g_cli` only if fallback mode is enabled (apply `runner_dependencies.vipc` for both 32-bit and 64-bit). Used in CI workflows.
