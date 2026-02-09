@@ -13,25 +13,27 @@ This repository uses LabVIEW, g-cli, and PowerShell tooling. Follow the steps be
 - Open a PowerShell terminal at the repo root.
 - Confirm `g-cli` is available:
   - `g-cli --version`
+- Pin `gh` to the fork for this shell:
+  - `$env:GH_REPO='svelderrainruiz/labview-icon-editor'`
 - If you need to open a PR from the current branch, use `gh`:
-  - Default template: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
-  - Draft PR: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md --draft`
+  - Default template: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  - Draft PR: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md --draft`
 
 ## GitHub Templates and Labels
 - Use issue templates with `gh` (preferred):
-  - Bug report: `gh issue create --template "Bug Report"`
-  - Feature request: `gh issue create --template "Feature request"`
+  - Bug report: `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Bug Report"`
+  - Feature request: `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Feature request"`
 - Use PR templates with `gh`:
-  - Generic: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
-  - Bug fix: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
-  - Feature addition: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
-  - Documentation update: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
-  - Infrastructure change: `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
+  - Generic: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md`
+  - Bug fix: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/bug_fix.md`
+  - Feature addition: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/feature_request.md`
+  - Documentation update: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/documentation.md`
+  - Infrastructure change: `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE/infrastructure_change.md`
 - Web fallback links:
-  - Issues: `https://github.com/ni/labview-icon-editor/issues/new/choose`
-  - Bug form: `https://github.com/ni/labview-icon-editor/issues/new?template=bug_report.yml`
-  - Feature form: `https://github.com/ni/labview-icon-editor/issues/new?template=feature_request.yml`
-  - PR page: `https://github.com/ni/labview-icon-editor/compare`
+  - Issues: `https://github.com/svelderrainruiz/labview-icon-editor/issues/new/choose`
+  - Bug form: `https://github.com/svelderrainruiz/labview-icon-editor/issues/new?template=bug_report.yml`
+  - Feature form: `https://github.com/svelderrainruiz/labview-icon-editor/issues/new?template=feature_request.yml`
+  - PR page: `https://github.com/svelderrainruiz/labview-icon-editor/compare`
 
 Label policy:
 - Canonical release labels:
@@ -48,8 +50,8 @@ Label policy:
   - `bug` -> `Issue group: Bug`
   - `enhancement` -> `Type: Enhancement`
 - Sync labels from contract (manual workflow):
-  - Dry run: `gh workflow run labels-sync.yml -f dry_run=true -f include_aliases=true`
-  - Apply: `gh workflow run labels-sync.yml -f dry_run=false -f include_aliases=true`
+  - Dry run: `gh workflow run labels-sync.yml --repo svelderrainruiz/labview-icon-editor -f dry_run=true -f include_aliases=true`
+  - Apply: `gh workflow run labels-sync.yml --repo svelderrainruiz/labview-icon-editor -f dry_run=false -f include_aliases=true`
 
 Stale issue policy:
 - Workflow: `.github/workflows/stale-issues.yml`
@@ -74,7 +76,21 @@ Stale issue policy:
       '-label:"Issue group: Added to agenda"'
       '-label:"good first issue"'
     ) -join ' '
-    gh issue list --state open --search $query --limit 200
+    gh issue list --repo svelderrainruiz/labview-icon-editor --state open --search $query --limit 200
+    ```
+
+Metadata quick-checks:
+- Unlabeled PRs (no normalized release label):
+  - `gh pr list --repo svelderrainruiz/labview-icon-editor --state open --search "-label:'Version Increment: Major' -label:'Version Increment: Minor' -label:'Version Increment: Patch' -label:major -label:minor -label:patch"`
+- Unlabeled issues:
+  - `gh issue list --repo svelderrainruiz/labview-icon-editor --state open --search "no:label" --limit 200`
+- Alias-only issue types:
+  - ```
+    $items = gh issue list --repo svelderrainruiz/labview-icon-editor --state open --limit 200 --json number,title,labels | ConvertFrom-Json
+    $items | Where-Object {
+      ($_.labels.name -contains 'enhancement' -or $_.labels.name -contains 'bug') -and
+      -not ($_.labels.name -contains 'Type: Enhancement' -or $_.labels.name -contains 'Issue group: Bug')
+    } | Select-Object number,title,@{Name='labels';Expression={ $_.labels.name -join ', ' }}
     ```
 
 ## pylavi / vi_validate gate

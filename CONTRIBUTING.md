@@ -27,7 +27,7 @@ All interactions should be respectful and follow our [Code of Conduct](CODE_OF_C
 4. **Follow Workflow:** We use a branching strategy where official development happens on feature branches and merges go first into `develop`, then through pre-release branches (e.g. `release-alpha`, `release-beta`, `release-rc`) before merging into `main` for the final release. External contributors will typically collaborate on feature branches created by NI maintainers (once an issue is approved and labeled "Open to contribution"). If you’re working on a fork, you can still develop on your own branch and submit a PR to the appropriate branch in the main repo.
 5. **Write and Test Code:** Make your changes in LabVIEW. If you’ve applied the dependencies and run the `Tooling\Prepare LV to Use Icon Editor Source.vi` (or used the PowerShell scripts to set development mode), you can open `lv_icon_editor.lvproj` and begin editing the VIs. We encourage writing or updating tests if applicable (see `Test` folder or ask maintainers how to run tests – we have a CLI script `RunUnitTests.ps1` that uses the included testing framework).
 6. **Commit Guidelines:** Commit messages should be clear. Please **sign off** your commits (this adds a `Signed-off-by:` line to your commit message, indicating you agree to the Developer Certificate of Origin). If using Git from command line, `git commit -s` will do this. Ensure each commit builds and passes tests.
-7. **Submit a Pull Request:** Push your branch to your fork and open a PR against this repository. In the PR description, clearly explain the purpose of the change, what was changed, and reference any issue it addresses (e.g., “Closes #123”). Include any relevant testing steps or screenshots. You can use the default PR template with `gh pr create --base develop -T .github/PULL_REQUEST_TEMPLATE.md` or a specialized template under `.github/PULL_REQUEST_TEMPLATE/`. A good PR description has:
+7. **Submit a Pull Request:** Push your branch to your fork and open a PR against this repository. In the PR description, clearly explain the purpose of the change, what was changed, and reference any issue it addresses (e.g., “Closes #123”). Include any relevant testing steps or screenshots. For this fork, pin `gh` commands to `--repo svelderrainruiz/labview-icon-editor`. You can use the default PR template with `gh pr create --repo svelderrainruiz/labview-icon-editor --base develop -T .github/PULL_REQUEST_TEMPLATE.md` or a specialized template under `.github/PULL_REQUEST_TEMPLATE/`. A good PR description has:
    - **Purpose** – Why is this change being made?
    - **Changes Made** – What did you do? 
    - **Issue Reference** – Link the issue number if one exists.
@@ -65,6 +65,10 @@ Be patient and responsive during the review. We might ask you to make changes �
 ## Reporting Issues
 
 When opening an issue (bug report or documentation issue), please provide as much detail as possible to help us understand and reproduce the problem:
+
+- Prefer issue templates via `gh` on this fork:
+  - `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Bug Report"`
+  - `gh issue create --repo svelderrainruiz/labview-icon-editor --template "Feature request"`
 
 - **Title:** A clear, concise title that summarizes the issue.
 - **Description:** Explain the issue in detail. For a bug, describe what happens and what you expected to happen instead.

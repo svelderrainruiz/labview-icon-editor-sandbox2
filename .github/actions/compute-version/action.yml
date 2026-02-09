@@ -41,32 +41,18 @@ runs:
       with:
         github-token: ${{ inputs.github_token }}
         script: |
-          const releaseLabelMap = new Map([
-            ['major', 'major'],
-            ['minor', 'minor'],
-            ['patch', 'patch'],
-            ['version increment: major', 'major'],
-            ['version increment: minor', 'minor'],
-            ['version increment: patch', 'patch'],
-          ]);
+          const path = require('path');
+          const {
+            loadLabelContract,
+            buildReleaseLabelMap,
+            normalizeLabels,
+          } = require(path.join(process.env.GITHUB_WORKSPACE || process.cwd(), '.github', 'scripts', 'label-metadata.js'));
+          const contractPath = path.join(process.env.GITHUB_WORKSPACE || process.cwd(), '.github', 'labels', 'label-contract.json');
+          const labelContract = loadLabelContract(contractPath);
+          const releaseLabelMap = buildReleaseLabelMap(labelContract);
           const allowed = ['major', 'minor', 'patch'];
           const allowedWithNone = [...allowed, 'none'];
           let bump = 'none';
-
-          function normalizeReleaseLabels(labelNames) {
-            const matches = [];
-            for (const rawName of labelNames) {
-              const raw = String(rawName || '').trim();
-              const normalized = releaseLabelMap.get(raw.toLowerCase());
-              if (normalized) {
-                matches.push({ raw, normalized });
-              }
-            }
-
-            const normalized = [...new Set(matches.map((entry) => entry.normalized))];
-            const matchedRaw = [...new Set(matches.map((entry) => entry.raw))];
-            return { normalized, matchedRaw };
-          }
 
           const override = core.getInput('bump_type_override').trim().toLowerCase();
           if (override) {
@@ -80,7 +66,7 @@ runs:
           }
           if (context.eventName === 'pull_request') {
             const labels = (context.payload.pull_request.labels || []).map((l) => String(l.name || ''));
-            const found = normalizeReleaseLabels(labels);
+            const found = normalizeLabels(labels, releaseLabelMap);
             if (found.normalized.length > 1) {
               core.setFailed(`Conflicting release labels detected after normalization: ${found.matchedRaw.join(', ')}`);
               return;
