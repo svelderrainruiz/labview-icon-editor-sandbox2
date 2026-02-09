@@ -272,7 +272,10 @@ function Get-IniLibraryPathList {
         return @()
     }
 
-    return ($value -split ';' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    return ($value -split ';' |
+            ForEach-Object { $_.Trim().Trim('"') } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Where-Object { -not (Test-IsInvalidLibraryPathToken -PathValue $_) })
 }
 
 function Format-IniPath {
@@ -289,6 +292,28 @@ function Format-IniPath {
     }
 
     return $PathValue
+}
+
+function Test-IsInvalidLibraryPathToken {
+    param(
+        [string]$PathValue
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+        return $true
+    }
+
+    $trimmed = $PathValue.Trim().Trim('"')
+    if ([string]::IsNullOrWhiteSpace($trimmed)) {
+        return $true
+    }
+
+    # Ignore obvious corruption fragments such as bare drive roots (e.g. C:\).
+    if ($trimmed -match '^[A-Za-z]:\\?$') {
+        return $true
+    }
+
+    return $false
 }
 
 function Remove-IniLibraryPath {
@@ -326,11 +351,24 @@ function Remove-IniLibraryPath {
     }
 
     $remaining = @()
+    $seen = @{}
     foreach ($pathValue in $paths) {
+        if (Test-IsInvalidLibraryPathToken -PathValue $pathValue) {
+            Write-Warning ("Ignoring invalid Localhost.LibraryPaths entry in {0}: '{1}'" -f $IniPath, $pathValue)
+            continue
+        }
+
         $normalized = Resolve-PathValue -PathValue $pathValue
+        $candidate = if ($normalized) { $normalized } else { $pathValue.Trim() }
+        $key = $candidate.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+        $seen[$key] = $true
+
         if (-not $normalized) { continue }
         if ($normalized.ToLowerInvariant() -ne $repoRootNormalized.ToLowerInvariant()) {
-            $remaining += $pathValue
+            $remaining += $candidate
         }
     }
 

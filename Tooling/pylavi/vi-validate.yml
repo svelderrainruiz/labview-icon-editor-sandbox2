@@ -9,5 +9,8 @@ strict:
   no_alpha: true
   no_development: true
   no_invalid: true
+  no_suspend_on_run: true
+  breakpoints: true
+  no_code: true
   no_absolute_path: true
   path_length: 260
