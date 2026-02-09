@@ -1,0 +1,110 @@
+name: Stale Issues
+
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+    inputs:
+      debug_only:
+        description: "Preview stale processing only (no issue mutation)"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  stale:
+    name: Mark and close stale issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure stale label exists
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const labelName = 'Workflow: Stale';
+            let desiredColor = 'fbca04';
+            let desiredDescription = 'Automatically applied to inactive issues pending auto-close.';
+            const contractPath = path.join(process.env.GITHUB_WORKSPACE || process.cwd(), '.github', 'labels', 'label-contract.json');
+
+            if (fs.existsSync(contractPath)) {
+              const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
+              const labels = Array.isArray(contract.labels) ? contract.labels : [];
+              const staleContract = labels.find((entry) => String(entry.name || '').trim() === labelName);
+              if (staleContract) {
+                if (staleContract.color) {
+                  desiredColor = String(staleContract.color).trim().replace(/^#/, '').toLowerCase();
+                }
+                if (staleContract.description) {
+                  desiredDescription = String(staleContract.description).trim();
+                }
+              }
+            }
+
+            let existing = null;
+            try {
+              existing = await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+            if (!existing) {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+                color: desiredColor,
+                description: desiredDescription,
+              });
+              core.notice(`Created missing label '${labelName}'.`);
+              return;
+            }
+
+            const current = existing.data;
+            const currentColor = String(current.color || '').trim().toLowerCase();
+            const currentDescription = String(current.description || '').trim();
+            if (currentColor !== desiredColor || currentDescription !== desiredDescription) {
+              await github.rest.issues.updateLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+                new_name: labelName,
+                color: desiredColor,
+                description: desiredDescription,
+              });
+              core.notice(`Updated label '${labelName}' to match contract values.`);
+            } else {
+              core.info(`Label '${labelName}' already exists with desired values.`);
+            }
+
+      - name: Run stale issue policy
+        uses: actions/stale@v10
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-issue-stale: 45
+          days-before-issue-close: 14
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          stale-issue-label: "Workflow: Stale"
+          remove-issue-stale-when-updated: true
+          exempt-issue-labels: "Workflow: Actively discussing,Workflow: NI Approves,Workflow: Requires R&D clarification,Workflow: Open to contribution,Issue group: Added to agenda,good first issue"
+          stale-issue-message: This issue has had no activity for 45 days, so it is now marked as stale. Comment or update the issue in the next 14 days to keep it open.
+          close-issue-message: Closing this issue after 14 additional days with no activity. If this still needs work, comment with updated context and we can reopen it.
+          operations-per-run: 200
+          ascending: true
+          debug-only: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_only == true }}

@@ -36,14 +36,57 @@ current.
   artifacts (VIPs), run the `approve-experiment` workflow in GitHub Actions.
   Coordinate with the NI Open-Source Program Manager (OSPM) before execution.
 - **Finalize experiment merges** – Prior to merging an experiment branch into
-  `develop`, apply an appropriate version label (major/minor/patch) and remove
-  any temporary settings. The OSPM or designated NI staff typically gives the
-  final approval.
+  `develop`, apply exactly one canonical version label (`Version Increment:
+  Major`, `Version Increment: Minor`, or `Version Increment: Patch`) and remove
+  any temporary settings. Compatibility aliases (`major`, `minor`, `patch`)
+  remain accepted during migration. The OSPM or designated NI staff typically
+  gives the final approval.
 - **Hotfix branches** – For critical fixes on an official release, create or
   approve a `hotfix/*` branch targeting `main`. After merging into `main`, merge
   the changes back into `develop` to keep branches synchronized.
 - **Documentation updates** – When workflows change, update related
   documentation in the `/docs` directory as part of the same pull request.
+
+## Stale Issue Automation
+
+- Workflow: `.github/workflows/stale-issues.yml`
+- Schedule: daily UTC run plus manual `workflow_dispatch`
+- Scope: issues only (`days-before-pr-stale` and `days-before-pr-close` are
+  disabled)
+- Policy: mark issues stale after 45 inactive days and close after 14
+  additional inactive days
+- Stale label: `Workflow: Stale` (created/updated automatically before each run)
+- Exempt labels:
+  - `Workflow: Actively discussing`
+  - `Workflow: NI Approves`
+  - `Workflow: Requires R&D clarification`
+  - `Workflow: Open to contribution`
+  - `Issue group: Added to agenda`
+  - `good first issue`
+
+Recovery and override:
+1. If an issue was marked stale but should stay open, add context in a comment
+   or edit the issue; stale status is removed automatically when activity occurs.
+2. If an issue was auto-closed but should remain open, reopen the issue and
+   add updated context.
+3. If a class of issues should never go stale, apply one of the exempt labels
+   above (or extend the workflow exempt list in a PR).
+
+Debug-only/manual validation:
+- Run `stale-issues.yml` with `debug_only=true` to preview candidates without
+  mutation.
+
+## Label Compatibility Policy
+
+- Canonical label taxonomy is immediate:
+  - Release: `Version Increment: Major|Minor|Patch`
+  - Issue type: `Issue group: Bug`, `Type: Enhancement`
+  - Stale lifecycle: `Workflow: Stale`
+- Compatibility aliases remain accepted for two release cycles:
+  - `major`, `minor`, `patch`, `bug`, `enhancement`
+- Alias retirement is documented but not auto-enforced in this phase.
+- Use `labels-sync.yml` to create/update contract labels from
+  `.github/labels/label-contract.json`.
 
 ## Pull Request Review Checklist
 
