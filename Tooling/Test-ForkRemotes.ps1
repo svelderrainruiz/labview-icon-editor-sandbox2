@@ -51,12 +51,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$gitKrakenScript = Join-Path $PSScriptRoot 'support\GitKrakenCli.ps1'
-if (-not (Test-Path -Path $gitKrakenScript)) {
-    throw "GitKraken CLI helper not found at $gitKrakenScript"
-}
-. $gitKrakenScript
-Enable-GitKrakenGitShim -Require | Out-Null
 $skipConnectivity = $SkipConnectivityCheck.IsPresent -or ($env:LVIE_SKIP_REMOTE_CONNECTIVITY_CHECK -eq '1')
 
 function Resolve-RepoRoot {
