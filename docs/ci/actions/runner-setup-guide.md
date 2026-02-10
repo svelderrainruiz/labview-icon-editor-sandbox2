@@ -60,6 +60,8 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 6. **Build VI Package**
     - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
    - Pre-release publication behavior is specified by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, assets, and failure policy.
+   - Prerelease-driving PRs into `develop` must be merged with a merge commit (`--merge`), not squash/rebase.
+   - Manual prerelease backfill requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
    - **You can also** pass in **org/repository** info (e.g., `-CompanyName "MyOrg"` or `-AuthorName "myorg/myrepo"`) to brand the resulting package with your unique identifiers.
 
 7. **Disable Dev Mode** (Optional)  
@@ -183,8 +185,8 @@ With your runner online:
 
 3. **Build VI Package**
     - Produces `.vip` using the version computed in the **version** job (review that job's output for version details).
-   - Merged-PR pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
-   - `workflow_dispatch` backfill publishing is available with explicit publish intent input.
+   - Merged-PR merge-commit pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
+   - `workflow_dispatch` backfill publishing requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
    - **Pass** your **org/repo** info (e.g. `-CompanyName "AcmeCorp"` / `-AuthorName "AcmeCorp/IconEditor"`) to embed in the final package.
    - Artifacts appear in the run summary under **Artifacts**.
 
@@ -238,7 +240,15 @@ Notes:
    - The workflow checks this label upon merging.  
 4. **Merge**:
    - The **CI Pipeline (Composite)** workflow triggers, with the **version** job computing the version and the **Build VI Package** job using that version to package and upload the `.vip`.
-   - Direction: a merge to `develop` should result in a GitHub pre-release that includes the `.vip` and release notes.
+   - Use merge commits for prerelease-driving PRs: `gh pr merge <pr-number> --merge --delete-branch`.
+   - Direction: a merge-commit merge to `develop` should result in a GitHub pre-release that includes the `.vip` and release notes.
+   - Manual backfill is deterministic only when pinned to the merged SHA:
+     ```powershell
+     gh workflow run ci-composite.yml --repo <owner/repo> `
+       -f publish_prerelease=true `
+       -f expected_sha=<merged-develop-sha> `
+       -f strict_sha=true
+     ```
    - Publish status is reported by the `publish-prerelease` job and the `prerelease-publish-status` artifact.
    - **Metadata** (such as company/repo) is already integrated into the final `.vip`, so each build is easily identified.
 5. **Disable Dev Mode**: Return to a normal LabVIEW environment.  
@@ -247,6 +257,8 @@ Notes:
 #### Develop Pre-Release Direction
 
 - Use `develop` merges as the default pre-release publication event.
+- Use merge commits (`--merge`) for prerelease-driving merges into `develop`.
+- Use strict manual backfill inputs (`publish_prerelease=true`, `expected_sha`, `strict_sha=true`) when replaying publication.
 - Keep `main` focused on stable/final release handling.
 - Treat alpha/beta/rc channel branches as optional legacy behavior unless your repository explicitly enables that model.
 

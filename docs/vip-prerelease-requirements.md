@@ -56,6 +56,8 @@ VR-TRIG-003: `pull_request` events shall never publish prereleases.
 VR-TRIG-004: `workflow_dispatch` runs shall publish only when the boolean input `publish_prerelease` is `true`.
 VR-TRIG-005: `workflow_dispatch` runs with `publish_prerelease` not equal to `true` shall skip prerelease publication.
 VR-TRIG-006: Trigger evaluation shall emit publish intent and reason outputs for downstream jobs.
+VR-TRIG-007: Eligible publish paths shall require `github.sha` to be a merge commit with at least two parents.
+VR-TRIG-008: Eligible publish paths shall require merged pull-request association where `merge_commit_sha` equals `github.sha`.
 
 ## 3. Version and Bump Contract (Core)
 
@@ -64,7 +66,7 @@ VR-VER-002: Eligible develop publish runs shall derive bump type from merged pul
 VR-VER-003: Conflicting merged pull-request release labels shall fail version resolution.
 VR-VER-004: The compute-version interface shall support optional `bump_type_override` input values `major`, `minor`, `patch`, or `none`.
 VR-VER-005: When `bump_type_override` is provided, compute-version shall use it instead of event-derived bump type.
-VR-VER-006: Manual backfill runs without merged pull-request association may use `none` bump override.
+VR-VER-006: Manual workflow_dispatch runs with `publish_prerelease` not equal to `true` shall allow `none` bump override behavior.
 
 ## 4. Publish Contract (Core)
 
@@ -89,6 +91,8 @@ VR-OPS-001: Manual backfill shall be available through `workflow_dispatch` with 
 VR-OPS-002: Manual backfill shall pin and validate the target SHA using `expected_sha` contract checks.
 VR-OPS-003: Manual backfill publication shall reuse Core upsert and asset replacement rules.
 VR-OPS-004: Manual backfill shall emit publish status outputs even when publication is skipped.
+VR-OPS-005: Manual backfill with `publish_prerelease=true` shall require `strict_sha=true`.
+VR-OPS-006: Manual backfill with `publish_prerelease=true` shall require `expected_sha` to resolve to an eligible merged `develop` merge commit.
 
 ## 7. Security and Permissions (Core)
 
@@ -98,10 +102,11 @@ VR-SEC-003: Publish behavior shall be repository-agnostic without requiring cano
 
 ## 8. Failure Semantics (Core)
 
-VR-FAIL-001: Ineligible publish paths shall complete with `publish_status=skipped` without failing the workflow.
+VR-FAIL-001: Ineligible auto-publish paths and manual runs with `publish_prerelease` not equal to `true` shall complete with `publish_status=skipped` without failing the workflow.
 VR-FAIL-002: Eligible publish API failures shall terminate publish job execution with a non-zero exit code.
 VR-FAIL-003: Required asset validation failures shall terminate publish job execution with a non-zero exit code.
 VR-FAIL-004: Label-conflict failures in bump derivation shall terminate version resolution with a non-zero exit code.
+VR-FAIL-005: Manual runs with `publish_prerelease=true` that fail strict SHA eligibility checks shall terminate workflow execution with a non-zero exit code.
 
 ## 9. Governance and Traceability (Full)
 
@@ -112,7 +117,7 @@ VR-GOV-004: All changed or new VR IDs shall map to at least one acceptance scena
 
 ## 10. Public Interface Summary (Normative)
 
-- `ci-composite.yml` dispatch input `publish_prerelease` (boolean, default `false`).
+- `ci-composite.yml` dispatch inputs `publish_prerelease` (boolean, default `false`), `expected_sha` (string), and `strict_sha` (boolean).
 - `.github/actions/compute-version/action.yml` input `bump_type_override` (optional).
 - `build-vip` job outputs for VIP and release-notes artifact identifiers.
 - `publish-prerelease` job outputs: `release_tag`, `release_url`, `release_id`, `publish_status`.
