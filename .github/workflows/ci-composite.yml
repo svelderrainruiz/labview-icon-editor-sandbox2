@@ -1525,13 +1525,33 @@ jobs:
           name: ${{ steps.locate-vip.outputs.vip_artifact }}
           path: ${{ steps.locate-vip.outputs.vip_path }}
           if-no-files-found: error
+      - name: Ensure g-cli logs evidence exists
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $logsDir = Join-Path $env:REPO_ROOT 'builds/logs'
+          New-Item -Path $logsDir -ItemType Directory -Force | Out-Null
+
+          $existingFiles = Get-ChildItem -Path $logsDir -Recurse -File -ErrorAction SilentlyContinue
+          if (-not $existingFiles) {
+            $placeholderPath = Join-Path $logsDir 'gcli-logs-placeholder.txt'
+            $runUrl = "{0}/{1}/actions/runs/{2}" -f $env:GITHUB_SERVER_URL, $env:GITHUB_REPOSITORY, $env:GITHUB_RUN_ID
+            @(
+              'No g-cli log files were produced by this run.'
+              'This placeholder preserves the prerelease gcli-logs asset contract.'
+              ("Run URL: {0}" -f $runUrl)
+              ("Generated UTC: {0}" -f (Get-Date).ToUniversalTime().ToString('o'))
+            ) | Out-File -FilePath $placeholderPath -Encoding utf8
+            Write-Host ("Created g-cli logs placeholder at {0}" -f $placeholderPath)
+          }
       - name: Upload g-cli logs (if present)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gcli-logs
           path: ${{ env.REPO_ROOT }}/builds/logs
-          if-no-files-found: warn
+          if-no-files-found: error
       - name: Validate tag matches computed version (if provided)
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.dispatch_tag != ''
         shell: pwsh
