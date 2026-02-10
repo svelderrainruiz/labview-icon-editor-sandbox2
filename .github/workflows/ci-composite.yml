@@ -1139,10 +1139,16 @@ jobs:
           $env:LVIE_LUNIT_BACKEND = $backendMode
           Write-Host ("LUnit backend mode for unit-tests job: {0}" -f $env:LVIE_LUNIT_BACKEND)
 
-          & ".github/actions/run-unit-tests/RunUnitTests.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness ${{ matrix.bitness }} `
-            -ProjectPath "$env:PROJECT_PATH"
+          $runUnitTestArgs = @(
+            '-LabVIEWVersion', $env:LABVIEW_VERSION_YEAR,
+            '-SupportedBitness', '${{ matrix.bitness }}',
+            '-ProjectPath', "$env:PROJECT_PATH"
+          )
+          if ($backendMode -ne 'gcli') {
+            $runUnitTestArgs += '-EnableGcliFallback'
+            Write-Host 'Enabled LUnit g-cli fallback for labviewcli mode.'
+          }
+          & ".github/actions/run-unit-tests/RunUnitTests.ps1" @runUnitTestArgs
       - name: Summarize unit-test backend mode
         if: always()
         shell: pwsh
