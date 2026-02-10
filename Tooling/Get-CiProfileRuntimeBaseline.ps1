@@ -82,7 +82,7 @@ function Get-Percentile {
     return [double]$sorted[$rank]
 }
 
-function Infer-DispatchProfile {
+function Get-DispatchProfile {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RepoName,
@@ -118,7 +118,7 @@ function Infer-DispatchProfile {
     return 'unknown'
 }
 
-function Get-ProfileTargets {
+function Get-ProfileTargetMap {
     return @{
         'release-priority' = 25.0
         'pr-fast' = 35.0
@@ -168,27 +168,27 @@ foreach ($run in $runList) {
     }
 
     $eventName = [string]$run.event
-    $profile = 'unknown'
+    $runProfile = 'unknown'
     switch ($eventName) {
-        'pull_request' { $profile = 'pr-fast' }
-        'push' { $profile = 'full' }
+        'pull_request' { $runProfile = 'pr-fast' }
+        'push' { $runProfile = 'full' }
         'workflow_dispatch' {
             $runIdKey = [string]$run.databaseId
             if ($dispatchProfileCache.ContainsKey($runIdKey)) {
-                $profile = $dispatchProfileCache[$runIdKey]
+                $runProfile = $dispatchProfileCache[$runIdKey]
             } else {
-                $inferred = Infer-DispatchProfile -RepoName $resolvedRepo -RunId ([long]$run.databaseId)
+                $inferred = Get-DispatchProfile -RepoName $resolvedRepo -RunId ([long]$run.databaseId)
                 $dispatchProfileCache[$runIdKey] = $inferred
-                $profile = $inferred
+                $runProfile = $inferred
             }
         }
-        default { $profile = 'unknown' }
+        default { $runProfile = 'unknown' }
     }
 
     $durationMinutes = [math]::Round(($updated - $created).TotalMinutes, 2)
     $rows.Add([pscustomobject]@{
         run_id = [long]$run.databaseId
-        profile = $profile
+        profile = $runProfile
         event = $eventName
         status = [string]$run.status
         conclusion = [string]$run.conclusion
@@ -202,7 +202,7 @@ foreach ($run in $runList) {
     }) | Out-Null
 }
 
-$profileTargets = Get-ProfileTargets
+$profileTargets = Get-ProfileTargetMap
 $profilesToReport = @('release-priority', 'pr-fast', 'full')
 $profileMetrics = New-Object System.Collections.Generic.List[object]
 
