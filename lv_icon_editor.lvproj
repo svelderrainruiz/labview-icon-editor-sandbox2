@@ -304,6 +304,7 @@
 			<Item Name="lv_icon.vit" Type="VI" URL="/&lt;resource&gt;/plugins/lv_icon.vit"/>
 			<Item Name="lv_IconEditor.lvlib" Type="Library" URL="/&lt;resource&gt;/plugins/lv_IconEditor.lvlib"/>
 			<Item Name="SAMPLE_lv_icon.vi" Type="VI" URL="/&lt;resource&gt;/plugins/SAMPLE_lv_icon.vi"/>
+			<Item Name="lv_icon_launcher.vi" Type="VI" URL="/&lt;resource&gt;/plugins/lv_icon_launcher.vi"/>
 		</Item>
 		<Item Name="Tooling" Type="Folder">
 			<Item Name="support" Type="Folder">
@@ -312,10 +313,14 @@
 				<Item Name="Get Paths to Icon Editor Files in LV Installation.vi" Type="VI" URL="../Tooling/support/Get Paths to Icon Editor Files in LV Installation.vi"/>
 				<Item Name="Prompt to Confirm Archival.vi" Type="VI" URL="../Tooling/support/Prompt to Confirm Archival.vi"/>
 				<Item Name="Set LibraryPaths to Include Icon Editor.vi" Type="VI" URL="../Tooling/support/Set LibraryPaths to Include Icon Editor.vi"/>
+				<Item Name="Add dev dist if present.vi" Type="VI" URL="../Tooling/support/Add dev dist if present.vi"/>
+				<Item Name="API Paths.vi" Type="VI" URL="../Tooling/support/API Paths.vi"/>
+				<Item Name="PPL Paths.vi" Type="VI" URL="../Tooling/support/PPL Paths.vi"/>
+				<Item Name="Set Path in Launcher.vi" Type="VI" URL="../Tooling/support/Set Path in Launcher.vi"/>
 			</Item>
 			<Item Name="Force Icon Editor to Unload.vi" Type="VI" URL="../Tooling/Force Icon Editor to Unload.vi"/>
 			<Item Name="Pre Build Icon Editor PPL.vi" Type="VI" URL="../Tooling/Pre Build Icon Editor PPL.vi"/>
-			<Item Name="Prepare LV to Use Icon Editor Source.vi" Type="VI" URL="../Tooling/Prepare LV to Use Icon Editor Source.vi"/>
+			<Item Name="Set Run Icon Editor from Source.vi" Type="VI" URL="../Tooling/Set Run Icon Editor from Source.vi"/>
 			<Item Name="Remove Icon Editor Settings.vi" Type="VI" URL="../Tooling/Remove Icon Editor Settings.vi"/>
 		</Item>
 		<Item Name="vi.lib/LabVIEW Icon API" Type="Folder">
@@ -353,6 +358,7 @@
 			<Item Name="Text-Based VI Icon Tests.lvclass" Type="LVClass" URL="../Test/Unit Tests/Text-Based VI Icon Tests/Text-Based VI Icon Tests.lvclass"/>
 			<Item Name="Undo Redo Core.lvclass" Type="LVClass" URL="../Test/Unit Tests/Undo Redo Core/Undo Redo Core.lvclass"/>
 		</Item>
+		<Item Name="Unset Run Icon Editor from Source.vi" Type="VI" URL="../Tooling/Unset Run Icon Editor from Source.vi"/>
 		<Item Name="Dependencies" Type="Dependencies"/>
 		<Item Name="Build Specifications" Type="Build">
 			<Item Name="Editor Packed Library" Type="Packed Library">
