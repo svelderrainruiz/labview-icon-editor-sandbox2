@@ -33,6 +33,7 @@ Profile rule:
 - [Contract-expanding] Adds new command interfaces: `manifest` and `conformance check`.
 - [Clarifying] Adds governance controls for change classification, deprecation lifecycle, and evidence traceability.
 - [Clarifying] Resolves ISO/IEC/IEEE 29148 well-formedness issues for conformance gating, atomicity, and requirement language precision.
+- [Contract-expanding] Adds `missing-in-project --dry-run` for deterministic command-surface validation on Windows.
 
 ## v5.1 Changelog (Normative)
 
@@ -48,6 +49,7 @@ v5.1 is a clarifying revision that preserves the v5 command surface while tighte
 | Add `conformance check` command and JSON types | RC-CONF-001, RC-CONF-002, RC-CONF-003, RC-JSN-080, RC-JSN-090 | Contract-expanding | Provide profile-scoped, machine-readable conformance result surface | V5-C5 |
 | Add governance and deprecation lifecycle controls | RC-GOV-001, RC-GOV-002, RC-GOV-003, RC-GOV-004, RC-GOV-005 | Clarifying | Standardize release/change/deprecation evidence requirements | V5-C6 |
 | Clarify requirement quality and governance linkage for ISO 29148 | RC-SCOPE-004, RC-JSN-004, RC-GOV-006 | Clarifying | Make conformance applicability, JSON compatibility, and breaking-change governance explicit | V5.1-C1 |
+| Add `missing-in-project --dry-run` command behavior | RC-MIP-002, RC-MIP-005, RC-MIP-006 | Contract-expanding | Provide deterministic Windows command-surface validation without launching script execution | V5.1-C4 |
 
 ## v6 Candidate C1 Summary (Draft, Non-active)
 
@@ -649,7 +651,7 @@ RC-PF-018: The command shall copy the canonical label report to pylavi-offenders
 Usage
 
 ```text
-runner-cli missing-in-project --arch <32|64> --project-file <path> [--repo-root <path>] [--labview <value>] [--worktree-root <path>] [--skip-worktree-root-check] [--connect-timeout-ms <ms>]
+runner-cli missing-in-project --arch <32|64> --project-file <path> [--repo-root <path>] [--labview <value>] [--worktree-root <path>] [--skip-worktree-root-check] [--connect-timeout-ms <ms>] [--dry-run]
 ```
 
 Options
@@ -663,14 +665,16 @@ Options
 | --worktree-root | No | none | Worktree root override. |
 | --skip-worktree-root-check | No | false | Skip worktree root validation in the script. |
 | --connect-timeout-ms | No | 0 | g-cli connect timeout override. |
+| --dry-run | No | false | Emit the command line to stderr and exit without launching the script. |
 
 Behavior
 
 RC-MIP-001: On non-Windows platforms, the command shall exit with code 1 and emit an ERROR: line stating the command is Windows-only.
-RC-MIP-002: On Windows, the command shall invoke .github/actions/missing-in-project/Invoke-MissingInProjectCLI.ps1 using pwsh.
+RC-MIP-002: On Windows and when --dry-run is not set, the command shall invoke .github/actions/missing-in-project/Invoke-MissingInProjectCLI.ps1 using pwsh.
 RC-MIP-003: The command shall resolve --project-file relative to the resolved repo root when it is not absolute.
-RC-MIP-004: The command shall write the constructed pwsh command line string to stderr before invoking the script.
-RC-MIP-005: The command shall forward the exit code from the PowerShell script as its own exit code.
+RC-MIP-004: The command shall write the constructed pwsh command line string to stderr before conditional script invocation behavior is evaluated.
+RC-MIP-005: When --dry-run is set, the command shall exit with code 0 and shall not launch the PowerShell script process.
+RC-MIP-006: When --dry-run is not set, the command shall forward the exit code from the PowerShell script as its own exit code.
 
 ### 7.9 manifest
 
@@ -794,6 +798,8 @@ RC-GOV-007: Trace artifacts used for conformance automation shall list RC IDs us
 | RC-JSN-004 | Core | Analysis (schema compatibility analysis) |
 | RC-PS-008 | Core | Test (default vs explicit offenders report path) |
 | RC-PS-017 | Core | Test (annotation format behavior) |
+| RC-MIP-005 | Core | Test (missing-in-project dry-run command echo and no-execution behavior) |
+| RC-MIP-006 | Core | Test (missing-in-project exit-code forwarding when not dry-run) |
 | RC-MAN-004 | Extended | Test (manifest required-field compatibility) |
 | RC-ENV-010 | Extended | Inspection (canonical env variable naming) |
 | RC-ENV-011 | Extended | Inspection (canonical env variable naming) |
@@ -820,7 +826,7 @@ RC-GOV-007: Trace artifacts used for conformance automation shall list RC IDs us
 ## 11. Migration Note
 
 v5.1 migration by profile:
-1. Core: align conformance applicability and requirement atomicity language to v5.1 rules.
+1. Core: align conformance applicability and requirement atomicity language to v5.1 rules, and adopt additive `missing-in-project --dry-run` behavior.
 2. Extended: keep `manifest` and `conformance check` command surfaces unchanged while clarifying environment variable naming and manifest compatibility wording.
 3. Full: enforce explicit major-version governance for breaking option/required-field changes.
 
