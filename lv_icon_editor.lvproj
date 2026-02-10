@@ -367,6 +367,7 @@
 			<Item Name="Pyramid Icon Template.vi" Type="VI" URL="../Test/Templates/Pyramid Icon Template.vi"/>
 			<Item Name="Pyramid.png" Type="Document" URL="../Test/Templates/Pyramid.png"/>
 		</Item>
+		<Item Name="Unset Run Icon Editor from Source.vi" Type="VI" URL="../Tooling/Unset Run Icon Editor from Source.vi"/>
 		<Item Name="Dependencies" Type="Dependencies"/>
 		<Item Name="Build Specifications" Type="Build">
 			<Item Name="Editor Packed Library" Type="Packed Library">
