@@ -202,6 +202,53 @@ jobs:
               return mergedDevelopPrs;
             }
 
+            async function findRecentSuccessfulFullProfileRun(maxAgeHours) {
+              const cutoffMs = Date.now() - (maxAgeHours * 60 * 60 * 1000);
+              let page = 1;
+              while (page <= 5) {
+                const response = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'ci-composite.yml',
+                  branch: 'develop',
+                  event: 'push',
+                  status: 'completed',
+                  per_page: 100,
+                  page,
+                });
+                const runs = Array.isArray(response.data.workflow_runs) ? response.data.workflow_runs : [];
+                if (!runs.length) {
+                  break;
+                }
+
+                for (const run of runs) {
+                  const createdMs = Date.parse(run.created_at || '');
+                  if (!Number.isFinite(createdMs)) {
+                    continue;
+                  }
+                  if (createdMs < cutoffMs) {
+                    return null;
+                  }
+                  if (run.id === context.runId) {
+                    continue;
+                  }
+                  if (String(run.conclusion || '') === 'success') {
+                    return run;
+                  }
+                }
+
+                const datedRuns = runs
+                  .map((run) => Date.parse(run.created_at || ''))
+                  .filter((value) => Number.isFinite(value));
+                if (datedRuns.length > 0 && Math.min(...datedRuns) < cutoffMs) {
+                  break;
+                }
+                page += 1;
+              }
+
+              return null;
+            }
+
             function findMergedPrForCurrentSha(mergedDevelopPrs) {
               const sha = String(context.sha || '').toLowerCase();
               for (const pr of mergedDevelopPrs) {
@@ -278,6 +325,20 @@ jobs:
                 }
                 return;
               } else {
+                if (ciProfile === 'release-priority') {
+                  const freshnessHours = 24;
+                  let recentFullRun = null;
+                  try {
+                    recentFullRun = await findRecentSuccessfulFullProfileRun(freshnessHours);
+                  } catch (error) {
+                    core.setFailed(`Release-priority prerelease publish could not verify recent full-profile run freshness: ${error.message}`);
+                    return;
+                  }
+                  if (!recentFullRun) {
+                    core.setFailed(`Release-priority prerelease publish requires a successful full profile run on develop within the last ${freshnessHours} hours.`);
+                    return;
+                  }
+                }
                 shouldPublish = true;
                 publishReason = 'manual-intent-eligible-merged-pr-merge-commit';
               }
@@ -1833,10 +1894,126 @@ jobs:
           path: TestResults/container-parity/windows/logs
           if-no-files-found: warn
 
+  publish-gate:
+    name: Publish Gate
+    if: always()
+    needs:
+      - run-metadata
+      - prerelease-context
+      - version-gate
+      - powershell-lint
+      - vip-prerelease-requirements-lint
+      - pylavi-validate
+      - dev-mode-gate
+      - changes
+      - apply-deps-lv-x64
+      - apply-deps-2021-x86
+      - devmode-no-labview-smoke
+      - missing-in-project
+      - unit-tests
+      - build-ppl-x64
+      - build-ppl-x86
+      - build-ppl-linux-container
+      - build-ppl-windows-container
+      - build-vip
+      - version
+      - conformance-full
+    runs-on: ubuntu-latest
+    outputs:
+      gate_reason: ${{ steps.gate.outputs.gate_reason }}
+      ci_profile: ${{ steps.gate.outputs.ci_profile }}
+    steps:
+      - id: gate
+        name: Evaluate profile-required prepublish jobs
+        shell: pwsh
+        run: |
+          $shouldPublish = '${{ needs.prerelease-context.outputs.should_publish }}' -eq 'true'
+          $ciProfile = '${{ needs.prerelease-context.outputs.ci_profile }}'
+          if ([string]::IsNullOrWhiteSpace($ciProfile)) {
+            Write-Warning 'ci_profile output was empty; defaulting to full for prepublish gating.'
+            $ciProfile = 'full'
+          }
+
+          "ci_profile=$ciProfile" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+
+          if (-not $shouldPublish) {
+            "gate_reason=publish-intent-disabled" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+            Write-Host 'Publish intent is disabled for this run; prepublish gate passes by policy.'
+            exit 0
+          }
+
+          $requiredCommon = @(
+            'run-metadata',
+            'prerelease-context',
+            'version-gate',
+            'powershell-lint',
+            'vip-prerelease-requirements-lint',
+            'pylavi-validate',
+            'build-ppl-linux-container',
+            'build-ppl-windows-container',
+            'version',
+            'conformance-full'
+          )
+          $requiredFullValidation = @(
+            'dev-mode-gate',
+            'changes',
+            'apply-deps-lv-x64',
+            'apply-deps-2021-x86',
+            'devmode-no-labview-smoke',
+            'missing-in-project',
+            'unit-tests',
+            'build-ppl-x64',
+            'build-ppl-x86',
+            'build-vip'
+          )
+          $requiredByProfile = @{
+            'full' = @($requiredCommon + $requiredFullValidation)
+            'pr-fast' = @($requiredCommon + $requiredFullValidation)
+            'release-priority' = @($requiredCommon)
+          }
+          if (-not $requiredByProfile.ContainsKey($ciProfile)) {
+            Write-Warning ("Unknown ci_profile '{0}'; defaulting to full prepublish contract." -f $ciProfile)
+            $ciProfile = 'full'
+            "ci_profile=$ciProfile" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          }
+
+          $required = $requiredByProfile[$ciProfile]
+          $needs = ConvertFrom-Json -InputObject '${{ toJson(needs) }}'
+          $needsProps = $needs.PSObject.Properties
+
+          $missing = @()
+          $failing = @()
+          foreach ($job in $required) {
+            $entryProp = $needsProps[$job]
+            if (-not $entryProp) {
+              $missing += "$job:missing"
+              continue
+            }
+            $result = [string]$entryProp.Value.result
+            if ($result -ne 'success') {
+              $failing += "{0}:{1}" -f $job, $result
+            }
+          }
+
+          $gatePasses = ($missing.Count -eq 0 -and $failing.Count -eq 0)
+          $gateReason = if ($gatePasses) { 'prepublish-required-jobs-satisfied' } else { 'prepublish-required-jobs-failed' }
+          "gate_reason=$gateReason" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+
+          $missingLabel = if ($missing.Count -gt 0) { $missing -join ', ' } else { '<none>' }
+          $failingLabel = if ($failing.Count -gt 0) { $failing -join ', ' } else { '<none>' }
+          Write-Host ("Prepublish gate profile: {0}" -f $ciProfile)
+          Write-Host ("Prepublish gate reason: {0}" -f $gateReason)
+          Write-Host ("Missing required jobs: {0}" -f $missingLabel)
+          Write-Host ("Failing/non-success required jobs: {0}" -f $failingLabel)
+
+          if (-not $gatePasses) {
+            throw ("Publish gate blocked prerelease publication for profile '{0}': missing={1}; failing={2}" -f $ciProfile, $missingLabel, $failingLabel)
+          }
+
   publish-prerelease:
     name: Publish Pre-Release
-    if: ${{ always() && needs.run-metadata.result == 'success' && needs.prerelease-context.result == 'success' && needs.version.result == 'success' && needs.build-ppl-linux-container.result == 'success' && needs.build-ppl-windows-container.result == 'success' && (needs.prerelease-context.outputs.ci_profile == 'release-priority' || needs.build-vip.result == 'success') }}
-    needs: [run-metadata, prerelease-context, version, build-vip, build-ppl-linux-container, build-ppl-windows-container]
+    if: ${{ always() && needs.publish-gate.result == 'success' && needs.run-metadata.result == 'success' && needs.prerelease-context.result == 'success' && needs.version.result == 'success' && needs.build-ppl-linux-container.result == 'success' && needs.build-ppl-windows-container.result == 'success' && (needs.prerelease-context.outputs.ci_profile == 'release-priority' || needs.build-vip.result == 'success') }}
+    needs: [run-metadata, prerelease-context, version, build-vip, build-ppl-linux-container, build-ppl-windows-container, publish-gate]
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -1849,6 +2026,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Report publish gate decision
+        shell: pwsh
+        run: |
+          Write-Host ("Publish gate reason: {0}" -f '${{ needs.publish-gate.outputs.gate_reason }}')
 
       - name: Download VI package artifact
         if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
@@ -1915,6 +2097,7 @@ jobs:
           $releasePriorityMode = $ciProfile -eq 'release-priority'
           $publishMode = '${{ needs.prerelease-context.outputs.publish_mode }}'
           $publishReason = '${{ needs.prerelease-context.outputs.publish_reason }}'
+          $publishGateReason = '${{ needs.publish-gate.outputs.gate_reason }}'
           $mergedPrNumber = '${{ needs.prerelease-context.outputs.merged_pr_number }}'
           $tag = '${{ needs.version.outputs.VERSION }}'
           $expectedVipFileName = '${{ needs.build-vip.outputs.vip_file_name }}'
@@ -2073,6 +2256,7 @@ jobs:
               event = '${{ github.event_name }}'
               publish_mode = $publishMode
               publish_reason = $publishReason
+              publish_gate_reason = $publishGateReason
               ci_profile = $ciProfile
               release_priority_mode = $releasePriorityMode
               should_publish = $shouldPublish
@@ -2129,6 +2313,7 @@ jobs:
       - build-ppl-linux-container
       - build-ppl-windows-container
       - build-vip
+      - publish-gate
       - publish-prerelease
       - version
       - conformance-full
@@ -2152,6 +2337,7 @@ jobs:
             'pylavi-validate',
             'build-ppl-linux-container',
             'build-ppl-windows-container',
+            'publish-gate',
             'publish-prerelease',
             'version',
             'conformance-full'
