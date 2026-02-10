@@ -765,6 +765,10 @@ var missingConnectTimeoutOption = new Option<int>(
     name: "--connect-timeout-ms",
     getDefaultValue: () => 0,
     description: "Connect timeout override for g-cli (ms).");
+var missingDryRunOption = new Option<bool>(
+    name: "--dry-run",
+    getDefaultValue: () => false,
+    description: "Emit the command line and exit without invoking the script.");
 
 missingCmd.AddOption(repoRootOption);
 missingCmd.AddOption(missingArchOption);
@@ -773,6 +777,7 @@ missingCmd.AddOption(missingLabviewOption);
 missingCmd.AddOption(missingWorktreeRootOption);
 missingCmd.AddOption(missingSkipWorktreeCheckOption);
 missingCmd.AddOption(missingConnectTimeoutOption);
+missingCmd.AddOption(missingDryRunOption);
 
 missingCmd.SetHandler((InvocationContext context) =>
 {
@@ -785,6 +790,7 @@ missingCmd.SetHandler((InvocationContext context) =>
         var worktreeRoot = context.ParseResult.GetValueForOption(missingWorktreeRootOption);
         var skipWorktreeRootCheck = context.ParseResult.GetValueForOption(missingSkipWorktreeCheckOption);
         var connectTimeoutMs = context.ParseResult.GetValueForOption(missingConnectTimeoutOption);
+        var dryRun = context.ParseResult.GetValueForOption(missingDryRunOption);
 
         if (string.IsNullOrWhiteSpace(arch))
         {
@@ -809,7 +815,8 @@ missingCmd.SetHandler((InvocationContext context) =>
             labviewInput,
             worktreeRoot,
             skipWorktreeRootCheck,
-            connectTimeoutMs > 0 ? connectTimeoutMs : null
+            connectTimeoutMs > 0 ? connectTimeoutMs : null,
+            dryRun
         );
 
         var exitCode = MissingInProjectService.Run(options);

@@ -528,7 +528,7 @@ public class RunnerCliCliTests
     }
 
     [Fact]
-    public void MissingInProject_emits_command_echo_to_stderr_on_windows()
+    public void MissingInProject_dry_run_emits_command_echo_and_skips_script_execution_on_windows()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -536,12 +536,47 @@ public class RunnerCliCliTests
         }
 
         var repoRoot = FindRepoRoot();
-        var projectPath = Path.Combine(repoRoot, "lv_icon_editor.lvproj");
-        var args = $"missing-in-project --repo-root \"{repoRoot}\" --arch 64 --project-file \"{projectPath}\" --skip-worktree-root-check";
-        var (_, stdout, stderr) = RunCli(repoRoot, args);
+        var fixture = CreateMissingInProjectFixture(
+            "lvie-cli-mip-dry-run",
+            """
+            $sentinel = Join-Path $PSScriptRoot "..\..\..\script-executed.txt"
+            Set-Content -Path $sentinel -Value "executed" -Encoding UTF8
+            exit 9
+            """);
 
+        var args = $"missing-in-project --repo-root \"{fixture.RepoRoot}\" --arch 64 --project-file \"{fixture.ProjectPath}\" --skip-worktree-root-check --dry-run";
+        var (exitCode, stdout, stderr) = RunCli(repoRoot, args, timeoutMs: 30000);
+
+        Assert.Equal(0, exitCode);
         Assert.Contains("missing-in-project command:", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("missing-in-project command:", stdout, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(fixture.SentinelPath), "dry-run should not execute the script.");
+    }
+
+    [Fact]
+    public void MissingInProject_forwards_script_exit_code_on_windows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var repoRoot = FindRepoRoot();
+        var fixture = CreateMissingInProjectFixture(
+            "lvie-cli-mip-exit-code",
+            """
+            $sentinel = Join-Path $PSScriptRoot "..\..\..\script-executed.txt"
+            Set-Content -Path $sentinel -Value "executed" -Encoding UTF8
+            exit 7
+            """);
+
+        var args = $"missing-in-project --repo-root \"{fixture.RepoRoot}\" --arch 64 --project-file \"{fixture.ProjectPath}\" --skip-worktree-root-check";
+        var (exitCode, stdout, stderr) = RunCli(repoRoot, args, timeoutMs: 30000);
+
+        Assert.Equal(7, exitCode);
+        Assert.Contains("missing-in-project command:", stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("missing-in-project command:", stdout, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(fixture.SentinelPath), "non-dry-run should execute the script.");
     }
 
     [Fact]
@@ -621,7 +656,8 @@ public class RunnerCliCliTests
     private static (int ExitCode, string StdOut, string StdErr) RunCli(
         string repoRoot,
         string args,
-        IDictionary<string, string?>? environmentOverrides = null)
+        IDictionary<string, string?>? environmentOverrides = null,
+        int timeoutMs = 120000)
     {
         var dllPath = ResolveRunnerCliDll(repoRoot);
         var runArgs = dllPath is null
@@ -652,9 +688,32 @@ public class RunnerCliCliTests
             throw new InvalidOperationException("Failed to start dotnet process.");
         }
 
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        if (!process.WaitForExit(timeoutMs))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Best effort; process state can race with timeout handling.
+            }
+
+            process.WaitForExit();
+            var partialStdout = stdoutTask.IsCompletedSuccessfully ? stdoutTask.Result.Trim() : string.Empty;
+            var partialStderr = stderrTask.IsCompletedSuccessfully ? stderrTask.Result.Trim() : string.Empty;
+            throw new TimeoutException(
+                $"runner-cli invocation timed out after {timeoutMs}ms: dotnet {runArgs}{Environment.NewLine}" +
+                $"stdout:{Environment.NewLine}{partialStdout}{Environment.NewLine}" +
+                $"stderr:{Environment.NewLine}{partialStderr}");
+        }
+
         process.WaitForExit();
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
 
         return (process.ExitCode, stdout.Trim(), stderr.Trim());
     }
@@ -827,6 +886,31 @@ public class RunnerCliCliTests
 
         expectedUncoveredRcIds = new[] { "RC-AAA-111", "RC-ZZZ-999" };
         return fixtureRoot;
+    }
+
+    private static (string RepoRoot, string ProjectPath, string SentinelPath) CreateMissingInProjectFixture(
+        string namePrefix,
+        string scriptContents)
+    {
+        var repoRoot = Directory.CreateTempSubdirectory(namePrefix).FullName;
+        var projectPath = Path.Combine(repoRoot, "fixture.lvproj");
+        var sentinelPath = Path.Combine(repoRoot, "script-executed.txt");
+        var scriptPath = Path.Combine(
+            repoRoot,
+            ".github",
+            "actions",
+            "missing-in-project",
+            "Invoke-MissingInProjectCLI.ps1");
+
+        var scriptDirectory = Path.GetDirectoryName(scriptPath);
+        if (!string.IsNullOrWhiteSpace(scriptDirectory))
+        {
+            Directory.CreateDirectory(scriptDirectory);
+        }
+
+        File.WriteAllText(projectPath, "<Project/>");
+        File.WriteAllText(scriptPath, scriptContents);
+        return (repoRoot, projectPath, sentinelPath);
     }
 
     private static void AssertItemOrder(JsonElement array, params string[] expectedItems)

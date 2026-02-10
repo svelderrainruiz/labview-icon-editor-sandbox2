@@ -9,7 +9,8 @@ public sealed record MissingInProjectOptions(
     string? LabviewInput,
     string? WorktreeRoot,
     bool SkipWorktreeRootCheck,
-    int? ConnectTimeoutMs
+    int? ConnectTimeoutMs,
+    bool DryRun
 );
 
 public static class MissingInProjectService
@@ -83,6 +84,11 @@ public static class MissingInProjectService
 
         var commandLine = $"pwsh {string.Join(' ', args.Select(QuoteIfNeeded))}";
         Console.Error.WriteLine($"missing-in-project command: {commandLine}");
+
+        if (options.DryRun)
+        {
+            return 0;
+        }
 
         var psi = new ProcessStartInfo
         {
