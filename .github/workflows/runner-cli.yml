@@ -91,6 +91,12 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build test binaries
+        run: dotnet build RunnerCli.Tests/RunnerCli.Tests.csproj --configuration Release --no-restore
+
       - name: Run RunnerCliCliTests and enforce timing budget
         shell: pwsh
         run: |
@@ -100,6 +106,8 @@ jobs:
           $timer = [System.Diagnostics.Stopwatch]::StartNew()
           dotnet test RunnerCli.Tests/RunnerCli.Tests.csproj `
             --configuration Release `
+            --no-restore `
+            --no-build `
             --filter "FullyQualifiedName~RunnerCli.Tests.RunnerCliCliTests" `
             --logger "trx;LogFileName=RunnerCliCliTests.trx" `
             --results-directory "$resultsDir" `
