@@ -55,7 +55,9 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - (Optional) Toggle LabVIEW dev mode (`Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`) via the **Development Mode Toggle** workflow.
 
 5. **Run Tests**
-   - Run the tests using the **CI Pipeline (Composite)** workflow; its dedicated **test** job executes the unit tests.
+   - Run tests using **CI Pipeline (Composite)**.
+   - `pull_request` runs use the `pr-fast` profile (64-bit smoke/missing/unit).
+   - `workflow_dispatch` with `force_gcli_lunit=true` uses `release-priority` and skips heavy self-hosted validation jobs.
 
 6. **Build VI Package**
     - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
@@ -93,7 +95,12 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - Great for reconfiguring LabVIEW for local dev vs. distribution builds.
 
 2. **CI Pipeline (Composite)**
-   - Includes a **test** job for unit tests, a **version** job that computes semantic versioning, and a **build-vi-package** job that packages the `.vip` using the version job's outputs.
+   - Includes `unit-tests`, `version`, and `build-vip` jobs, plus container packed-library and prerelease publication jobs.
+   - Execution profile is computed as `ci_profile`:
+     - `release-priority` = `workflow_dispatch` + `force_gcli_lunit=true` (target <= 25 minutes).
+     - `pr-fast` = `pull_request` (target <= 35 minutes).
+     - `full` = all other events.
+   - `pipeline-contract` enforces profile-specific required-job outcomes so intentional profile skips do not fail the run.
    - **Label-based** semantic versioning (`major`, `minor`, `patch`). Defaults to `patch` if no label.
    - **Derives build number from total commit count** (`git rev-list --count HEAD`).
    - **Fork-friendly**: runs on forks without requiring signing keys.
@@ -181,10 +188,11 @@ With your runner online:
    - `labview_version` must match `.lvversion` if provided.
 
 2. **Run Tests via CI Pipeline (Composite)**
-   - Execute the workflow and review the **test** job logs to confirm all unit tests pass.
+   - Execute the workflow and review `unit-tests` logs (`pr-fast`: 64-bit only, `full`: 64/32).
 
 3. **Build VI Package**
-    - Produces `.vip` using the version computed in the **version** job (review that job's output for version details).
+    - Produces `.vip` using the version computed in the **version** job for `full`/`pr-fast` profiles.
+    - `release-priority` runs intentionally skip `build-vip`; publish artifacts come from Linux/Windows container packed-library jobs.
    - Merged-PR merge-commit pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
    - `workflow_dispatch` backfill publishing requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
    - **Pass** your **org/repo** info (e.g. `-CompanyName "AcmeCorp"` / `-AuthorName "AcmeCorp/IconEditor"`) to embed in the final package.

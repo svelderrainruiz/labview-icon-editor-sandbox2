@@ -73,6 +73,7 @@ on:
         type: boolean
 
 jobs:
+  # Stage 1: Run identity and publish-eligibility context.
   run-metadata:
     name: Run Metadata
     runs-on: ubuntu-latest
@@ -145,6 +146,7 @@ jobs:
       should_publish: ${{ steps.ctx.outputs.should_publish }}
       publish_mode: ${{ steps.ctx.outputs.publish_mode }}
       publish_reason: ${{ steps.ctx.outputs.publish_reason }}
+      ci_profile: ${{ steps.ctx.outputs.ci_profile }}
       release_priority_mode: ${{ steps.ctx.outputs.release_priority_mode }}
       bump_type_override: ${{ steps.ctx.outputs.bump_type_override }}
       merged_pr_number: ${{ steps.ctx.outputs.merged_pr_number }}
@@ -173,7 +175,10 @@ jobs:
             const releaseLabelMap = buildReleaseLabelMap(labelContract);
             const publishInput = (process.env.PUBLISH_PRERELEASE || 'false').toLowerCase() === 'true';
             const forceGcliLunitInput = (process.env.FORCE_GCLI_LUNIT || 'false').toLowerCase() === 'true';
-            const releasePriorityMode = context.eventName === 'workflow_dispatch' && forceGcliLunitInput;
+            const ciProfile = context.eventName === 'workflow_dispatch' && forceGcliLunitInput
+              ? 'release-priority'
+              : (context.eventName === 'pull_request' ? 'pr-fast' : 'full');
+            const releasePriorityMode = ciProfile === 'release-priority';
 
             async function getCommitParentCount() {
               const response = await github.rest.repos.getCommit({
@@ -299,6 +304,7 @@ jobs:
             core.setOutput('should_publish', shouldPublish ? 'true' : 'false');
             core.setOutput('publish_mode', publishMode);
             core.setOutput('publish_reason', publishReason);
+            core.setOutput('ci_profile', ciProfile);
             core.setOutput('release_priority_mode', releasePriorityMode ? 'true' : 'false');
             core.setOutput('bump_type_override', bumpTypeOverride);
             core.setOutput('merged_pr_number', mergedPrNumber);
@@ -666,9 +672,11 @@ jobs:
           report_only: 'true'
           absolute_roots: ${{ vars.LVIE_PYLAVI_ABSOLUTE_PATH_ROOTS }}
 
+  # Stage 2: Baseline hosted/static checks + self-hosted Verify IE Paths gate.
   dev-mode-gate:
     name: Verify IE Paths Gate (LV ${{ matrix.bitness }}-bit)
-    needs: [run-metadata, version-gate, pylavi-validate]
+    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
+    needs: [run-metadata, prerelease-context, version-gate, pylavi-validate]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -920,7 +928,7 @@ jobs:
 
   version:
     name: Compute Version
-    needs: [run-metadata, version-gate, dev-mode-gate, prerelease-context]
+    needs: [run-metadata, version-gate, prerelease-context]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -965,9 +973,11 @@ jobs:
         with:
           cleanup_worktree: 'false'
 
+  # Stage 3: Self-hosted LabVIEW validation/build chain (profile-gated).
   devmode-no-labview-smoke:
     name: DevMode.NoLabVIEW Smoke (LV ${{ matrix.bitness }}-bit)
-    needs: [run-metadata, version-gate, apply-deps-2021-x86]
+    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
+    needs: [run-metadata, prerelease-context, version-gate, apply-deps-2021-x86]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -978,7 +988,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        bitness: ["64", "32"]
+        bitness: ${{ fromJson(needs.prerelease-context.outputs.ci_profile == 'full' && '["64","32"]' || '["64"]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -995,7 +1005,7 @@ jobs:
         shell: pwsh
         run: |
           $backendMode = 'labviewcli'
-          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ github.event.inputs.force_gcli_lunit }}' -eq 'true') {
+          if ('${{ needs.prerelease-context.outputs.ci_profile }}' -eq 'release-priority') {
             $backendMode = 'gcli'
           }
           "LVIE_LUNIT_BACKEND=$backendMode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -1033,7 +1043,8 @@ jobs:
 
   missing-in-project:
     name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
-    needs: [run-metadata, version-gate, apply-deps-2021-x86, devmode-no-labview-smoke]
+    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
+    needs: [run-metadata, prerelease-context, version-gate, apply-deps-2021-x86, devmode-no-labview-smoke]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -1044,7 +1055,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        bitness: ["64", "32"]
+        bitness: ${{ fromJson(needs.prerelease-context.outputs.ci_profile == 'full' && '["64","32"]' || '["64"]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -1121,6 +1132,7 @@ jobs:
 
   unit-tests:
     name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
+    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, missing-in-project]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
@@ -1132,7 +1144,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        bitness: ${{ fromJson(needs.prerelease-context.outputs.release_priority_mode == 'true' && '["64"]' || '["64","32"]') }}
+        bitness: ${{ fromJson(needs.prerelease-context.outputs.ci_profile == 'full' && '["64","32"]' || '["64"]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -1149,39 +1161,16 @@ jobs:
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
-          $useLabVIEWForReleasePriorityX86 = (
-            '${{ matrix.bitness }}' -eq '32' -and
-            '${{ github.event_name }}' -eq 'workflow_dispatch' -and
-            '${{ github.event.inputs.force_gcli_lunit }}' -eq 'true'
-          )
-
-          if ($useLabVIEWForReleasePriorityX86) {
-            Write-Host 'Release-priority mode detected (force_gcli_lunit=true, 32-bit): using LabVIEW-backed dev mode for unit tests.'
-            $previousForceNoLabVIEW = $env:LVIE_FORCE_NO_LABVIEW_DEVMODE
-            Remove-Item Env:LVIE_FORCE_NO_LABVIEW_DEVMODE -ErrorAction SilentlyContinue
-            try {
-              & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-                -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-                -SupportedBitness ${{ matrix.bitness }} `
-                -RepoRoot "$env:REPO_ROOT" `
-                -UseLabVIEW
-            } finally {
-              if (-not [string]::IsNullOrWhiteSpace($previousForceNoLabVIEW)) {
-                $env:LVIE_FORCE_NO_LABVIEW_DEVMODE = $previousForceNoLabVIEW
-              }
-            }
-          } else {
-            & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-              -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-              -SupportedBitness ${{ matrix.bitness }} `
-              -RepoRoot "$env:REPO_ROOT"
-          }
+          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
+            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
+            -SupportedBitness ${{ matrix.bitness }} `
+            -RepoRoot "$env:REPO_ROOT"
       - name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
           $backendMode = 'labviewcli'
-          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ github.event.inputs.force_gcli_lunit }}' -eq 'true') {
+          if ('${{ needs.prerelease-context.outputs.ci_profile }}' -eq 'release-priority') {
             $backendMode = 'gcli'
           }
           "LVIE_LUNIT_BACKEND=$backendMode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -1230,7 +1219,7 @@ jobs:
 
   build-ppl-x86:
     name: Build 32-bit Packed Library
-    if: ${{ needs.prerelease-context.outputs.release_priority_mode != 'true' }}
+    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, build-ppl-x64, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
@@ -1293,7 +1282,8 @@ jobs:
 
   build-ppl-x64:
     name: Build 64-bit Packed Library
-    needs: [run-metadata, version-gate, unit-tests, version]
+    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
+    needs: [run-metadata, prerelease-context, version-gate, unit-tests, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -1355,7 +1345,7 @@ jobs:
 
   build-vip:
     name: Build VI Package
-    if: ${{ needs.prerelease-context.outputs.release_priority_mode != 'true' }}
+    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     # Chain after 32-bit PPL build (which depends on 64-bit PPL build).
     needs: [run-metadata, prerelease-context, version-gate, build-ppl-x86, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -1845,7 +1835,7 @@ jobs:
 
   publish-prerelease:
     name: Publish Pre-Release
-    if: ${{ always() && needs.run-metadata.result == 'success' && needs.prerelease-context.result == 'success' && needs.version.result == 'success' && needs.build-ppl-linux-container.result == 'success' && needs.build-ppl-windows-container.result == 'success' && (needs.prerelease-context.outputs.release_priority_mode == 'true' || needs.build-vip.result == 'success') }}
+    if: ${{ always() && needs.run-metadata.result == 'success' && needs.prerelease-context.result == 'success' && needs.version.result == 'success' && needs.build-ppl-linux-container.result == 'success' && needs.build-ppl-windows-container.result == 'success' && (needs.prerelease-context.outputs.ci_profile == 'release-priority' || needs.build-vip.result == 'success') }}
     needs: [run-metadata, prerelease-context, version, build-vip, build-ppl-linux-container, build-ppl-windows-container]
     runs-on: ubuntu-latest
     permissions:
@@ -1861,7 +1851,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download VI package artifact
-        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.release_priority_mode != 'true' }}
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -1869,7 +1859,7 @@ jobs:
           path: ${{ runner.temp }}/prerelease-assets/vip
 
       - name: Download release notes artifact
-        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.release_priority_mode != 'true' }}
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -1877,7 +1867,7 @@ jobs:
           path: ${{ runner.temp }}/prerelease-assets/release-notes
 
       - name: Download g-cli logs artifact
-        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.release_priority_mode != 'true' }}
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -1885,7 +1875,7 @@ jobs:
           path: ${{ runner.temp }}/prerelease-assets/gcli-logs
 
       - name: Download VIP build status artifact
-        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.release_priority_mode != 'true' }}
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' && needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -1921,7 +1911,8 @@ jobs:
           $statusPath = Join-Path $statusDir 'prerelease-publish.json'
 
           $shouldPublish = '${{ needs.prerelease-context.outputs.should_publish }}' -eq 'true'
-          $releasePriorityMode = '${{ needs.prerelease-context.outputs.release_priority_mode }}' -eq 'true'
+          $ciProfile = '${{ needs.prerelease-context.outputs.ci_profile }}'
+          $releasePriorityMode = $ciProfile -eq 'release-priority'
           $publishMode = '${{ needs.prerelease-context.outputs.publish_mode }}'
           $publishReason = '${{ needs.prerelease-context.outputs.publish_reason }}'
           $mergedPrNumber = '${{ needs.prerelease-context.outputs.merged_pr_number }}'
@@ -2082,6 +2073,7 @@ jobs:
               event = '${{ github.event_name }}'
               publish_mode = $publishMode
               publish_reason = $publishReason
+              ci_profile = $ciProfile
               release_priority_mode = $releasePriorityMode
               should_publish = $shouldPublish
               publish_status = $publishStatus
@@ -2151,13 +2143,20 @@ jobs:
       - name: Validate required jobs
         shell: pwsh
         run: |
-          $required = @(
+          $requiredCommon = @(
             'run-metadata',
             'prerelease-context',
             'version-gate',
             'powershell-lint',
             'vip-prerelease-requirements-lint',
             'pylavi-validate',
+            'build-ppl-linux-container',
+            'build-ppl-windows-container',
+            'publish-prerelease',
+            'version',
+            'conformance-full'
+          )
+          $requiredFullValidation = @(
             'dev-mode-gate',
             'changes',
             'apply-deps-lv-x64',
@@ -2167,17 +2166,28 @@ jobs:
             'unit-tests',
             'build-ppl-x64',
             'build-ppl-x86',
-            'build-ppl-linux-container',
-            'build-ppl-windows-container',
-            'build-vip',
-            'publish-prerelease',
-            'version',
-            'conformance-full'
+            'build-vip'
           )
-          $releasePriorityMode = '${{ needs.prerelease-context.outputs.release_priority_mode }}' -eq 'true'
-          if ($releasePriorityMode) {
-            $required = $required | Where-Object { $_ -notin @('build-ppl-x86', 'build-vip') }
+          $requiredByProfile = @{
+            'full' = @($requiredCommon + $requiredFullValidation)
+            'pr-fast' = @($requiredCommon + $requiredFullValidation)
+            'release-priority' = @($requiredCommon)
           }
+
+          $ciProfile = '${{ needs.prerelease-context.outputs.ci_profile }}'
+          if ([string]::IsNullOrWhiteSpace($ciProfile)) {
+            Write-Warning 'ci_profile output was empty; defaulting to full profile contract.'
+            $ciProfile = 'full'
+          }
+          if (-not $requiredByProfile.ContainsKey($ciProfile)) {
+            Write-Warning ("Unknown ci_profile '{0}'; defaulting to full profile contract." -f $ciProfile)
+            $ciProfile = 'full'
+          }
+
+          $required = $requiredByProfile[$ciProfile]
+          Write-Host ("CI profile: {0}" -f $ciProfile)
+          Write-Host ("Required jobs ({0}): {1}" -f $required.Count, ($required -join ', '))
+
           $needs = ConvertFrom-Json -InputObject '${{ toJson(needs) }}'
           $needsProps = $needs.PSObject.Properties
           $missing = @()

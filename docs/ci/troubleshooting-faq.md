@@ -22,7 +22,8 @@ This document provides a collection of common **troubleshooting** scenarios (wit
    13. [No. 13: Repository Forks Not Displaying Correct Metadata](#no-13-repository-forks-not-displaying-correct-metadata)
    14. [No. 14: Dev Mode Failure Missing Paths](#no-14-dev-mode-failure-missing-paths)
    15. [No. 15: Verify IE Paths Gate Fails in CI](#no-15-verify-ie-paths-gate-fails-in-ci)
-   16. [No. 16: PR Merge Blocked Despite Green Required Checks](#no-16-pr-merge-blocked-despite-green-required-checks)
+   16. [No. 16: Expected Job Is Skipped (Profile-Based Behavior)](#no-16-expected-job-is-skipped-profile-based-behavior)
+   17. [No. 17: PR Merge Blocked Despite Green Required Checks](#no-17-pr-merge-blocked-despite-green-required-checks)
 
 
 2. [FAQ](#faq)
@@ -45,7 +46,7 @@ This document provides a collection of common **troubleshooting** scenarios (wit
 
 ## Troubleshooting
 
-Below are 16 possible issues you might encounter, along with suggested steps to resolve them.
+Below are 17 possible issues you might encounter, along with suggested steps to resolve them.
 
 ### No. 1: LabVIEW Not Found on Runner
 
@@ -166,10 +167,10 @@ gh workflow run ci-composite.yml --repo $repo `
 1. Have the required reviewers approve your Pull Request.
 2. Ensure all required status checks pass:
    - [`changes`](../../.github/workflows/ci-composite.yml#changes) – detects `.vipc` file changes.
-   - [`apply-deps`](../../.github/workflows/ci-composite.yml#apply-deps) – applies VIPC dependencies when needed.
+   - [`apply-deps-lv-x64`](../../.github/workflows/ci-composite.yml#apply-deps-lv-x64) and [`apply-deps-2021-x86`](../../.github/workflows/ci-composite.yml#apply-deps-2021-x86) – apply VIPC dependencies when needed.
    - [`missing-in-project`](../../.github/workflows/ci-composite.yml#missing-in-project) – validates project file membership.
-   - [`Run Unit Tests`](../../.github/workflows/ci-composite.yml#test) – executes unit tests.
-   - [`Build VI Package`](../../.github/workflows/ci-composite.yml#build-vi-package) – produces the `.vip` artifact.
+   - [`unit-tests`](../../.github/workflows/ci-composite.yml#unit-tests) – executes unit tests.
+   - [`build-vip`](../../.github/workflows/ci-composite.yml#build-vip) – produces the `.vip` artifact in `full`/`pr-fast` profiles.
 3. Update your `CONTRIBUTING.md` to specify the merging rules so contributors know what’s needed.
 
 ---
@@ -301,7 +302,26 @@ gh workflow run ci-composite.yml --repo $repo `
 
 ---
 
-### No. 16: PR Merge Blocked Despite Green Required Checks
+### No. 16: Expected Job Is Skipped (Profile-Based Behavior)
+
+**Symptoms**:
+- One or more jobs show `skipped`, but the workflow still proceeds to publish checks.
+- Common examples: `dev-mode-gate`, `devmode-no-labview-smoke`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`.
+
+**Possible Causes**:
+- The run used a different `ci_profile`:
+  - `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`) intentionally skips heavy self-hosted validation/build jobs.
+  - `pr-fast` (`pull_request`) keeps the jobs but uses 64-bit-only matrices for smoke/missing/unit tests.
+  - `full` runs the full matrix and full self-hosted flow.
+
+**Solution**:
+1. Check `prerelease-context` outputs for `ci_profile`.
+2. For `release-priority`, confirm skipped jobs are from the intentional skip list and that required jobs (`run-metadata`, `prerelease-context`, `version`, container packed-library jobs, `publish-prerelease`, `pipeline-contract`) succeeded.
+3. If full validation is required, rerun without `force_gcli_lunit=true` (or use a `pull_request`/`push` run path).
+
+---
+
+### No. 17: PR Merge Blocked Despite Green Required Checks
 
 **Symptoms**:
 - Pull request is `MERGEABLE` but `BLOCKED` even though required checks are green.
