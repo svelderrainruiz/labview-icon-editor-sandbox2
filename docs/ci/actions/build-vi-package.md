@@ -132,7 +132,7 @@ components remain unchanged and only the build number increases.
 ### 3.4 Artifact Publication
 - Packaging output: the `.vip` is uploaded as a run artifact by `build-vip`.
 - Publication contract: prerelease publication is defined by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, version binding, and required asset rules.
-- Manual backfill: `workflow_dispatch` can republish eligible assets when `publish_prerelease=true` and SHA validation is satisfied.
+- Manual backfill: `workflow_dispatch` can republish eligible assets only when `publish_prerelease=true`, `expected_sha` is set to the merged `develop` SHA, and `strict_sha=true`.
 
 
 
@@ -231,7 +231,7 @@ components remain unchanged and only the build number increases.
 ### 7.1 Pull Requests with Labels
 - **Scenario**: You create a PR from a feature branch into `develop`.
 - **Action**: Add a label like `major` or `minor`.
-- **Result**: Upon merging, the workflow updates that version field (major/minor/patch) and applies a commit-based build number. If the PR has no version label, the patch version is bumped by default. The `.vip` artifact is uploaded, and the target policy is to publish a GitHub pre-release from that build on `develop`.
+- **Result**: Upon merge-commit merge (`--merge`), the workflow updates that version field (major/minor/patch) and applies a commit-based build number. If the PR has no version label, the patch version is bumped by default. The `.vip` artifact is uploaded, and the target policy is to publish a GitHub pre-release from that merged `develop` SHA.
 
 #### Example:
 1. PR labeled `minor`:
@@ -251,8 +251,8 @@ components remain unchanged and only the build number increases.
 
 ### 7.4 Manually Triggering (workflow_dispatch)
 - **Scenario**: A maintainer manually runs the workflow from the Actions tab (if enabled).
-- **Action**: Provide any input parameters (if configured), or rely on defaults like `none` for version bump.
-- **Result**: The script runs as if it were a push event and produces a `.vip` artifact. For prerelease publication, `develop` merged-PR runs publish automatically and `workflow_dispatch` supports explicit backfill intent.
+- **Action**: For prerelease backfill, set `publish_prerelease=true`, set `expected_sha` to the merged `develop` SHA, and set `strict_sha=true`.
+- **Result**: The script produces a `.vip` artifact. For prerelease publication, `develop` merged-PR merge commits publish automatically and `workflow_dispatch` supports explicit backfill only when pinned to the merged SHA.
 
 ## 8. **Testing & Verification**
 
