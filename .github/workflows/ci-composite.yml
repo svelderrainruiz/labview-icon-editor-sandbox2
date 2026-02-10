@@ -20,8 +20,8 @@ env:
   LVIE_PYLAVI_FAIL_ON_DELTA: ${{ vars.LVIE_PYLAVI_FAIL_ON_DELTA || '0' }}
 
 concurrency:
-  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-  cancel-in-progress: false
+  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 on:
   push:

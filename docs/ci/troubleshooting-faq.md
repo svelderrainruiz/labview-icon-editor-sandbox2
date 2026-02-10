@@ -22,6 +22,7 @@ This document provides a collection of common **troubleshooting** scenarios (wit
    13. [No. 13: Repository Forks Not Displaying Correct Metadata](#no-13-repository-forks-not-displaying-correct-metadata)
    14. [No. 14: Dev Mode Failure Missing Paths](#no-14-dev-mode-failure-missing-paths)
    15. [No. 15: Verify IE Paths Gate Fails in CI](#no-15-verify-ie-paths-gate-fails-in-ci)
+   16. [No. 16: PR Merge Blocked Despite Green Required Checks](#no-16-pr-merge-blocked-despite-green-required-checks)
 
 
 2. [FAQ](#faq)
@@ -44,7 +45,7 @@ This document provides a collection of common **troubleshooting** scenarios (wit
 
 ## Troubleshooting
 
-Below are 14 possible issues you might encounter, along with suggested steps to resolve them.
+Below are 16 possible issues you might encounter, along with suggested steps to resolve them.
 
 ### No. 1: LabVIEW Not Found on Runner
 
@@ -286,6 +287,40 @@ Below are 14 possible issues you might encounter, along with suggested steps to 
 1. Open the “verify-iepaths-32-bit” or “verify-iepaths-64-bit” artifact attached to the failed job.
 2. Check the comma-separated list of missing paths in `missing_IE_paths.txt`.
 3. Restore the missing files (or revert dev mode) and re-run the workflow.
+
+---
+
+### No. 16: PR Merge Blocked Despite Green Required Checks
+
+**Symptoms**:
+- Pull request is `MERGEABLE` but `BLOCKED` even though required checks are green.
+- `gh pr merge` fails with: “the base branch policy prohibits the merge.”
+
+**Evidence Pattern**:
+- `gh pr checks <pr-number>` shows required checks passing.
+- `gh run view <run-id> --json status,conclusion,jobs` shows a `pending` or `queued` workflow run with `jobs: []`.
+- PR merge state remains blocked until the stale pending run is canceled or cleared.
+
+**Incident Reference (2026-02-10)**:
+- Pull request: `#82`
+- Stale pending run: `21853308619` (`CI Pipeline (Composite)`), head SHA `c5fc1ecf2175127cf4734cf7bde38ae9b648853c`
+- Older queued/in-progress run on same branch: `21852840202`
+- Merge commit after manual unblock: `aa5a705bc45f54f26f0b3b5ac0893958de4a3e5c`
+
+**Diagnostic Command Set**:
+```powershell
+gh pr view <pr-number> --json mergeStateStatus,mergeable,statusCheckRollup
+gh pr checks <pr-number>
+gh run list --branch <branch> --workflow "CI Pipeline (Composite)"
+gh run view <run-id> --json status,conclusion,jobs
+```
+
+**Immediate Unblock Playbook**:
+1. Cancel stale pending run(s): `gh run cancel <run-id>`.
+2. Re-run stale failed required checks if present (use `gh run rerun <run-id> --failed`).
+3. If required check context is still stale, push one empty refresh commit.
+4. Re-check merge state and required contexts.
+5. Use `--admin` merge only as a last resort when required checks are green but policy remains blocked.
 
 ## FAQ
 
