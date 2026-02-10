@@ -136,9 +136,20 @@ Below are 16 possible issues you might encounter, along with suggested steps to 
 - The publish step failed or was skipped due to eligibility, assets, or API errors.
 
 **Solution**:
-1. Confirm the run is an eligible publish path (`develop` merged-PR push, or `workflow_dispatch` with `publish_prerelease=true` and valid `expected_sha`).
-2. Inspect the `publish-prerelease` job logs for explicit failure/skip reason output.
-3. Inspect the `prerelease-publish-status` artifact for machine-readable failure details and required-asset validation results.
+1. Confirm the PR was merged into `develop` using a merge commit (not squash/rebase) and identify the merged `develop` SHA.
+2. Confirm the run is an eligible publish path (`develop` merged-PR push, or `workflow_dispatch` with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`).
+3. Inspect the `publish-prerelease` job logs for explicit failure/skip reason output.
+4. Inspect the `prerelease-publish-status` artifact for machine-readable failure details and required-asset validation results.
+
+Deterministic backfill command:
+```powershell
+$repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1
+$mergeSha = gh pr view <pr-number> --repo $repo --json mergeCommit --jq .mergeCommit.oid
+gh workflow run ci-composite.yml --repo $repo `
+  -f publish_prerelease=true `
+  -f expected_sha=$mergeSha `
+  -f strict_sha=true
+```
 
 ---
 
@@ -336,7 +347,7 @@ By default, the workflow calculates the build number with `git rev-list --count 
 ### Q2: How Do I Create a Release?
 
 **Answer**:
-Repository policy publishes a GitHub prerelease for eligible `develop` publication events. Use `workflow_dispatch` with `publish_prerelease=true` for explicit backfill operations, and review `prerelease-publish-status` when troubleshooting.
+Repository policy publishes a GitHub prerelease for eligible `develop` publication events from merge commits. Merge PRs with `--merge` (not squash/rebase) when commit-number determinism matters. For explicit backfill, dispatch `ci-composite.yml` with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`, then review `prerelease-publish-status` when troubleshooting.
 
 ---
 

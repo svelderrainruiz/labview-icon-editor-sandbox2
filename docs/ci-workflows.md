@@ -1,6 +1,6 @@
 # Local CI/CD Workflows
 
-**Last updated:** 2026-02-09
+**Last updated:** 2026-02-10
 
 Quick link: `.github/workflows/runner-cli.yml` (Runner CLI consolidated workflow).
 
@@ -76,11 +76,31 @@ Automating your Icon Editor builds and tests:
 This document is the canonical source for release/publication policy.
 
 - Normative contract: [VI Package Pre-Release Requirements](vip-prerelease-requirements.md).
-- Auto publish contract: prerelease publication runs for `push` events on `develop` when the pushed SHA is associated with a merged pull request targeting `develop`.
-- Manual publish contract: `workflow_dispatch` supports explicit prerelease backfill with `publish_prerelease=true` and SHA validation.
+- Merge strategy contract: pull requests intended to drive prerelease publication to `develop` must use merge commits (`--merge`), not squash or rebase.
+- Auto publish contract: prerelease publication runs for `push` events on `develop` when the pushed SHA is the merged `develop` SHA from a merged pull request targeting `develop`.
+- Manual publish contract: `workflow_dispatch` supports explicit prerelease backfill only with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
 - LUnit escape hatch: `workflow_dispatch` also supports `force_gcli_lunit=true` to force g-cli in unit-test jobs while exercising release paths.
 - Asset contract: published prereleases attach `.vip`, release notes, `gcli-logs`, and `vip-build-status` assets from the same CI run.
 - Branch trigger reality for `ci-composite.yml`: `push` and `pull_request` run on `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*`, plus `workflow_dispatch`.
+
+#### Deterministic Merge + Publish Procedure
+
+1. Merge the PR into `develop` with a merge commit:
+   ```powershell
+   gh pr merge <pr-number> --merge --delete-branch
+   ```
+2. Read the merged `develop` SHA:
+   ```powershell
+   $repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1
+   $mergeSha = gh pr view <pr-number> --repo $repo --json mergeCommit --jq .mergeCommit.oid
+   ```
+3. Use manual publish/backfill only when needed, pinned to that merged SHA:
+   ```powershell
+   gh workflow run ci-composite.yml --repo $repo `
+     -f publish_prerelease=true `
+     -f expected_sha=$mergeSha `
+     -f strict_sha=true
+   ```
 
 ---
 
@@ -222,10 +242,11 @@ Although GitHub Actions primarily run on GitHub-hosted or self-hosted agents, yo
    - Assign `major`, `minor`, or `patch` to control the version bump.
    - The CI validates your code and produces versioned build artifacts.
 
-4. **Merge the PR** into `develop` (or `main`):
+4. **Merge the PR into `develop` with a merge commit**:
      - The **Build VI Package** workflow builds and uploads the `.vip` artifact.
+     - Use merge commits only (`gh pr merge <pr-number> --merge --delete-branch`); do not use squash/rebase for prerelease-driving PRs.
      - Merged PR commits into `develop` publish a GitHub prerelease automatically when eligibility checks pass.
-     - Manual backfill is available through `workflow_dispatch` using `publish_prerelease=true` with SHA pinning.
+     - Manual backfill is available through `workflow_dispatch` using `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
      - **Inside** that `.vip`, the **“Company Name”** and **“Author Name (Person or Company)”** fields are filled automatically using `github.repository_owner` and `github.event.repository.name`. Modify the “Generate display information JSON” step in `.github/workflows/ci-composite.yml` to override them.
 
 5. **Disable Development Mode**:  
