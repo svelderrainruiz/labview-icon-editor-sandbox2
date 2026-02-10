@@ -1,4 +1,4 @@
-name: CI Pipeline (Composite)
+name: CI Pipeline (No Smoke)
 run-name: "CI ${{ github.sha }} (#${{ github.run_id }}.${{ github.run_attempt }})"
 
 permissions:
@@ -20,7 +20,7 @@ env:
   LVIE_PYLAVI_FAIL_ON_DELTA: ${{ vars.LVIE_PYLAVI_FAIL_ON_DELTA || '0' }}
 
 concurrency:
-  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}-${{ github.event_name }}-${{ github.ref }}
+  group: labview-${{ github.repository }}-${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}-${{ github.event_name }}-${{ github.ref }}-no-smoke
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 on:
