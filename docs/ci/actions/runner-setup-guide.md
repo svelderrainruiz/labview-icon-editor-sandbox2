@@ -60,11 +60,12 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - `workflow_dispatch` with `force_gcli_lunit=true` uses `release-priority` and skips heavy self-hosted validation jobs.
 
 6. **Build VI Package**
-    - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
-   - Pre-release publication behavior is specified by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, assets, and failure policy.
-   - Prerelease-driving PRs into `develop` must be merged with a merge commit (`--merge`), not squash/rebase.
-   - Manual prerelease backfill requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
-   - **You can also** pass in **org/repository** info (e.g., `-CompanyName "MyOrg"` or `-AuthorName "myorg/myrepo"`) to brand the resulting package with your unique identifiers.
+     - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
+    - Pre-release publication behavior is specified by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, assets, and failure policy.
+    - Prerelease-driving PRs into `develop` must be merged with a merge commit (`--merge`), not squash/rebase.
+    - Manual prerelease backfill requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+    - `release-priority` publish intent (`force_gcli_lunit=true`) additionally requires a successful `full` profile run on `develop` within the previous 24 hours.
+    - **You can also** pass in **org/repository** info (e.g., `-CompanyName "MyOrg"` or `-AuthorName "myorg/myrepo"`) to brand the resulting package with your unique identifiers.
 
 7. **Disable Dev Mode** (Optional)  
    - Revert environment once building/testing is done.
@@ -100,7 +101,8 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
      - `release-priority` = `workflow_dispatch` + `force_gcli_lunit=true` (target <= 25 minutes).
      - `pr-fast` = `pull_request` (target <= 35 minutes).
      - `full` = all other events.
-   - `pipeline-contract` enforces profile-specific required-job outcomes so intentional profile skips do not fail the run.
+    - `pipeline-contract` enforces profile-specific required-job outcomes so intentional profile skips do not fail the run.
+    - `publish-gate` enforces profile-required prepublish outcomes before `publish-prerelease`.
    - **Label-based** semantic versioning (`major`, `minor`, `patch`). Defaults to `patch` if no label.
    - **Derives build number from total commit count** (`git rev-list --count HEAD`).
    - **Fork-friendly**: runs on forks without requiring signing keys.
@@ -191,11 +193,12 @@ With your runner online:
    - Execute the workflow and review `unit-tests` logs (`pr-fast`: 64-bit only, `full`: 64/32).
 
 3. **Build VI Package**
-    - Produces `.vip` using the version computed in the **version** job for `full`/`pr-fast` profiles.
-    - `release-priority` runs intentionally skip `build-vip`; publish artifacts come from Linux/Windows container packed-library jobs.
-   - Merged-PR merge-commit pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
-   - `workflow_dispatch` backfill publishing requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
-   - **Pass** your **org/repo** info (e.g. `-CompanyName "AcmeCorp"` / `-AuthorName "AcmeCorp/IconEditor"`) to embed in the final package.
+     - Produces `.vip` using the version computed in the **version** job for `full`/`pr-fast` profiles.
+     - `release-priority` runs intentionally skip `build-vip`; publish artifacts come from Linux/Windows container packed-library jobs.
+    - Merged-PR merge-commit pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
+    - `workflow_dispatch` backfill publishing requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+    - `release-priority` publish intent requires a successful `full` profile run on `develop` in the prior 24 hours.
+    - **Pass** your **org/repo** info (e.g. `-CompanyName "AcmeCorp"` / `-AuthorName "AcmeCorp/IconEditor"`) to embed in the final package.
    - Artifacts appear in the run summary under **Artifacts**.
 
 4. **Disable Dev Mode** (if used)  

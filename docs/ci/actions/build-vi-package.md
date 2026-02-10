@@ -94,7 +94,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 
 ### 3.1 How the Action Is Triggered
 The `build-vi-package` directory defines a **composite action**. It does not listen for events on its own; instead, the CI workflow in [`ci-composite.yml`](../../../.github/workflows/ci-composite.yml) invokes it.
-That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Early jobs like `run-metadata`, `version-gate`, and `changes` run on GitHub-hosted `ubuntu-latest`. Windows self-hosted jobs handle LabVIEW testing, PPL generation, and VI Package packaging (`apply-deps`, `version`, `test`, `build-ppl`, `build-vip`). Current branch filters for push/PR triggers are `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*` in `ci-composite.yml`.
+That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Early jobs like `run-metadata`, `prerelease-context`, `version-gate`, and `changes` run on GitHub-hosted `ubuntu-latest`. Windows self-hosted jobs handle LabVIEW validation and packaging (`dev-mode-gate`, `devmode-no-labview-smoke`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) when the active `ci_profile` requires them. Current branch filters for push/PR triggers are `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*` in `ci-composite.yml`.
 
 ### 3.2 Configurable Inputs / Parameters
 `ci-composite.yml` calls this action and provides all required inputs automatically. When invoking
@@ -133,6 +133,10 @@ components remain unchanged and only the build number increases.
 - Packaging output: the `.vip` is uploaded as a run artifact by `build-vip`.
 - Publication contract: prerelease publication is defined by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, version binding, and required asset rules.
 - Manual backfill: `workflow_dispatch` can republish eligible assets only when `publish_prerelease=true`, `expected_sha` is set to the merged `develop` SHA, and `strict_sha=true`.
+- `ci_profile` behavior:
+  - `full` and `pr-fast` runs include `build-vip` and full prerelease asset expectations.
+  - `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`) intentionally skips `build-vip` and publishes container packed-library assets only.
+  - Release-priority publish intent requires a successful `full` profile run on `develop` within the previous 24 hours.
 
 
 
@@ -163,7 +167,8 @@ components remain unchanged and only the build number increases.
      - semantic-version components (`major`, `minor`, `patch`, `build`),
      - repository-derived metadata (company/author names, homepage URL, and description), and
      - the markdown release notes captured from `Tooling/deployment/release_notes.md`.
-   - Runs the Windows/self-hosted `build-vip` packaging path for PR, push, and manual workflow-dispatch runs.
+   - Runs the Windows/self-hosted `build-vip` packaging path for `full` and `pr-fast` profiles.
+   - `release-priority` profile intentionally skips `build-vip` to prioritize publish latency.
 
 6. **Capture & Upload Artifacts**
    - Uploads the generated `.vip` as an ephemeral artifact for the current Actions run.
@@ -251,8 +256,8 @@ components remain unchanged and only the build number increases.
 
 ### 7.4 Manually Triggering (workflow_dispatch)
 - **Scenario**: A maintainer manually runs the workflow from the Actions tab (if enabled).
-- **Action**: For prerelease backfill, set `publish_prerelease=true`, set `expected_sha` to the merged `develop` SHA, and set `strict_sha=true`.
-- **Result**: The script produces a `.vip` artifact. For prerelease publication, `develop` merged-PR merge commits publish automatically and `workflow_dispatch` supports explicit backfill only when pinned to the merged SHA.
+- **Action**: For prerelease backfill, set `publish_prerelease=true`, set `expected_sha` to the merged `develop` SHA, and set `strict_sha=true`. Use `force_gcli_lunit=true` only when intentionally selecting `release-priority` mode.
+- **Result**: `full` dispatch runs produce `.vip` artifacts; `release-priority` dispatch runs skip `build-vip`, require a recent successful `full` run on `develop` (<=24h), and publish container packed-library assets when all prepublish gate checks succeed.
 
 ## 8. **Testing & Verification**
 
