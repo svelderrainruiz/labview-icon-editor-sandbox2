@@ -28,7 +28,8 @@ current.
    `develop` (or another appropriate branch).
 4. Run unit tests or scripted checks locally whenever possible.
 5. Ensure CI passes and obtain at least one maintainer approval before merging.
-6. After merging, delete the source branch to keep the repository tidy.
+6. For PRs targeting `develop` that drive prerelease publication, merge with a merge commit (`gh pr merge <pr-number> --merge --delete-branch`) and avoid squash/rebase.
+7. After merging, delete the source branch to keep the repository tidy.
 
 ## Workflow Administration
 

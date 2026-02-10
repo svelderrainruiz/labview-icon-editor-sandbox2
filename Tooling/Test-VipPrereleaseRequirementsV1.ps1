@@ -285,6 +285,14 @@ try {
         $computeActionContent = Get-Content -Raw -Path $computeVersionActionFile
 
         Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'workflow_dispatch:[\s\S]*publish_prerelease:' -Message "Workflow dispatch input 'publish_prerelease' is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'workflow_dispatch:[\s\S]*strict_sha:' -Message "Workflow dispatch input 'strict_sha' is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'strict_sha=true is required when publish_prerelease=true\.' -Message "run-metadata strict_sha publish-intent enforcement is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'github\.rest\.repos\.getCommit' -Message "prerelease-context merge-commit eligibility check hook is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'develop-push-not-merge-commit' -Message "prerelease-context merge-commit publish reason token is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'develop-push-merged-pr-sha-mismatch' -Message "prerelease-context merged PR SHA mismatch reason token is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'Manual prerelease publish requires expected_sha to reference a merged develop merge commit\.' -Message "manual prerelease merge-commit fail-fast enforcement is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'Manual prerelease publish requires expected_sha to match the merged develop PR merge SHA\.' -Message "manual prerelease merged PR SHA match fail-fast enforcement is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'Manual prerelease publish requires expected_sha to be associated with a merged PR targeting develop\.' -Message "manual prerelease merged develop PR association fail-fast enforcement is missing."
         Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'prerelease-context:[\s\S]*outputs:[\s\S]*bump_conflict:' -Message "prerelease-context output 'bump_conflict' is missing."
         Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'prerelease-context:[\s\S]*outputs:[\s\S]*bump_conflict_labels:' -Message "prerelease-context output 'bump_conflict_labels' is missing."
         Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'bump_type_override:\s*\$\{\{\s*needs\.prerelease-context\.outputs\.bump_type_override\s*\}\}' -Message "version job is not wiring prerelease-context bump_type_override into compute-version."

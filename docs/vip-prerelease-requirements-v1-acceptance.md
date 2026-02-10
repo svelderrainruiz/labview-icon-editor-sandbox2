@@ -5,9 +5,9 @@ This matrix defines executable acceptance scenarios for `docs/vip-prerelease-req
 | Scenario ID | Scope/Profile | Target VR IDs | Setup | Execution | Pass Criteria |
 |---|---|---|---|---|---|
 | A-001 | Core | VR-SCOPE-001, VR-SCOPE-002, VR-SCOPE-003, VR-SCOPE-004, VR-PUR-001, VR-PUR-002, VR-PUR-003, VR-PUR-004, VR-PUR-005, VR-PUR-006 | Load requirements document. | Parse `VR-` requirement IDs and normative statements. | IDs are unique and monotonic within each VR family; each `shall` statement is independently testable. |
-| A-002 | Core | VR-TRIG-001, VR-TRIG-006 | Push merge commit to `develop` associated with merged PR targeting `develop`. | Run `ci-composite.yml`. | Publish context marks run eligible with reason output indicating auto merged-PR path. |
-| A-003 | Core | VR-TRIG-002, VR-FAIL-001 | Push direct commit to `develop` without merged PR association. | Run `ci-composite.yml`. | Publish job reports `publish_status=skipped` and workflow remains successful. |
-| A-004 | Extended | VR-TRIG-004, VR-TRIG-005, VR-OPS-001, VR-OPS-002, VR-OPS-003, VR-OPS-004 | Dispatch workflow manually with `publish_prerelease=true` and then with `publish_prerelease=false`. | Compare publish job behavior across both runs. | Publish occurs only when input is `true`; `false` run is skipped; SHA pinning contract is enforced for manual publish intent. |
+| A-002 | Core | VR-TRIG-001, VR-TRIG-006, VR-TRIG-007, VR-TRIG-008 | Push merge commit to `develop` associated with merged PR targeting `develop`, where commit parent count is greater than 1 and PR `merge_commit_sha` equals `github.sha`. | Run `ci-composite.yml`. | Publish context marks run eligible with reason output indicating merged-PR merge-commit auto path. |
+| A-003 | Core | VR-TRIG-002, VR-TRIG-007, VR-FAIL-001 | Push direct commit to `develop` without merged PR association. | Run `ci-composite.yml`. | Publish path is ineligible, `publish_status=skipped` is emitted, and workflow remains successful. |
+| A-004 | Extended | VR-TRIG-004, VR-TRIG-005, VR-TRIG-007, VR-TRIG-008, VR-OPS-001, VR-OPS-002, VR-OPS-003, VR-OPS-004, VR-OPS-005, VR-OPS-006, VR-FAIL-005 | Dispatch workflow manually with three cases: valid publish intent (`publish_prerelease=true`, `expected_sha=<merged develop merge SHA>`, `strict_sha=true`), false intent (`publish_prerelease=false`), and invalid publish intent (missing `strict_sha=true` or non-eligible SHA). | Compare publish behavior and failure semantics across all dispatch runs. | Valid manual intent publishes; false intent skips; invalid publish intent fails fast with explicit policy errors before publication. |
 | A-005 | Core | VR-VER-002, VR-VER-004, VR-VER-005, VR-VER-006 | Use merged PR labels on develop merge (`major`, `minor`, `patch`, none). | Execute version computation in eligible publish runs. | Bump type follows merged PR labels, with default `patch` when no release label exists; override interface behavior is valid. |
 | A-006 | Core | VR-VER-003, VR-FAIL-004 | Apply conflicting merged PR release labels (for example `major` and `minor`). | Execute eligible develop publish run. | Version resolution fails with non-zero exit and explicit conflict error. |
 | A-007 | Core | VR-VER-001 | Prepare run with known computed `VERSION` output. | Publish prerelease and inspect release metadata. | Release tag and title equal `needs.version.outputs.VERSION` exactly. |
@@ -27,7 +27,7 @@ This matrix defines executable acceptance scenarios for `docs/vip-prerelease-req
 | A-001 | Pass | local | local | Revalidated on 2026-02-08 via `pwsh -NoProfile -File .\\Tooling\\Test-VipPrereleaseRequirementsV1.ps1`; VR ID uniqueness/ordering and shall-atomicity checks passed. |
 | A-002 | Planned | N/A | N/A | Populate after first merged-PR-to-develop publish run. |
 | A-003 | Planned | N/A | N/A | Populate after direct-push develop validation run. |
-| A-004 | Planned | N/A | N/A | Populate after two workflow_dispatch intent runs. |
+| A-004 | Planned | N/A | N/A | Populate after valid, false-intent, and invalid workflow_dispatch intent runs. |
 | A-005 | Planned | N/A | N/A | Populate after merged PR label matrix validation. |
 | A-006 | Planned | N/A | N/A | Populate after conflicting-label negative test. |
 | A-007 | Planned | N/A | N/A | Populate after metadata verification run. |
