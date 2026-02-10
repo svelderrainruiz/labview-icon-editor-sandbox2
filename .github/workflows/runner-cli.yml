@@ -76,9 +76,64 @@ jobs:
         if: always()
         run: dotnet build-server shutdown
 
+  windows-cli-timing-gate:
+    name: RunnerCliCliTests Timing Gate (Windows <= 60s)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Tooling/runner-cli
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run RunnerCliCliTests and enforce timing budget
+        shell: pwsh
+        run: |
+          $resultsDir = Join-Path $PWD 'TestResults\runner-cli-cli-tests'
+          New-Item -ItemType Directory -Path $resultsDir -Force | Out-Null
+
+          $timer = [System.Diagnostics.Stopwatch]::StartNew()
+          dotnet test RunnerCli.Tests/RunnerCli.Tests.csproj `
+            --configuration Release `
+            --filter "FullyQualifiedName~RunnerCli.Tests.RunnerCliCliTests" `
+            --logger "trx;LogFileName=RunnerCliCliTests.trx" `
+            --results-directory "$resultsDir" `
+            --verbosity normal
+          $testExitCode = $LASTEXITCODE
+          $timer.Stop()
+
+          $elapsedSeconds = [Math]::Round($timer.Elapsed.TotalSeconds, 2)
+          Write-Host "RunnerCliCliTests elapsed_seconds=$elapsedSeconds"
+          if ($testExitCode -ne 0) {
+            throw "RunnerCliCliTests failed with exit code $testExitCode."
+          }
+          if ($elapsedSeconds -gt 60) {
+            throw "RunnerCliCliTests exceeded 60s budget (elapsed=${elapsedSeconds}s)."
+          }
+
+      - name: Upload RunnerCliCliTests results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-cli-cli-tests-trx-windows
+          path: Tooling/runner-cli/TestResults/runner-cli-cli-tests/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Shutdown dotnet build servers
+        if: always()
+        run: dotnet build-server shutdown
+
   publish:
     name: Publish Runner CLI (${{ matrix.rid }})
-    needs: build-and-test
+    needs:
+      - build-and-test
+      - windows-cli-timing-gate
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
@@ -120,7 +175,9 @@ jobs:
 
   smoke-pr:
     name: Smoke Runner CLI (PR linux-x64)
-    needs: build-and-test
+    needs:
+      - build-and-test
+      - windows-cli-timing-gate
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -283,7 +340,9 @@ jobs:
 
   docker-linux:
     name: Runner CLI Docker (Linux)
-    needs: build-and-test
+    needs:
+      - build-and-test
+      - windows-cli-timing-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
