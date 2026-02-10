@@ -53,7 +53,9 @@ Automating your Icon Editor builds and tests:
    Use the main CI workflow (`ci-composite.yml`) to confirm your environment is valid.
    - The workflow triggers on pushes to or pull requests targeting the branches configured in `ci-composite.yml` (`on.push.branches` / `on.pull_request.branches`), and supports manual `workflow_dispatch` runs.
      - Typically run with Dev Mode **disabled** unless you’re testing dev features specifically.
-     - A concurrency group cancels any previous run on the same branch, ensuring only the latest pipeline execution continues.
+     - Concurrency is isolated by repository, runner label, event name, and ref.
+     - Pull request runs auto-cancel earlier runs for the same PR ref.
+     - Push and `workflow_dispatch` runs are isolated by event/ref and are not canceled by pull request updates.
 
 5. **Build VI Package**
    - Produces `.vip` artifacts automatically using the Windows/self-hosted `build-vip` job in `ci-composite.yml`.
