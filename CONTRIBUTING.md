@@ -62,7 +62,7 @@ When submitting a pull request, follow these guidelines to streamline reviews:
    - **Changes Made:** What you changed. If it’s a bug fix, describe the root cause and solution. If it’s a new feature, summarize how it works.
    - **Related Issues:** Reference any issue numbers (e.g., “Closes #123”).
    - **Testing:** Explain how you tested the changes. Include steps for reviewers to test, and mention any specific areas to focus on.
-3. **Commit Sign-off:** As mentioned, ensure your commits are signed off (DCO). Also, make sure each commit in the PR is self-contained and the overall branch history can be cleanly merged or squashed as the maintainers see fit.
+3. **Commit Sign-off:** As mentioned, ensure your commits are signed off (DCO). Also, make sure each commit in the PR is self-contained and the overall branch history can be cleanly merged. For prerelease-driving PRs targeting `develop`, maintainers use merge commits (`--merge`) rather than squash/rebase.
 
 Be patient and responsive during the review. We might ask you to make changes – that’s part of making sure the contribution is robust and fits well with the codebase.
 

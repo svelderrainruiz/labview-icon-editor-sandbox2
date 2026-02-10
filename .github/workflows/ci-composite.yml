@@ -98,6 +98,9 @@ jobs:
           $publishPrerelease = '${{ github.event.inputs.publish_prerelease }}'
           $runUid = "{0}-{1}-{2}" -f $runId, $runAttempt, $sha
 
+          if ($eventName -eq 'workflow_dispatch' -and $publishPrerelease -eq 'true' -and $strictSha -ne 'true') {
+            throw "strict_sha=true is required when publish_prerelease=true."
+          }
           if ($eventName -eq 'workflow_dispatch' -and $publishPrerelease -eq 'true' -and [string]::IsNullOrWhiteSpace($expectedSha)) {
             throw "expected_sha is required when publish_prerelease=true."
           }
@@ -172,7 +175,17 @@ jobs:
             const forceGcliLunitInput = (process.env.FORCE_GCLI_LUNIT || 'false').toLowerCase() === 'true';
             const releasePriorityMode = context.eventName === 'workflow_dispatch' && forceGcliLunitInput;
 
-            async function findMergedPrTargetingDevelop() {
+            async function getCommitParentCount() {
+              const response = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: context.sha,
+              });
+              const parents = Array.isArray(response.data.parents) ? response.data.parents : [];
+              return parents.length;
+            }
+
+            async function findMergedPrsTargetingDevelop() {
               const response = await github.rest.repos.listPullRequestsAssociatedWithCommit({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -181,7 +194,18 @@ jobs:
               const mergedDevelopPrs = response.data
                 .filter((pr) => pr.merged_at && pr.base && pr.base.ref === 'develop')
                 .sort((a, b) => new Date(b.merged_at) - new Date(a.merged_at));
-              return mergedDevelopPrs.length > 0 ? mergedDevelopPrs[0] : null;
+              return mergedDevelopPrs;
+            }
+
+            function findMergedPrForCurrentSha(mergedDevelopPrs) {
+              const sha = String(context.sha || '').toLowerCase();
+              for (const pr of mergedDevelopPrs) {
+                const mergeSha = String(pr.merge_commit_sha || '').toLowerCase();
+                if (mergeSha === sha) {
+                  return pr;
+                }
+              }
+              return null;
             }
 
             function deriveBumpFromLabels(pr) {
@@ -209,24 +233,49 @@ jobs:
             let bumpConflict = false;
             let bumpConflictLabels = '';
 
-            const mergedPr = await findMergedPrTargetingDevelop();
+            const commitParentCount = await getCommitParentCount();
+            const isMergeCommit = commitParentCount > 1;
+            const mergedDevelopPrs = await findMergedPrsTargetingDevelop();
+            const hasMergedDevelopPrAssociation = mergedDevelopPrs.length > 0;
+            const mergedPr = findMergedPrForCurrentSha(mergedDevelopPrs);
             if (mergedPr) {
               mergedPrNumber = String(mergedPr.number);
             }
 
             if (context.eventName === 'push' && context.ref === 'refs/heads/develop') {
               publishMode = 'auto';
-              if (mergedPr) {
+              if (!isMergeCommit) {
+                shouldPublish = false;
+                publishReason = 'develop-push-not-merge-commit';
+              } else if (mergedPr) {
                 shouldPublish = true;
-                publishReason = 'develop-push-merged-pr';
+                publishReason = 'develop-push-merged-pr-merge-commit';
+              } else if (hasMergedDevelopPrAssociation) {
+                shouldPublish = false;
+                publishReason = 'develop-push-merged-pr-sha-mismatch';
               } else {
                 shouldPublish = false;
                 publishReason = 'develop-push-no-merged-pr';
               }
             } else if (context.eventName === 'workflow_dispatch') {
               publishMode = 'manual';
-              shouldPublish = publishInput;
-              publishReason = publishInput ? 'manual-intent-true' : 'manual-intent-false';
+              if (!publishInput) {
+                shouldPublish = false;
+                publishReason = 'manual-intent-false';
+              } else if (!isMergeCommit) {
+                core.setFailed('Manual prerelease publish requires expected_sha to reference a merged develop merge commit.');
+                return;
+              } else if (!mergedPr) {
+                if (hasMergedDevelopPrAssociation) {
+                  core.setFailed('Manual prerelease publish requires expected_sha to match the merged develop PR merge SHA.');
+                } else {
+                  core.setFailed('Manual prerelease publish requires expected_sha to be associated with a merged PR targeting develop.');
+                }
+                return;
+              } else {
+                shouldPublish = true;
+                publishReason = 'manual-intent-eligible-merged-pr-merge-commit';
+              }
             } else if (context.eventName === 'pull_request') {
               publishMode = 'pull-request';
               shouldPublish = false;
@@ -238,8 +287,8 @@ jobs:
             }
 
             const shouldDeriveMergedPrBump =
-              (context.eventName === 'push' && context.ref === 'refs/heads/develop' && !!mergedPr) ||
-              (context.eventName === 'workflow_dispatch' && publishInput && !!mergedPr);
+              (context.eventName === 'push' && context.ref === 'refs/heads/develop' && shouldPublish && !!mergedPr) ||
+              (context.eventName === 'workflow_dispatch' && publishInput && shouldPublish && !!mergedPr);
             if (shouldDeriveMergedPrBump) {
               const bumpInfo = deriveBumpFromLabels(mergedPr);
               bumpConflict = bumpInfo.conflict;
