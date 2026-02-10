@@ -94,7 +94,11 @@ if (-not (Test-Path -Path $gitKrakenScript)) {
     throw "GitKraken CLI helper not found at $gitKrakenScript"
 }
 . $gitKrakenScript
-Enable-GitKrakenGitShim -Require | Out-Null
+$requireGitKraken = $env:LVIE_REQUIRE_GITKRAKEN_CLI -eq '1'
+$gitKrakenEnabled = Enable-GitKrakenGitShim -Require:$requireGitKraken
+if (-not $gitKrakenEnabled) {
+    Write-Warning "GitKraken CLI 'gk' not found. Using system git. Set LVIE_REQUIRE_GITKRAKEN_CLI=1 to enforce gk."
+}
 
 function Resolve-RepoRoot {
     param([string]$PathOverride)
@@ -391,6 +395,7 @@ $savedEnv = @{
     LABVIEW_PROCESS_TIMEOUT_MS = $env:LABVIEW_PROCESS_TIMEOUT_MS
     LVIE_SKIP_WORKTREE_ROOT_CHECK = $env:LVIE_SKIP_WORKTREE_ROOT_CHECK
     LVIE_SKIP_DEVMODE_PROCESS_CHECK = $env:LVIE_SKIP_DEVMODE_PROCESS_CHECK
+    LVIE_ENABLE_GCLI_LUNIT_FALLBACK = $env:LVIE_ENABLE_GCLI_LUNIT_FALLBACK
 }
 
 try {
@@ -400,6 +405,10 @@ try {
     $env:LABVIEW_CONNECT_TIMEOUT_MS = $ConnectTimeoutMs.ToString()
     $env:LABVIEW_PROCESS_TIMEOUT_MS = $ProcessTimeoutMs.ToString()
     $env:LVIE_SKIP_DEVMODE_PROCESS_CHECK = '1'
+    if ([string]::IsNullOrWhiteSpace($env:LVIE_ENABLE_GCLI_LUNIT_FALLBACK)) {
+        $env:LVIE_ENABLE_GCLI_LUNIT_FALLBACK = '1'
+        Write-Host 'Enabled LVIE_ENABLE_GCLI_LUNIT_FALLBACK=1 for smoke resiliency.'
+    }
     Write-Host 'DevMode process check bypass enabled for smoke run.'
     if ($SkipWorktreeRootCheck) {
         $env:LVIE_SKIP_WORKTREE_ROOT_CHECK = '1'
