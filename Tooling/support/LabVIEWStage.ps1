@@ -423,6 +423,228 @@ function Invoke-LabVIEWCli {
     }
 }
 
+function Test-LabVIEWCliConnectionFailure {
+    param(
+        [string[]]$OutputLines
+    )
+
+    if (-not $OutputLines -or $OutputLines.Count -eq 0) {
+        return $false
+    }
+
+    $outputText = $OutputLines -join [Environment]::NewLine
+    if ([string]::IsNullOrWhiteSpace($outputText)) {
+        return $false
+    }
+
+    return ($outputText -match '(?i)Error\s*code\s*:\s*-350000' -or $outputText -match '(?i)failed to establish a connection with LabVIEW')
+}
+
+function Get-LabVIEWCliPortAttemptList {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$PrimaryPortNumber
+    )
+
+    $attemptPorts = New-Object System.Collections.Generic.List[int]
+    $seenPorts = @{}
+    foreach ($candidatePort in @($PrimaryPortNumber, 3370, 3363)) {
+        if ($candidatePort -lt 1 -or $candidatePort -gt 65535) {
+            continue
+        }
+
+        if ($seenPorts.ContainsKey($candidatePort)) {
+            continue
+        }
+
+        $attemptPorts.Add($candidatePort) | Out-Null
+        $seenPorts[$candidatePort] = $true
+    }
+
+    return @($attemptPorts.ToArray())
+}
+
+function Set-LabVIEWCliPortArgument {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory = $true)]
+        [int]$PortNumber
+    )
+
+    $updated = New-Object System.Collections.Generic.List[string]
+    $portSet = $false
+    for ($index = 0; $index -lt $Arguments.Count; $index++) {
+        $arg = [string]$Arguments[$index]
+        if ($arg -ieq '-PortNumber') {
+            if (-not $portSet) {
+                $updated.Add('-PortNumber') | Out-Null
+                $updated.Add($PortNumber.ToString()) | Out-Null
+                $portSet = $true
+            }
+
+            if (($index + 1) -lt $Arguments.Count) {
+                $index++
+            }
+            continue
+        }
+
+        $updated.Add($arg) | Out-Null
+    }
+
+    if (-not $portSet) {
+        $updated.Add('-PortNumber') | Out-Null
+        $updated.Add($PortNumber.ToString()) | Out-Null
+    }
+
+    return @($updated.ToArray())
+}
+
+function Remove-LabVIEWCliPortArgument {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $updated = New-Object System.Collections.Generic.List[string]
+    for ($index = 0; $index -lt $Arguments.Count; $index++) {
+        $arg = [string]$Arguments[$index]
+        if ($arg -ieq '-PortNumber') {
+            if (($index + 1) -lt $Arguments.Count) {
+                $index++
+            }
+            continue
+        }
+
+        $updated.Add($arg) | Out-Null
+    }
+
+    return @($updated.ToArray())
+}
+
+function New-LabVIEWCliResultWithRetryInfo {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Result,
+        [string[]]$Attempts,
+        [AllowNull()]
+        [int]$PortNumber,
+        [AllowNull()]
+        [string]$PortSource,
+        [bool]$UsedImplicitPort
+    )
+
+    return [pscustomobject]@{
+        ExitCode         = $Result.ExitCode
+        OutputLines      = @($Result.OutputLines)
+        Attempts         = @($Attempts)
+        PortNumber       = $PortNumber
+        PortSource       = $PortSource
+        UsedImplicitPort = $UsedImplicitPort
+    }
+}
+
+function Invoke-LabVIEWCliWithConnectionRetry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$OperationName,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory = $true)]
+        [int]$PrimaryPortNumber,
+        [switch]$AllowImplicitPortFallback
+    )
+
+    $attemptSummaries = New-Object System.Collections.Generic.List[string]
+    $combinedOutput = New-Object System.Collections.Generic.List[string]
+    $lastResult = $null
+    $lastPortNumber = $null
+    $lastPortSource = $null
+    $sawConnectionFailure = $false
+
+    $portAttempts = @(Get-LabVIEWCliPortAttemptList -PrimaryPortNumber $PrimaryPortNumber)
+    foreach ($portNumber in $portAttempts) {
+        $portSource = if ($portNumber -eq $PrimaryPortNumber) { 'primary' } else { "fallback:$portNumber" }
+        if ($portNumber -ne $PrimaryPortNumber) {
+            Write-Warning ("{0}: retrying with fallback port {1} ({2})." -f $OperationName, $portNumber, $portSource)
+        }
+
+        $portArgs = Set-LabVIEWCliPortArgument -Arguments $Arguments -PortNumber $portNumber
+        $result = Invoke-LabVIEWCli -Arguments $portArgs
+        $lastResult = $result
+        $lastPortNumber = $portNumber
+        $lastPortSource = $portSource
+
+        $attemptSummaries.Add(("port:{0} source:{1} exit:{2}" -f $portNumber, $portSource, $result.ExitCode)) | Out-Null
+        foreach ($line in @($result.OutputLines)) {
+            $combinedOutput.Add($line) | Out-Null
+        }
+
+        if ($result.ExitCode -eq 0) {
+            return [pscustomobject]@{
+                ExitCode         = 0
+                OutputLines      = @($combinedOutput.ToArray())
+                Attempts         = @($attemptSummaries.ToArray())
+                PortNumber       = $portNumber
+                PortSource       = $portSource
+                UsedImplicitPort = $false
+            }
+        }
+
+        if (Test-LabVIEWCliConnectionFailure -OutputLines $result.OutputLines) {
+            $sawConnectionFailure = $true
+            continue
+        }
+
+        return New-LabVIEWCliResultWithRetryInfo -Result $result -Attempts @($attemptSummaries.ToArray()) -PortNumber $portNumber -PortSource $portSource -UsedImplicitPort:$false
+    }
+
+    if ($AllowImplicitPortFallback -and $sawConnectionFailure) {
+        Write-Warning ("{0}: explicit port attempts failed with connection errors; retrying without -PortNumber." -f $OperationName)
+        $implicitArgs = Remove-LabVIEWCliPortArgument -Arguments $Arguments
+        $implicitResult = Invoke-LabVIEWCli -Arguments $implicitArgs
+        $lastResult = $implicitResult
+        $lastPortNumber = $null
+        $lastPortSource = 'implicit-default'
+        $attemptSummaries.Add(("port:implicit source:implicit-default exit:{0}" -f $implicitResult.ExitCode)) | Out-Null
+        foreach ($line in @($implicitResult.OutputLines)) {
+            $combinedOutput.Add($line) | Out-Null
+        }
+
+        if ($implicitResult.ExitCode -eq 0) {
+            return [pscustomobject]@{
+                ExitCode         = 0
+                OutputLines      = @($combinedOutput.ToArray())
+                Attempts         = @($attemptSummaries.ToArray())
+                PortNumber       = $null
+                PortSource       = 'implicit-default'
+                UsedImplicitPort = $true
+            }
+        }
+    }
+
+    if ($null -eq $lastResult) {
+        return [pscustomobject]@{
+            ExitCode         = 1
+            OutputLines      = @("No LabVIEWCLI attempts were executed for $OperationName.")
+            Attempts         = @($attemptSummaries.ToArray())
+            PortNumber       = $lastPortNumber
+            PortSource       = $lastPortSource
+            UsedImplicitPort = $false
+        }
+    }
+
+    $finalOutput = if ($combinedOutput.Count -gt 0) { @($combinedOutput.ToArray()) } else { @($lastResult.OutputLines) }
+    return [pscustomobject]@{
+        ExitCode         = $lastResult.ExitCode
+        OutputLines      = $finalOutput
+        Attempts         = @($attemptSummaries.ToArray())
+        PortNumber       = $lastPortNumber
+        PortSource       = $lastPortSource
+        UsedImplicitPort = ($lastPortSource -eq 'implicit-default')
+    }
+}
+
 function Invoke-RunIconEditorFromSourceSelector {
     param(
         [Parameter(Mandatory = $true)]
@@ -460,11 +682,12 @@ function Invoke-RunIconEditorFromSourceSelector {
         $selectorMode = if ($Mode -eq 'enable') { 'set' } else { 'unset' }
         Write-Host ("Running selector VI mode '{0}' ({1}-bit) via LabVIEWCLI on port {2} (source: {3})" -f $selectorMode, $Bitness, $portResolution.PortNumber, $portResolution.Source)
 
-        return Invoke-LabVIEWCli -Arguments @(
+        return Invoke-LabVIEWCliWithConnectionRetry -OperationName ("Selector-{0}-{1}-bit" -f $selectorMode, $Bitness) -PrimaryPortNumber $portResolution.PortNumber -AllowImplicitPortFallback -Arguments @(
             '-OperationName', 'RunVI',
             '-LabVIEWPath', $labviewExecutablePath,
             '-PortNumber', $portResolution.PortNumber.ToString(),
             '-VIPath', $selectorViPath,
+            '-Headless',
             $selectorMode
         )
     } catch {
