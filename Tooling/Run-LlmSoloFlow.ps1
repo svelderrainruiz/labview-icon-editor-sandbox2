@@ -221,7 +221,7 @@ function Resolve-RepositoryName {
     return $repoName
 }
 
-function Ensure-SourceBranchPushed {
+function Invoke-SourceBranchPush {
     param(
         [Parameter(Mandatory = $true)]
         [string]$BranchName
@@ -231,7 +231,7 @@ function Ensure-SourceBranchPushed {
     $null = Invoke-GitCommand -Arguments @('push', 'origin', $BranchName) -Description 'Push source branch'
 }
 
-function Ensure-PullRequest {
+function Get-OrCreatePullRequest {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RepoName,
@@ -305,7 +305,7 @@ function Ensure-PullRequest {
     }
 }
 
-function Dispatch-PublishWorkflow {
+function Invoke-PublishWorkflowDispatch {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RepoName,
@@ -360,7 +360,7 @@ function Resolve-DispatchedRun {
     return $null
 }
 
-function Get-RunArtifactNames {
+function Get-RunArtifactName {
     param(
         [Parameter(Mandatory = $true)]
         [string]$RepoName,
@@ -441,8 +441,8 @@ try {
 
     Assert-GhReady
     $repoName = Resolve-RepositoryName -RepoRootPath $repoRoot
-    Ensure-SourceBranchPushed -BranchName $resolvedSourceBranch
-    $pullRequest = Ensure-PullRequest -RepoName $repoName -SourceBranchName $resolvedSourceBranch -TargetBranchName $TargetBranch
+    Invoke-SourceBranchPush -BranchName $resolvedSourceBranch
+    $pullRequest = Get-OrCreatePullRequest -RepoName $repoName -SourceBranchName $resolvedSourceBranch -TargetBranchName $TargetBranch
     Write-Host ("Pull request ({0}): {1}" -f $pullRequest.Number, $pullRequest.Url)
 
     if ($Mode -eq 'integrate') {
@@ -480,11 +480,11 @@ try {
         throw ("ExpectedSha '{0}' does not match current HEAD '{1}'." -f $ExpectedSha.Trim(), $currentSha)
     }
 
-    Dispatch-PublishWorkflow -RepoName $repoName -Sha $currentSha
+    Invoke-PublishWorkflowDispatch -RepoName $repoName -Sha $currentSha
     $dispatchedRun = Resolve-DispatchedRun -RepoName $repoName -Sha $currentSha
     if ($dispatchedRun) {
         $evidence.ci_run_urls = @($dispatchedRun.Url)
-        $evidence.artifact_names = @(Get-RunArtifactNames -RepoName $repoName -RunId $dispatchedRun.RunId)
+        $evidence.artifact_names = @(Get-RunArtifactName -RepoName $repoName -RunId $dispatchedRun.RunId)
     }
     $evidence.publish_decision = 'dispatch-requested'
 

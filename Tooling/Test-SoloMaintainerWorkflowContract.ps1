@@ -69,7 +69,7 @@ function Remove-InlineComment {
     return $Value
 }
 
-function Normalize-YamlToken {
+function ConvertTo-YamlToken {
     param(
         [Parameter(Mandatory = $true)]
         [AllowEmptyString()]
@@ -97,7 +97,7 @@ function Add-EventName {
         [string]$RawValue
     )
 
-    $normalized = (Normalize-YamlToken -Value $RawValue).ToLowerInvariant()
+    $normalized = (ConvertTo-YamlToken -Value $RawValue).ToLowerInvariant()
     if ([string]::IsNullOrWhiteSpace($normalized)) {
         return
     }
@@ -111,7 +111,7 @@ function Add-EventName {
     }
 }
 
-function Add-InlineEventsFromRhs {
+function Add-InlineEventFromRhsValue {
     param(
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
@@ -122,7 +122,7 @@ function Add-InlineEventsFromRhs {
         [string]$Rhs
     )
 
-    $value = Normalize-YamlToken -Value $Rhs
+    $value = ConvertTo-YamlToken -Value $Rhs
     if ([string]::IsNullOrWhiteSpace($value)) {
         return
     }
@@ -130,7 +130,7 @@ function Add-InlineEventsFromRhs {
     if ($value -match '^\[(?<inner>.*)\]$') {
         $inner = $Matches['inner']
         foreach ($part in ($inner -split ',')) {
-            $token = Normalize-YamlToken -Value $part
+            $token = ConvertTo-YamlToken -Value $part
             if ($token -match '^(?<event>[a-zA-Z0-9_-]+)\s*:?\s*$') {
                 Add-EventName -EventList $EventList -RawValue $Matches['event']
             }
@@ -140,8 +140,8 @@ function Add-InlineEventsFromRhs {
 
     if ($value -match '^\{(?<inner>.*)\}$') {
         $inner = $Matches['inner']
-        $matches = [regex]::Matches($inner, '(?m)(["'']?[A-Za-z0-9_-]+["'']?)\s*:')
-        foreach ($item in $matches) {
+        $regexMatches = [regex]::Matches($inner, '(?m)(["'']?[A-Za-z0-9_-]+["'']?)\s*:')
+        foreach ($item in $regexMatches) {
             Add-EventName -EventList $EventList -RawValue $item.Groups[1].Value
         }
         return
@@ -152,7 +152,7 @@ function Add-InlineEventsFromRhs {
     }
 }
 
-function Get-WorkflowEventNames {
+function Get-WorkflowEventName {
     param(
         [Parameter(Mandatory = $true)]
         [AllowEmptyString()]
@@ -173,9 +173,9 @@ function Get-WorkflowEventNames {
                 $insideOnBlock = $true
                 $onIndent = Get-LeadingWhitespaceCount -Value $line
                 $eventIndent = -1
-                Add-InlineEventsFromRhs -EventList $eventList -Rhs $Matches['rhs']
+                Add-InlineEventFromRhsValue -EventList $eventList -Rhs $Matches['rhs']
 
-                if (-not [string]::IsNullOrWhiteSpace((Normalize-YamlToken -Value $Matches['rhs']))) {
+                if (-not [string]::IsNullOrWhiteSpace((ConvertTo-YamlToken -Value $Matches['rhs']))) {
                     $insideOnBlock = $false
                     $onIndent = -1
                 }
@@ -197,7 +197,7 @@ function Get-WorkflowEventNames {
             continue
         }
 
-        $content = Normalize-YamlToken -Value $trimmed
+        $content = ConvertTo-YamlToken -Value $trimmed
         if ([string]::IsNullOrWhiteSpace($content)) {
             continue
         }
@@ -290,7 +290,7 @@ foreach ($relativePathRaw in ($pipelineContractFiles + '.github/workflows/develo
         }
     }
 
-    $events = @(Get-WorkflowEventNames -Lines $lineItems)
+    $events = @(Get-WorkflowEventName -Lines $lineItems)
     if ($relativePath -eq '.github/workflows/development-mode-toggle.yml') {
         $allowedEvents = @('workflow_dispatch', 'workflow_call')
         $unexpectedEvents = @($events | Where-Object { $allowedEvents -notcontains $_ })
