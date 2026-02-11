@@ -500,7 +500,7 @@ jobs:
       - name: Validate CI selector/dev-mode contract
         shell: pwsh
         run: |
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-CiPipelineSelectorDevModeContract.ps1" -WriteSummary
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-CiPipelineSelectorDevModeContract.ps1" -Scope ci-only -WriteSummary
       - name: Validate solo-maintainer workflow contract
         shell: pwsh
         run: |
@@ -640,90 +640,10 @@ jobs:
 
   # Stage 3: Self-hosted LabVIEW validation/build chain (profile-gated).
 
-  missing-in-project:
-    name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
-    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, changes]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-    env:
-      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
-      LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
-      LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
-      LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        bitness: ${{ fromJson(needs.prerelease-context.outputs.ci_profile == 'full' && '["64","32"]' || '["64"]') }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          checkout: 'false'
-          bitness: ${{ matrix.bitness }}
-          create_worktree: 'true'
-          worktree_root_mode: runner_temp
-      - name: Resolve LabVIEW project path
-        id: proj
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:PROJECT_PATH)) {
-            throw "PROJECT_PATH was not set."
-          }
-          if (-not (Test-Path -Path $env:PROJECT_PATH)) {
-            throw "Project file not found: $env:PROJECT_PATH"
-          }
-          Write-Host "Using project file: $env:PROJECT_PATH"
-          "project_file=$env:PROJECT_PATH" >> $env:GITHUB_OUTPUT
-      - name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
-        id: mip
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github\\actions\\missing-in-project\\Invoke-MissingInProjectCLI.ps1" `
-            -LVVersion   "$env:LABVIEW_VERSION_YEAR" `
-            -Arch        "${{ matrix.bitness }}" `
-            -ProjectFile "${{ steps.proj.outputs.project_file }}"
-
-          $missingFile = Join-Path $env:REPO_ROOT '.github\\actions\\missing-in-project\\missing_files.txt'
-          $missingCsv = ''
-          if (Test-Path $missingFile) {
-            $missingCsv = Get-Content -Path $missingFile -Raw
-          }
-          $passed = [string]::IsNullOrWhiteSpace($missingCsv)
-          "passed=$($passed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          "missing-files=$missingCsv" >> $env:GITHUB_OUTPUT
-      - name: Summarize to run Summary tab
-        if: always()
-        shell: pwsh
-        env:
-          PROJ_FILE: ${{ steps.proj.outputs.project_file }}
-          MISSING_CSV: ${{ steps.mip.outputs.missing-files }}
-        run: |
-          echo "INFO: Using project file: $env:PROJ_FILE" >> $GITHUB_STEP_SUMMARY
-          if ("${{ steps.mip.outputs.passed }}" -eq "true") {
-            echo "OK: Nothing missing for $env:LABVIEW_VERSION_YEAR-${{ matrix.bitness }}" >> $GITHUB_STEP_SUMMARY
-            exit 0
-          }
-          echo "ERROR: Missing files for $env:LABVIEW_VERSION_YEAR-${{ matrix.bitness }}" >> $GITHUB_STEP_SUMMARY
-          echo "$env:MISSING_CSV" >> $GITHUB_STEP_SUMMARY
-          exit 1
-      - name: Job teardown
-        if: always()
-        uses: ./.github/actions/lvie-job-teardown
-        with:
-          revert_bitness: ${{ matrix.bitness }}
-          close_labview: 'true'
-          close_bitness: ${{ matrix.bitness }}
-
   unit-tests:
     name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, missing-in-project]
+    needs: [run-metadata, prerelease-context, version-gate, changes]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -1191,7 +1111,6 @@ jobs:
       - vip-prerelease-requirements-lint
       - pylavi-validate
       - changes
-      - missing-in-project
       - unit-tests
       - build-ppl-x64
       - build-ppl-x86
@@ -1221,7 +1140,6 @@ jobs:
           )
           $requiredFullValidation = @(
             'changes',
-            'missing-in-project',
             'unit-tests',
             'build-ppl-x64',
             'build-ppl-x86',

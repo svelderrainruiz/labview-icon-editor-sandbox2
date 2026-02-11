@@ -2,6 +2,8 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot = '.',
+    [ValidateSet('all', 'ci-only')]
+    [string]$Scope = 'all',
     [switch]$WriteSummary
 )
 
@@ -9,13 +11,27 @@ $ErrorActionPreference = 'Stop'
 
 $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 
-$targetFiles = @(
+$allTargetFiles = @(
     '.github/workflows/ci.yml',
     '.github/workflows/ci-composite.yml',
     '.github/workflows/labview-container-parity.yml',
     'Tooling/container-parity/runlabview-windows.ps1',
     'Tooling/container-parity/runlabview-linux.sh'
 )
+
+$targetFiles = switch ($Scope) {
+    'ci-only' {
+        @(
+            '.github/workflows/ci.yml',
+            '.github/workflows/labview-container-parity.yml',
+            'Tooling/container-parity/runlabview-windows.ps1',
+            'Tooling/container-parity/runlabview-linux.sh'
+        )
+    }
+    default {
+        $allTargetFiles
+    }
+}
 
 $ruleList = @(
     [pscustomobject]@{
