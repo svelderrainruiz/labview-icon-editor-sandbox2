@@ -386,6 +386,8 @@ function Clear-VIObjCacheFallback {
             cache_root = $cacheRoot
             matched_paths = @()
             removed_paths = @()
+            failed_paths = @()
+            errors = @()
             status = 'cache-root-missing'
         }
     }
@@ -395,17 +397,44 @@ function Clear-VIObjCacheFallback {
     })
 
     $removed = New-Object System.Collections.Generic.List[string]
+    $failed = New-Object System.Collections.Generic.List[string]
+    $errors = New-Object System.Collections.Generic.List[object]
     foreach ($item in $matched) {
         Write-Host ("Removing compiled cache path: {0}" -f $item.FullName)
-        Remove-Item -Path $item.FullName -Recurse -Force
-        $removed.Add($item.FullName)
+        try {
+            Remove-Item -Path $item.FullName -Recurse -Force
+            $removed.Add($item.FullName)
+        }
+        catch {
+            $message = $_.Exception.Message
+            Write-Warning ("Failed to remove compiled cache path '{0}': {1}" -f $item.FullName, $message)
+            $failed.Add($item.FullName)
+            $errors.Add([pscustomobject]@{
+                path = $item.FullName
+                message = $message
+                exception_type = $_.Exception.GetType().FullName
+            })
+        }
+    }
+
+    $status = 'no-match'
+    if ($matched.Count -gt 0) {
+        if ($failed.Count -eq 0) {
+            $status = 'removed'
+        } elseif ($removed.Count -eq 0) {
+            $status = 'locked'
+        } else {
+            $status = 'partial-locked'
+        }
     }
 
     return [pscustomobject]@{
         cache_root = $cacheRoot
         matched_paths = @($matched | ForEach-Object { $_.FullName })
         removed_paths = @($removed.ToArray())
-        status = if ($matched.Count -gt 0) { 'removed' } else { 'no-match' }
+        failed_paths = @($failed.ToArray())
+        errors = @($errors.ToArray())
+        status = $status
     }
 }
 
