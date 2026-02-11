@@ -19,7 +19,9 @@ if [[ -n "$REPO_ROOT_INPUT" ]]; then
   LVIE_REPO_ROOT="$REPO_ROOT_INPUT"
   LVIE_REPO_ROOT_SOURCE="arg:repo_root_input"
 else
-  LVIE_REPO_ROOT="$(resolve_lvie_repo_root "/workspace")"
+  resolve_lvie_repo_root "/workspace" > /dev/null
+  LVIE_REPO_ROOT="${LVIE_RESOLVED_REPO_ROOT:-}"
+  LVIE_REPO_ROOT_SOURCE="${LVIE_RESOLVED_REPO_ROOT_SOURCE:-unknown}"
 fi
 
 WORKSPACE_ROOT="$LVIE_REPO_ROOT"
