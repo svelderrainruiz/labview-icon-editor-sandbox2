@@ -271,7 +271,7 @@ function ConvertTo-LabVIEWCliPortNumber {
     return $parsedPort
 }
 
-function Get-LabVIEWIniTcpSettings {
+function Get-LabVIEWIniTcpSetting {
     param(
         [Parameter(Mandatory = $true)]
         [string]$LabVIEWExecutablePath
@@ -371,7 +371,7 @@ function Resolve-LabVIEWCliPort {
         }
     }
 
-    $iniSettings = Get-LabVIEWIniTcpSettings -LabVIEWExecutablePath $LabVIEWExecutablePath
+    $iniSettings = Get-LabVIEWIniTcpSetting -LabVIEWExecutablePath $LabVIEWExecutablePath
     $iniPort = ConvertTo-LabVIEWCliPortNumber -RawValue $iniSettings.PortRaw -Source ('{0} (server.tcp.port)' -f $iniSettings.IniPath)
     if ($null -ne $iniPort) {
         return [pscustomobject]@{
