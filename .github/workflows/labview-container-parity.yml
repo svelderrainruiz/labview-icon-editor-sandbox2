@@ -80,7 +80,7 @@ jobs:
             -e "CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH=resource/plugins/lv_icon.lvlibp" \
             -e "CONTAINER_PARITY_LABVIEW_VERSION=${LV_YEAR}" \
             "$IMAGE" \
-            bash -lc "chmod +x /workspace/Tooling/container-parity/runlabview-linux.sh /workspace/Tooling/container-parity/devmode-linux.sh && /workspace/Tooling/container-parity/runlabview-linux.sh"
+            bash -lc "chmod +x /workspace/Tooling/container-parity/runlabview-linux.sh && /workspace/Tooling/container-parity/runlabview-linux.sh"
 
       - name: Verify built specification output (Linux container)
         if: ${{ env.RUN_BUILD_SPEC == 'true' }}

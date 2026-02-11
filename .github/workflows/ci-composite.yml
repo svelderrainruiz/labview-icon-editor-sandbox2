@@ -664,6 +664,10 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-PathContract.ps1" -WriteSummary
+      - name: Validate CI selector/dev-mode contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-CiPipelineSelectorDevModeContract.ps1" -WriteSummary
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -1039,8 +1043,8 @@ jobs:
           cleanup_worktree: 'false'
 
   # Stage 3: Self-hosted LabVIEW validation/build chain (profile-gated).
-  devmode-no-labview-smoke:
-    name: DevMode.NoLabVIEW Smoke (LV ${{ matrix.bitness }}-bit)
+  missing-in-project:
+    name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, apply-deps-2021-x86]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -1066,81 +1070,6 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Resolve LUnit backend mode for smoke job
-        shell: pwsh
-        run: |
-          $backendMode = 'labviewcli'
-          if ('${{ needs.prerelease-context.outputs.ci_profile }}' -eq 'release-priority') {
-            $backendMode = 'gcli'
-          }
-          "LVIE_LUNIT_BACKEND=$backendMode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          $env:LVIE_LUNIT_BACKEND = $backendMode
-          Write-Host ("LUnit backend mode for smoke job: {0}" -f $backendMode)
-          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- DevMode smoke (LV {0}-bit): LUnit backend mode = {1}" -f '${{ matrix.bitness }}', $backendMode)
-          }
-      - name: Run DevMode.NoLabVIEW smoke (LV ${{ matrix.bitness }}-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".\Tooling\Invoke-DevModeNoLabVIEWSmoke.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -LabVIEWBitness ${{ matrix.bitness }} `
-            -DevModeNoLabVIEWSmokeDepth full `
-            -ConnectTimeoutMs 180000 `
-            -ProcessTimeoutMs 300000 `
-            -RepoRoot "$env:REPO_ROOT"
-      - name: Upload DevMode.NoLabVIEW smoke artifacts (LV ${{ matrix.bitness }}-bit)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: devmode-no-labview-smoke-${{ matrix.bitness }}-bit
-          path: ${{ env.REPO_ROOT }}/TestResults/devmode-no-labview-smoke
-          if-no-files-found: warn
-      - name: Job teardown
-        if: always()
-        uses: ./.github/actions/lvie-job-teardown
-        with:
-          revert_dev_mode: 'true'
-          revert_bitness: ${{ matrix.bitness }}
-          close_labview: 'true'
-          close_bitness: ${{ matrix.bitness }}
-
-  missing-in-project:
-    name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
-    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, apply-deps-2021-x86, devmode-no-labview-smoke]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-    env:
-      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
-      LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
-      LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
-      LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        bitness: ${{ fromJson(needs.prerelease-context.outputs.ci_profile == 'full' && '["64","32"]' || '["64"]') }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          checkout: 'false'
-          bitness: ${{ matrix.bitness }}
-          create_worktree: 'true'
-          worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github\\actions\\set-development-mode\\Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness ${{ matrix.bitness }} `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Resolve LabVIEW project path
         id: proj
         shell: pwsh
@@ -1190,7 +1119,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: ${{ matrix.bitness }}
           close_labview: 'true'
           close_bitness: ${{ matrix.bitness }}
@@ -1222,14 +1150,6 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness ${{ matrix.bitness }} `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -1277,7 +1197,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: ${{ matrix.bitness }}
           close_labview: 'true'
           close_bitness: ${{ matrix.bitness }}
@@ -1304,14 +1223,6 @@ jobs:
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV 32-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 32 `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Build PPL (LV 32-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -1340,7 +1251,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: 32
           close_labview: 'true'
           close_bitness: 32
@@ -1367,14 +1277,6 @@ jobs:
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV 64-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 64 `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Build PPL (LV 64-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -1403,7 +1305,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: 64
           close_labview: 'true'
           close_bitness: 64
@@ -1736,7 +1637,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x Tooling/container-parity/runlabview-linux.sh Tooling/container-parity/devmode-linux.sh
+          chmod +x Tooling/container-parity/runlabview-linux.sh
 
           docker run --rm \
             -v "${GITHUB_WORKSPACE}:/workspace" \
@@ -1755,7 +1656,7 @@ jobs:
             -e "CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH=resource/plugins/lv_icon.lvlibp" \
             -e "CONTAINER_PARITY_LABVIEW_VERSION=2026" \
             "$LABVIEW_LINUX_IMAGE" \
-            bash -lc "chmod +x /workspace/Tooling/container-parity/runlabview-linux.sh /workspace/Tooling/container-parity/devmode-linux.sh && /workspace/Tooling/container-parity/runlabview-linux.sh"
+            bash -lc "chmod +x /workspace/Tooling/container-parity/runlabview-linux.sh && /workspace/Tooling/container-parity/runlabview-linux.sh"
 
       - id: prepare-linux-ppl
         name: Prepare Linux packed library release asset
@@ -1924,7 +1825,6 @@ jobs:
       - changes
       - apply-deps-lv-x64
       - apply-deps-2021-x86
-      - devmode-no-labview-smoke
       - missing-in-project
       - unit-tests
       - build-ppl-x64
@@ -1975,7 +1875,6 @@ jobs:
             'changes',
             'apply-deps-lv-x64',
             'apply-deps-2021-x86',
-            'devmode-no-labview-smoke',
             'missing-in-project',
             'unit-tests',
             'build-ppl-x64',
@@ -2321,7 +2220,6 @@ jobs:
       - changes
       - apply-deps-lv-x64
       - apply-deps-2021-x86
-      - devmode-no-labview-smoke
       - missing-in-project
       - unit-tests
       - build-ppl-x64
@@ -2363,7 +2261,6 @@ jobs:
             'changes',
             'apply-deps-lv-x64',
             'apply-deps-2021-x86',
-            'devmode-no-labview-smoke',
             'missing-in-project',
             'unit-tests',
             'build-ppl-x64',
@@ -2457,6 +2354,7 @@ jobs:
           } else {
             Write-Host 'Pipeline contract satisfied.'
           }
+
 
 
 

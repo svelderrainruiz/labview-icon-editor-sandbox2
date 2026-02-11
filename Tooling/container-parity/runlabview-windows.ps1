@@ -32,273 +32,6 @@ function Test-EnabledValue {
         -or $Value.Equals('yes', [System.StringComparison]::OrdinalIgnoreCase)
 }
 
-function Resolve-LabVIEWVersionYear {
-    param(
-        [string]$VersionInput,
-        [string]$LabVIEWExecutablePath
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($VersionInput)) {
-        return $VersionInput
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($env:CONTAINER_PARITY_LABVIEW_VERSION)) {
-        return $env:CONTAINER_PARITY_LABVIEW_VERSION
-    }
-
-    if ($LabVIEWExecutablePath -match 'LabVIEW\s+(?<year>\d{4})') {
-        return $Matches['year']
-    }
-
-    return ''
-}
-
-function ConvertTo-LabVIEWCliPortNumber {
-    param(
-        [AllowNull()]
-        [AllowEmptyString()]
-        [string]$RawValue,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Source
-    )
-
-    if ([string]::IsNullOrWhiteSpace($RawValue)) {
-        return $null
-    }
-
-    $parsedPort = 0
-    if (-not [int]::TryParse($RawValue.Trim(), [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
-        Write-Warning ("Ignoring invalid port value '{0}' from {1}. Expected integer range 1-65535." -f $RawValue, $Source)
-        return $null
-    }
-
-    return $parsedPort
-}
-
-function Get-LabVIEWIniTcpPort {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$LabVIEWExecutablePath
-    )
-
-    $iniPath = Join-Path -Path (Split-Path -Path $LabVIEWExecutablePath -Parent) -ChildPath 'LabVIEW.ini'
-    $portRaw = $null
-
-    if (-not (Test-Path -LiteralPath $iniPath -PathType Leaf)) {
-        return [pscustomobject]@{
-            IniPath = $iniPath
-            PortRaw = $portRaw
-        }
-    }
-
-    try {
-        $lines = Get-Content -LiteralPath $iniPath -ErrorAction Stop
-    } catch {
-        Write-Warning ("Unable to read LabVIEW.ini at {0}: {1}" -f $iniPath, $_.Exception.Message)
-        return [pscustomobject]@{
-            IniPath = $iniPath
-            PortRaw = $portRaw
-        }
-    }
-
-    foreach ($line in $lines) {
-        if ($null -eq $line) {
-            continue
-        }
-
-        if ($line -match '^\s*server\.tcp\.port\s*=\s*(.+?)\s*$') {
-            $portRaw = $Matches[1].Trim()
-            break
-        }
-    }
-
-    return [pscustomobject]@{
-        IniPath = $iniPath
-        PortRaw = $portRaw
-    }
-}
-
-function Resolve-LabVIEWCliPort {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$LabVIEWExecutablePath
-    )
-
-    $bitnessPort = ConvertTo-LabVIEWCliPortNumber -RawValue $env:LVIE_LUNIT_PORT_64 -Source '$env:LVIE_LUNIT_PORT_64'
-    if ($null -ne $bitnessPort) {
-        return [pscustomobject]@{
-            PortNumber = $bitnessPort
-            Source     = '$env:LVIE_LUNIT_PORT_64'
-        }
-    }
-
-    $genericPort = ConvertTo-LabVIEWCliPortNumber -RawValue $env:LVIE_LUNIT_PORT -Source '$env:LVIE_LUNIT_PORT'
-    if ($null -ne $genericPort) {
-        return [pscustomobject]@{
-            PortNumber = $genericPort
-            Source     = '$env:LVIE_LUNIT_PORT'
-        }
-    }
-
-    $iniPortInfo = Get-LabVIEWIniTcpPort -LabVIEWExecutablePath $LabVIEWExecutablePath
-    $iniPort = ConvertTo-LabVIEWCliPortNumber -RawValue $iniPortInfo.PortRaw -Source ('{0} (server.tcp.port)' -f $iniPortInfo.IniPath)
-    if ($null -ne $iniPort) {
-        return [pscustomobject]@{
-            PortNumber = $iniPort
-            Source     = ('{0} (server.tcp.port)' -f $iniPortInfo.IniPath)
-        }
-    }
-
-    return [pscustomobject]@{
-        PortNumber = 3363
-        Source     = 'default:3363'
-    }
-}
-
-function Test-LabVIEWCliConnectionFailure {
-    param(
-        [AllowNull()]
-        [AllowEmptyString()]
-        [string]$OutputText
-    )
-
-    if ([string]::IsNullOrWhiteSpace($OutputText)) {
-        return $false
-    }
-
-    return $OutputText -match '(?i)Error\s*code\s*:\s*-350000'
-}
-
-function Get-LabVIEWCliSelectorPortAttemptList {
-    param(
-        [Parameter(Mandatory = $true)]
-        [int]$PrimaryPortNumber
-    )
-
-    $attemptPorts = New-Object System.Collections.Generic.List[int]
-    $seenPorts = @{}
-
-    foreach ($candidatePort in @($PrimaryPortNumber, 3370, 3363)) {
-        if ($candidatePort -lt 1 -or $candidatePort -gt 65535) {
-            continue
-        }
-
-        if ($seenPorts.ContainsKey($candidatePort)) {
-            continue
-        }
-
-        $attemptPorts.Add($candidatePort) | Out-Null
-        $seenPorts[$candidatePort] = $true
-    }
-
-    return @($attemptPorts.ToArray())
-}
-
-function Invoke-LabVIEWCliSelectorMode {
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('set', 'unset')]
-        [string]$Mode,
-
-        [Parameter(Mandatory = $true)]
-        [string]$LabVIEWExecutablePath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$SelectorViAbsolutePath,
-
-        [Parameter(Mandatory = $true)]
-        [pscustomobject]$PrimaryPort,
-
-        [Parameter(Mandatory = $true)]
-        [string]$WorkspaceRootPath
-    )
-
-    $attemptSummaries = New-Object System.Collections.Generic.List[string]
-    $lastResult = $null
-    $lastPortNumber = $null
-    $lastPortSource = $null
-    $sawConnectionFailure = $false
-
-    $portAttempts = @(Get-LabVIEWCliSelectorPortAttemptList -PrimaryPortNumber $PrimaryPort.PortNumber)
-    foreach ($portNumber in $portAttempts) {
-        $portSource = if ($portNumber -eq $PrimaryPort.PortNumber) {
-            $PrimaryPort.Source
-        } else {
-            "fallback:$portNumber"
-        }
-
-        Write-Output ("Running selector mode '{0}' via LabVIEWCLI on port {1} (source: {2})." -f $Mode, $portNumber, $portSource)
-        $selectorArgs = @(
-            '-LogToConsole', 'TRUE',
-            '-OperationName', 'RunVI',
-            '-LabVIEWPath', $LabVIEWExecutablePath,
-            '-PortNumber', $portNumber.ToString(),
-            '-VIPath', $SelectorViAbsolutePath,
-            '-Headless',
-            $Mode
-        )
-        $selectorResult = Invoke-LabVIEWCliOperation -OperationName ("Selector-{0}-Port{1}" -f $Mode, $portNumber) -Arguments $selectorArgs -WorkspaceRootPath $WorkspaceRootPath
-        $lastResult = $selectorResult
-        $lastPortNumber = $portNumber
-        $lastPortSource = $portSource
-
-        if ($selectorResult.ExitCode -eq 0) {
-            return [pscustomobject]@{
-                ExitCode         = 0
-                PortNumber       = $portNumber
-                PortSource       = $portSource
-                UsedImplicitPort = $false
-                Attempts         = @($attemptSummaries)
-            }
-        }
-
-        $attemptSummaries.Add(("port:{0} source:{1} exit:{2}" -f $portNumber, $portSource, $selectorResult.ExitCode)) | Out-Null
-        if (Test-LabVIEWCliConnectionFailure -OutputText $selectorResult.OutputText) {
-            $sawConnectionFailure = $true
-            continue
-        }
-
-        break
-    }
-
-    if ($sawConnectionFailure) {
-        Write-Warning ("Selector mode '{0}' failed to connect on explicit ports. Retrying without explicit -PortNumber." -f $Mode)
-        $implicitArgs = @(
-            '-LogToConsole', 'TRUE',
-            '-OperationName', 'RunVI',
-            '-LabVIEWPath', $LabVIEWExecutablePath,
-            '-VIPath', $SelectorViAbsolutePath,
-            '-Headless',
-            $Mode
-        )
-        $implicitResult = Invoke-LabVIEWCliOperation -OperationName ("Selector-{0}-ImplicitPort" -f $Mode) -Arguments $implicitArgs -WorkspaceRootPath $WorkspaceRootPath
-        $lastResult = $implicitResult
-        $lastPortNumber = $null
-        $lastPortSource = 'implicit-default'
-
-        if ($implicitResult.ExitCode -eq 0) {
-            return [pscustomobject]@{
-                ExitCode         = 0
-                PortNumber       = $null
-                PortSource       = 'implicit-default'
-                UsedImplicitPort = $true
-                Attempts         = @($attemptSummaries)
-            }
-        }
-
-        $attemptSummaries.Add(("port:implicit source:implicit-default exit:{0}" -f $implicitResult.ExitCode)) | Out-Null
-    }
-
-    return [pscustomobject]@{
-        ExitCode         = if ($null -eq $lastResult) { 1 } else { $lastResult.ExitCode }
-        PortNumber       = $lastPortNumber
-        PortSource       = $lastPortSource
-        UsedImplicitPort = $false
-        Attempts         = @($attemptSummaries)
-    }
-}
-
 function Sync-IconEditorSourcesForBuildSpec {
     param(
         [string]$WorkspaceRootPath,
@@ -510,7 +243,6 @@ if ([string]::IsNullOrWhiteSpace($TargetName)) {
 }
 
 $buildSpecEnabled = $BuildProjectSpec.IsPresent -or (Test-EnabledValue -Value $env:CONTAINER_PARITY_BUILD_SPEC)
-$enableDevMode = Test-EnabledValue -Value $env:CONTAINER_PARITY_ENABLE_DEVMODE
 $buildOutputRelativePath = if ([string]::IsNullOrWhiteSpace($env:CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH)) {
     'resource\plugins\lv_icon.lvlibp'
 } else {
@@ -524,18 +256,6 @@ if (-not (Get-Command LabVIEWCLI -ErrorAction SilentlyContinue)) {
 
 if (-not (Test-Path -LiteralPath $TargetDir -PathType Container)) {
     Write-Error "Target directory does not exist: $TargetDir"
-}
-
-$selectorViPath = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Run Icon Editor from Source Selector.vi'
-if (-not (Test-Path -LiteralPath $selectorViPath -PathType Leaf)) {
-    Write-Error "Selector VI does not exist: $selectorViPath"
-}
-
-$selectorPrimaryPort = Resolve-LabVIEWCliPort -LabVIEWExecutablePath $LabVIEWPath
-Write-Output ("Using selector VI Server primary port: {0} ({1})" -f $selectorPrimaryPort.PortNumber, $selectorPrimaryPort.Source)
-$selectorPortAttempts = @(Get-LabVIEWCliSelectorPortAttemptList -PrimaryPortNumber $selectorPrimaryPort.PortNumber)
-if ($selectorPortAttempts.Count -gt 1) {
-    Write-Output ("Selector port fallback order: {0}" -f (($selectorPortAttempts | ForEach-Object { $_.ToString() }) -join ', '))
 }
 
 $excludeRaw = $env:CONTAINER_PARITY_EXCLUDE_FILES
@@ -557,87 +277,21 @@ try {
         }
     }
 
-    $massCompileStageError = $null
-    $selectorUnsetErrorMessage = $null
-    $selectorSetSucceeded = $false
-    $selectorSetContext = $null
-    try {
-        $selectorSet = Invoke-LabVIEWCliSelectorMode `
-            -Mode 'set' `
-            -LabVIEWExecutablePath $LabVIEWPath `
-            -SelectorViAbsolutePath $selectorViPath `
-            -PrimaryPort $selectorPrimaryPort `
-            -WorkspaceRootPath $WorkspaceRoot
-        if ($selectorSet.ExitCode -ne 0) {
-            $selectorSetAttempts = if ($selectorSet.Attempts.Count -gt 0) {
-                " Attempts: $($selectorSet.Attempts -join '; ')"
-            } else {
-                ''
-            }
-            throw ("LabVIEWCLI selector set failed with exit code {0}.{1}" -f $selectorSet.ExitCode, $selectorSetAttempts)
-        }
+    Write-Output "Running LabVIEWCLI MassCompile in headless mode."
+    Write-Output "Target directory: $TargetDir"
+    Write-Output "LabVIEW path: $LabVIEWPath"
+    Write-Output ("Excluded templates: {0}" -f ($excludeFiles -join '; '))
+    Write-Output "Staging directory: $stagingDir"
 
-        if ($selectorSet.UsedImplicitPort) {
-            Write-Output "Selector mode 'set' succeeded without explicit -PortNumber."
-        } elseif ($selectorSet.PortNumber -ne $selectorPrimaryPort.PortNumber) {
-            Write-Output ("Selector mode 'set' succeeded on fallback port {0} (source: {1})." -f $selectorSet.PortNumber, $selectorSet.PortSource)
-        }
-        $selectorSetContext = $selectorSet
-        $selectorSetSucceeded = $true
-
-        Write-Output "Running LabVIEWCLI MassCompile in headless mode."
-        Write-Output "Target directory: $TargetDir"
-        Write-Output "LabVIEW path: $LabVIEWPath"
-        Write-Output ("Excluded templates: {0}" -f ($excludeFiles -join '; '))
-        Write-Output "Staging directory: $stagingDir"
-
-        $massCompile = Invoke-LabVIEWCliOperation -OperationName 'MassCompile' -Arguments @(
-            '-LogToConsole', 'TRUE',
-            '-OperationName', 'MassCompile',
-            '-DirectoryToCompile', $stagingDir,
-            '-LabVIEWPath', $LabVIEWPath,
-            '-Headless'
-        ) -WorkspaceRootPath $WorkspaceRoot
-        if ($massCompile.ExitCode -ne 0) {
-            throw "LabVIEWCLI MassCompile failed with exit code $($massCompile.ExitCode)."
-        }
-    } catch {
-        $massCompileStageError = $_
-    } finally {
-        if ($selectorSetSucceeded) {
-            $unsetPrimaryPort = $selectorPrimaryPort
-            if ($null -ne $selectorSetContext -and -not $selectorSetContext.UsedImplicitPort -and $null -ne $selectorSetContext.PortNumber) {
-                $unsetPrimaryPort = [pscustomobject]@{
-                    PortNumber = [int]$selectorSetContext.PortNumber
-                    Source     = "selector-set-success:$($selectorSetContext.PortSource)"
-                }
-            }
-
-            $selectorUnset = Invoke-LabVIEWCliSelectorMode `
-                -Mode 'unset' `
-                -LabVIEWExecutablePath $LabVIEWPath `
-                -SelectorViAbsolutePath $selectorViPath `
-                -PrimaryPort $unsetPrimaryPort `
-                -WorkspaceRootPath $WorkspaceRoot
-            if ($selectorUnset.ExitCode -ne 0) {
-                $selectorUnsetAttempts = if ($selectorUnset.Attempts.Count -gt 0) {
-                    " Attempts: $($selectorUnset.Attempts -join '; ')"
-                } else {
-                    ''
-                }
-                $selectorUnsetErrorMessage = ("LabVIEWCLI selector unset failed with exit code {0}.{1}" -f $selectorUnset.ExitCode, $selectorUnsetAttempts)
-            }
-        }
-    }
-
-    if ($massCompileStageError -and $selectorUnsetErrorMessage) {
-        throw ("{0} Selector unset error: {1}" -f $massCompileStageError.Exception.Message, $selectorUnsetErrorMessage)
-    }
-    if ($massCompileStageError) {
-        throw $massCompileStageError.Exception
-    }
-    if ($selectorUnsetErrorMessage) {
-        throw $selectorUnsetErrorMessage
+    $massCompile = Invoke-LabVIEWCliOperation -OperationName 'MassCompile' -Arguments @(
+        '-LogToConsole', 'TRUE',
+        '-OperationName', 'MassCompile',
+        '-DirectoryToCompile', $stagingDir,
+        '-LabVIEWPath', $LabVIEWPath,
+        '-Headless'
+    ) -WorkspaceRootPath $WorkspaceRoot
+    if ($massCompile.ExitCode -ne 0) {
+        throw "LabVIEWCLI MassCompile failed with exit code $($massCompile.ExitCode)."
     }
 
     Write-Output "MassCompile completed successfully."
@@ -654,91 +308,31 @@ try {
     Write-Output "Synchronizing workspace Icon Editor sources into LabVIEW install before build-spec execution."
     Sync-IconEditorSourcesForBuildSpec -WorkspaceRootPath $WorkspaceRoot -LabVIEWExecutablePath $LabVIEWPath
 
-    $setDevModeScript = $null
-    $revertDevModeScript = $null
-    $labviewYear = $null
-    $devModeEnabled = $false
-    if ($enableDevMode) {
-        $setDevModeScript = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
-        $revertDevModeScript = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
-        if (-not (Test-Path -LiteralPath $setDevModeScript -PathType Leaf)) {
-            throw "Required script not found: $setDevModeScript"
-        }
-        if (-not (Test-Path -LiteralPath $revertDevModeScript -PathType Leaf)) {
-            throw "Required script not found: $revertDevModeScript"
-        }
+    Write-Output "Running LabVIEWCLI ExecuteBuildSpec in headless mode."
+    Write-Output "Project path: $ProjectPath"
+    Write-Output "Build specification: $BuildSpecName"
+    Write-Output "Target name: $TargetName"
+    Write-Output "Expected output: $buildOutputPath"
 
-        $labviewYear = Resolve-LabVIEWVersionYear -VersionInput $LabVIEWVersion -LabVIEWExecutablePath $LabVIEWPath
-        if ([string]::IsNullOrWhiteSpace($labviewYear)) {
-            throw "Unable to resolve LabVIEW version year for no-LabVIEW dev mode plumbing."
-        }
-
-        Write-Output "Preparing no-LabVIEW dev mode before build-spec execution."
-        & $setDevModeScript `
-            -LabVIEWVersion $labviewYear `
-            -SupportedBitness 64 `
-            -RepoRoot $WorkspaceRoot `
-            -SkipProcessCheck `
-            -SkipRepoVersionCheck
-        if ($LASTEXITCODE -ne 0) {
-            throw "Set-DevelopmentMode-NoLabVIEW failed with exit code $LASTEXITCODE."
-        }
-        $devModeEnabled = $true
-    } else {
-        Write-Output "No-LabVIEW dev mode is disabled for container parity (set CONTAINER_PARITY_ENABLE_DEVMODE=true to enable)."
+    $buildSpec = Invoke-LabVIEWCliOperation -OperationName 'ExecuteBuildSpec' -Arguments @(
+        '-LogToConsole', 'TRUE',
+        '-OperationName', 'ExecuteBuildSpec',
+        '-ProjectPath', $ProjectPath,
+        '-BuildSpecName', $BuildSpecName,
+        '-TargetName', $TargetName,
+        '-LabVIEWPath', $LabVIEWPath,
+        '-Headless'
+    ) -WorkspaceRootPath $WorkspaceRoot
+    if ($buildSpec.ExitCode -ne 0) {
+        throw "LabVIEWCLI ExecuteBuildSpec failed with exit code $($buildSpec.ExitCode)."
     }
 
-    $buildSpecError = $null
-    try {
-        Write-Output "Running LabVIEWCLI ExecuteBuildSpec in headless mode."
-        Write-Output "Project path: $ProjectPath"
-        Write-Output "Build specification: $BuildSpecName"
-        Write-Output "Target name: $TargetName"
-        Write-Output "Expected output: $buildOutputPath"
-
-        $buildSpec = Invoke-LabVIEWCliOperation -OperationName 'ExecuteBuildSpec' -Arguments @(
-            '-LogToConsole', 'TRUE',
-            '-OperationName', 'ExecuteBuildSpec',
-            '-ProjectPath', $ProjectPath,
-            '-BuildSpecName', $BuildSpecName,
-            '-TargetName', $TargetName,
-            '-LabVIEWPath', $LabVIEWPath,
-            '-Headless'
-        ) -WorkspaceRootPath $WorkspaceRoot
-        if ($buildSpec.ExitCode -ne 0) {
-            throw "LabVIEWCLI ExecuteBuildSpec failed with exit code $($buildSpec.ExitCode)."
-        }
-
-        if (-not (Test-Path -LiteralPath $buildOutputPath -PathType Leaf)) {
-            throw "Build specification output not found at expected path: $buildOutputPath"
-        }
-
-        $buildOutput = Get-Item -LiteralPath $buildOutputPath
-        Write-Output ("Build specification completed: {0} ({1} bytes)" -f $buildOutput.FullName, $buildOutput.Length)
-    } catch {
-        $buildSpecError = $_
-    } finally {
-        if ($devModeEnabled) {
-            Write-Output "Reverting no-LabVIEW dev mode after build-spec execution."
-            & $revertDevModeScript `
-                -LabVIEWVersion $labviewYear `
-                -SupportedBitness 64 `
-                -RepoRoot $WorkspaceRoot `
-                -SkipProcessCheck `
-                -SkipRepoVersionCheck
-            if ($LASTEXITCODE -ne 0) {
-                $revertError = "Revert-DevelopmentMode-NoLabVIEW failed with exit code $LASTEXITCODE."
-                if ($buildSpecError) {
-                    throw ("{0} Revert error: {1}" -f $buildSpecError.Exception.Message, $revertError)
-                }
-                throw $revertError
-            }
-        }
+    if (-not (Test-Path -LiteralPath $buildOutputPath -PathType Leaf)) {
+        throw "Build specification output not found at expected path: $buildOutputPath"
     }
 
-    if ($buildSpecError) {
-        throw $buildSpecError.Exception
-    }
+    $buildOutput = Get-Item -LiteralPath $buildOutputPath
+    Write-Output ("Build specification completed: {0} ({1} bytes)" -f $buildOutput.FullName, $buildOutput.Length)
 } finally {
     if (Test-Path -LiteralPath $stagingDir) {
         Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
