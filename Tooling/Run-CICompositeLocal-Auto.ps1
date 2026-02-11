@@ -95,9 +95,6 @@
     If set, purge known output folders before and after the run.
 #>
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git was not found on PATH."
-}
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
@@ -191,6 +188,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git was not found on PATH."
+}
 
 function Resolve-RepoRoot {
     param([string]$PathOverride)

@@ -145,9 +145,6 @@
     Internal flag used by Invoke-WorktreeOrchestrator to prevent recursion.
 #>
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git was not found on PATH."
-}
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
@@ -268,6 +265,10 @@ param(
 
     [switch]$Orchestrated
 )
+
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git was not found on PATH."
+}
 
 $ErrorActionPreference = 'Stop'
 
