@@ -562,7 +562,15 @@ try {
     $summary.mass_compile = $massCompile
 
     if ($massCompile.exit_code -ne 0) {
-        throw ("MassCompile failed with exit code {0}." -f $massCompile.exit_code)
+        $outputTail = @($massCompile.output_tail)
+        $hasAliasMismatchWarning = ($outputTail | Where-Object { $_ -like '* was loaded from *' }).Count -gt 0
+        if ($massCompile.exit_code -eq 3 -and $hasAliasMismatchWarning) {
+            $warningMessage = 'MassCompile returned exit code 3 with staged alias-mismatch warnings. Continuing preflight.'
+            Write-Warning $warningMessage
+            $summary['mass_compile_warning'] = $warningMessage
+        } else {
+            throw ("MassCompile failed with exit code {0}." -f $massCompile.exit_code)
+        }
     }
 
     $closeAfter = Invoke-LabVIEWCliOperation -LabVIEWCliPath $labviewCliPath -OperationName 'CloseLabVIEW-after' -Arguments @(
