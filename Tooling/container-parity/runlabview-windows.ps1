@@ -1,5 +1,5 @@
 param(
-    [string]$WorkspaceRoot = "C:\workspace",
+    [string]$WorkspaceRoot = "",
     [string]$TargetDir = "",
     [string]$LabVIEWPath = "C:\Program Files\National Instruments\LabVIEW 2026\LabVIEW.exe",
     [string]$ProjectPath = "",
@@ -10,6 +10,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+$pathContractScript = Join-Path -Path $PSScriptRoot -ChildPath '..\support\PathContract.ps1'
+if (-not (Test-Path -LiteralPath $pathContractScript -PathType Leaf)) {
+    throw "Path contract helper was not found: $pathContractScript"
+}
+. $pathContractScript
 
 function Test-EnabledValue {
     param(
@@ -281,13 +287,59 @@ function Invoke-LabVIEWCliOperation {
     }
 }
 
-if ([string]::IsNullOrWhiteSpace($TargetDir)) {
-    $TargetDir = Join-Path $WorkspaceRoot 'Test\Templates'
+$repoRootResolution = Resolve-LvieRepoRoot `
+    -LvieRepoRoot $env:LVIE_REPO_ROOT `
+    -WorkspaceRoot $WorkspaceRoot `
+    -RepoRoot $env:REPO_ROOT `
+    -DefaultRepoRoot 'C:\workspace'
+$WorkspaceRoot = $repoRootResolution.Path
+
+$projectRelativePath = if ([string]::IsNullOrWhiteSpace($env:LVIE_PROJECT_RELATIVE_PATH)) {
+    if ([string]::IsNullOrWhiteSpace($env:PROJECT_PATH_REL)) {
+        'lv_icon_editor.lvproj'
+    } else {
+        $env:PROJECT_PATH_REL
+    }
+} else {
+    $env:LVIE_PROJECT_RELATIVE_PATH
 }
 
-if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
-    $ProjectPath = Join-Path $WorkspaceRoot 'lv_icon_editor.lvproj'
+$projectPathCanonicalCandidate = if ([string]::IsNullOrWhiteSpace($ProjectPath)) { $env:LVIE_PROJECT_PATH } else { $ProjectPath }
+$projectPathAliasCandidate = if ([string]::IsNullOrWhiteSpace($ProjectPath)) { $env:PROJECT_PATH } else { $null }
+$projectPathResolution = Resolve-LvieProjectPath `
+    -LvieProjectPath $projectPathCanonicalCandidate `
+    -ProjectPath $projectPathAliasCandidate `
+    -RepoRoot $WorkspaceRoot `
+    -ProjectRelativePath $projectRelativePath `
+    -DefaultProjectRelativePath 'lv_icon_editor.lvproj'
+$ProjectPath = $projectPathResolution.Path
+
+$targetDirRelativePath = if ([string]::IsNullOrWhiteSpace($env:TARGET_DIR_REL)) {
+    'Test\Templates'
+} else {
+    $env:TARGET_DIR_REL
 }
+$targetDirSource = 'parameter:TargetDir'
+if ([string]::IsNullOrWhiteSpace($TargetDir)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:TARGET_DIR)) {
+        $TargetDir = $env:TARGET_DIR
+        $targetDirSource = '$env:TARGET_DIR'
+    } else {
+        $TargetDir = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath $targetDirRelativePath
+        $targetDirSource = '$env:TARGET_DIR_REL'
+    }
+}
+
+$env:LVIE_REPO_ROOT = $WorkspaceRoot
+$env:LVIE_PROJECT_PATH = $ProjectPath
+$env:LVIE_PROJECT_RELATIVE_PATH = $projectPathResolution.RelativePath
+$env:WORKSPACE_ROOT = $WorkspaceRoot
+$env:REPO_ROOT = $WorkspaceRoot
+$env:PROJECT_PATH = $ProjectPath
+
+Write-Output ("Resolved repo root: {0} (source: {1})" -f $WorkspaceRoot, $repoRootResolution.Source)
+Write-Output ("Resolved project path: {0} (source: {1})" -f $ProjectPath, $projectPathResolution.Source)
+Write-Output ("Resolved target directory: {0} (source: {1})" -f $TargetDir, $targetDirSource)
 
 if ([string]::IsNullOrWhiteSpace($BuildSpecName)) {
     $BuildSpecName = if ([string]::IsNullOrWhiteSpace($env:CONTAINER_PARITY_BUILD_SPEC_NAME)) {
@@ -312,7 +364,7 @@ $buildOutputRelativePath = if ([string]::IsNullOrWhiteSpace($env:CONTAINER_PARIT
 } else {
     $env:CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH
 }
-$buildOutputPath = Join-Path $WorkspaceRoot $buildOutputRelativePath
+$buildOutputPath = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath $buildOutputRelativePath
 
 if (-not (Get-Command LabVIEWCLI -ErrorAction SilentlyContinue)) {
     Write-Error "LabVIEWCLI is not available on PATH inside the container."
@@ -322,7 +374,7 @@ if (-not (Test-Path -LiteralPath $TargetDir -PathType Container)) {
     Write-Error "Target directory does not exist: $TargetDir"
 }
 
-$selectorViPath = Join-Path $WorkspaceRoot 'Tooling\Run Icon Editor from Source Selector.vi'
+$selectorViPath = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Run Icon Editor from Source Selector.vi'
 if (-not (Test-Path -LiteralPath $selectorViPath -PathType Leaf)) {
     Write-Error "Selector VI does not exist: $selectorViPath"
 }
@@ -431,8 +483,8 @@ try {
     $labviewYear = $null
     $devModeEnabled = $false
     if ($enableDevMode) {
-        $setDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
-        $revertDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
+        $setDevModeScript = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
+        $revertDevModeScript = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
         if (-not (Test-Path -LiteralPath $setDevModeScript -PathType Leaf)) {
             throw "Required script not found: $setDevModeScript"
         }

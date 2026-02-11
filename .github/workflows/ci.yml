@@ -492,6 +492,10 @@ jobs:
           }
 
           Write-Host "Baseline guard: no changes detected."
+      - name: Validate path root contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-PathContract.ps1" -WriteSummary
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: |

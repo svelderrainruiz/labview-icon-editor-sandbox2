@@ -1,24 +1,54 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATH_CONTRACT_SCRIPT="$SCRIPT_DIR/path-contract.sh"
+if [[ ! -f "$PATH_CONTRACT_SCRIPT" ]]; then
+  echo "ERROR: Path contract helper was not found: $PATH_CONTRACT_SCRIPT" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$PATH_CONTRACT_SCRIPT"
+
 LV_YEAR="${LV_YEAR:-2026}"
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace}"
-TARGET_DIR="${TARGET_DIR:-$WORKSPACE_ROOT/Test/Templates}"
+LVIE_PROJECT_RELATIVE_PATH="${LVIE_PROJECT_RELATIVE_PATH:-${PROJECT_PATH_REL:-lv_icon_editor.lvproj}}"
+LVIE_REPO_ROOT="$(resolve_lvie_repo_root "/workspace")"
+LVIE_PROJECT_PATH="$(resolve_lvie_project_path "$LVIE_REPO_ROOT" "$LVIE_PROJECT_RELATIVE_PATH")"
+
+TARGET_DIR_REL="${TARGET_DIR_REL:-Test/Templates}"
+TARGET_DIR_SOURCE="\$TARGET_DIR"
+if [[ -z "${TARGET_DIR:-}" ]]; then
+  TARGET_DIR="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "$TARGET_DIR_REL")"
+  TARGET_DIR_SOURCE="\$TARGET_DIR_REL"
+fi
+
 EXCLUDE_LIST="${CONTAINER_PARITY_EXCLUDE_FILES:-Polymorphic Template.vi}"
 LABVIEW_PATH="${LABVIEW_PATH:-/usr/local/natinst/LabVIEW-${LV_YEAR}-64/labviewprofull}"
-PROJECT_PATH="${PROJECT_PATH:-$WORKSPACE_ROOT/lv_icon_editor.lvproj}"
+PROJECT_PATH="$LVIE_PROJECT_PATH"
 BUILD_SPEC_NAME="${CONTAINER_PARITY_BUILD_SPEC_NAME:-Editor Packed Library}"
 TARGET_NAME="${CONTAINER_PARITY_TARGET_NAME:-My Computer}"
 BUILD_OUTPUT_RELATIVE_PATH="${CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH:-resource/plugins/lv_icon.lvlibp}"
-BUILD_OUTPUT_PATH="$WORKSPACE_ROOT/$BUILD_OUTPUT_RELATIVE_PATH"
+BUILD_OUTPUT_PATH="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "$BUILD_OUTPUT_RELATIVE_PATH")"
 BUILD_SPEC_ENABLED_RAW="${CONTAINER_PARITY_BUILD_SPEC:-false}"
 ENABLE_DEVMODE_RAW="${CONTAINER_PARITY_ENABLE_DEVMODE:-false}"
-LOG_ROOT="$WORKSPACE_ROOT/TestResults/container-parity/linux/logs"
+LOG_ROOT="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "TestResults/container-parity/linux/logs")"
 LABVIEW_ROOT="$(dirname "$LABVIEW_PATH")"
-DEVMODE_SCRIPT="$WORKSPACE_ROOT/Tooling/container-parity/devmode-linux.sh"
-SELECTOR_VI_PATH="$WORKSPACE_ROOT/Tooling/Run Icon Editor from Source Selector.vi"
+DEVMODE_SCRIPT="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "Tooling/container-parity/devmode-linux.sh")"
+SELECTOR_VI_PATH="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "Tooling/Run Icon Editor from Source Selector.vi")"
 SELECTOR_PORT="3363"
 SELECTOR_PORT_SOURCE="default:3363"
+
+export LVIE_REPO_ROOT
+export LVIE_PROJECT_PATH
+export LVIE_PROJECT_RELATIVE_PATH
+export WORKSPACE_ROOT="$LVIE_REPO_ROOT"
+export REPO_ROOT="$LVIE_REPO_ROOT"
+export PROJECT_PATH="$LVIE_PROJECT_PATH"
+
+echo "Resolved repo root: $LVIE_REPO_ROOT (source: $LVIE_REPO_ROOT_SOURCE)"
+echo "Resolved project path: $LVIE_PROJECT_PATH (source: $LVIE_PROJECT_PATH_SOURCE)"
+echo "Resolved target directory: $TARGET_DIR (source: $TARGET_DIR_SOURCE)"
 
 is_enabled_value() {
   local value="${1:-}"
@@ -32,9 +62,11 @@ is_enabled_value() {
 }
 
 sync_icon_editor_sources_for_build_spec() {
-  local repo_plugins="$WORKSPACE_ROOT/resource/plugins"
+  local repo_plugins
+  repo_plugins="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "resource/plugins")"
   local install_plugins="$LABVIEW_ROOT/resource/plugins"
-  local repo_icon_api="$WORKSPACE_ROOT/vi.lib/LabVIEW Icon API"
+  local repo_icon_api
+  repo_icon_api="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "vi.lib/LabVIEW Icon API")"
   local install_icon_api="$LABVIEW_ROOT/vi.lib/LabVIEW Icon API"
 
   local required_paths=(
@@ -257,7 +289,7 @@ cleanup() {
 
   if [[ "$DEVMODE_ENABLED" -eq 1 ]]; then
     echo "Reverting no-LabVIEW dev mode after build-spec execution."
-    if ! "$DEVMODE_SCRIPT" revert "$LABVIEW_ROOT" "$WORKSPACE_ROOT"; then
+    if ! "$DEVMODE_SCRIPT" revert "$LABVIEW_ROOT" "$LVIE_REPO_ROOT"; then
       echo "ERROR: Failed to revert no-LabVIEW dev mode." >&2
       final_exit=1
     fi
@@ -347,7 +379,7 @@ if is_enabled_value "$ENABLE_DEVMODE_RAW"; then
     chmod +x "$DEVMODE_SCRIPT"
   fi
   echo "Preparing no-LabVIEW dev mode before build-spec execution."
-  "$DEVMODE_SCRIPT" enable "$LABVIEW_ROOT" "$WORKSPACE_ROOT"
+  "$DEVMODE_SCRIPT" enable "$LABVIEW_ROOT" "$LVIE_REPO_ROOT"
   DEVMODE_ENABLED=1
 else
   echo "No-LabVIEW dev mode is disabled for container parity (set CONTAINER_PARITY_ENABLE_DEVMODE=true to enable)."
