@@ -449,7 +449,6 @@ $labviewCliLogRoot = Join-Path $artifactRoot 'labviewcli'
 New-Item -Path $artifactRoot -ItemType Directory -Force | Out-Null
 New-Item -Path $labviewCliLogRoot -ItemType Directory -Force | Out-Null
 
-$massCompileLogPath = Join-Path $artifactRoot 'masscompile.log'
 $summaryPath = Join-Path $artifactRoot 'summary.json'
 $stagingDir = Join-Path ([System.IO.Path]::GetTempPath()) ("lvie-masscompile-{0}" -f [Guid]::NewGuid().ToString('N'))
 New-Item -Path $stagingDir -ItemType Directory -Force | Out-Null
@@ -552,16 +551,12 @@ try {
     }
 
     $massCompile = Invoke-LabVIEWCliOperation -LabVIEWCliPath $labviewCliPath -OperationName 'MassCompile' -Arguments @(
+        '-LogToConsole', 'TRUE',
         '-OperationName', 'MassCompile',
+        '-DirectoryToCompile', $stagingDir,
         '-LabVIEWPath', $labviewPath,
         '-PortNumber', $tcpSettings.PortNumber.ToString(),
-        '-LogToConsole', 'TRUE',
-        '-Verbosity', 'Default',
-        '-Headless',
-        '-DirectoryToCompile', $stagingDir,
-        '-MassCompileLogFile', $massCompileLogPath,
-        '-AppendToMassCompileLog', 'FALSE',
-        '-NumberOfVIsToCache', '0'
+        '-Headless'
     ) -LabVIEWCliLogRoot $labviewCliLogRoot
     $summary.operations += $massCompile
     $summary.mass_compile = $massCompile
