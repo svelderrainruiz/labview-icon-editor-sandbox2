@@ -34,7 +34,12 @@ Build-spec environment contract used by container scripts:
 - `CONTAINER_PARITY_BUILD_SPEC_NAME`
 - `CONTAINER_PARITY_TARGET_NAME`
 - `CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH`
-- `CONTAINER_PARITY_ENABLE_DEVMODE` (optional; default disabled)
+
+Solo-mode CI contract:
+
+- Container parity CI scripts do not perform selector set/unset orchestration.
+- Container parity CI scripts do not toggle development mode automatically.
+- Manual development-mode operations remain available only through the dedicated manual workflow.
 
 Default build-spec settings:
 
@@ -67,4 +72,5 @@ Manual run:
 PR run:
 
 - Triggered automatically when parity workflow/script files, `.lvversion`, `lv_icon_editor.lvproj`, or `Test/Templates` change.
-- PR runs execute both MassCompile parity and packed-library build-spec parity by default.
+- PR runs execute the Linux container parity lane by default.
+- Windows container parity runs on `push` to `develop` and on manual `workflow_dispatch`.

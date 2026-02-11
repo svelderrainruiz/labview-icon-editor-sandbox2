@@ -1,12 +1,6 @@
 name: CI Debt Policy Gate
 
 on:
-  pull_request:
-    branches:
-      - develop
-  push:
-    branches:
-      - develop
   workflow_dispatch:
     inputs:
       mode:

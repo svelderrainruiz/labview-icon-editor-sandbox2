@@ -58,13 +58,13 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
     - Run tests using **CI Pipeline (Composite)**.
     - `pull_request` runs use the `pr-fast` profile (64-bit smoke/missing/unit).
     - `workflow_dispatch` with `force_gcli_lunit=true` uses `release-priority` and skips heavy self-hosted validation jobs.
-    - **CI Pipeline (No Smoke)** (`.github/workflows/ci.yml`) runs on `pull_request` only as a companion signal and intentionally excludes `devmode-no-labview-smoke` and publish-path jobs.
+    - **CI Pipeline (No Smoke)** (`.github/workflows/ci.yml`) runs on `pull_request` only as a companion signal and intentionally excludes publish-path jobs.
 
 6. **Build VI Package**
      - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
     - Pre-release publication behavior is specified by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, assets, and failure policy.
-    - Prerelease-driving PRs into `develop` must be merged with a merge commit (`--merge`), not squash/rebase.
-    - Manual prerelease backfill requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+    - Prerelease-driving changes should use merge commits (`--merge`), not squash/rebase.
+    - Prerelease publication is manual-intent only and requires `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
     - `release-priority` publish intent (`force_gcli_lunit=true`) additionally requires a successful `full` profile run on `develop` within the previous 24 hours.
     - **You can also** pass in **org/repository** info (e.g., `-CompanyName "MyOrg"` or `-AuthorName "myorg/myrepo"`) to brand the resulting package with your unique identifiers.
 
@@ -115,8 +115,8 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
 
 3. **CI Pipeline (No Smoke)**
    - PR-only companion workflow (`.github/workflows/ci.yml`) for additional validation signal.
-   - Uses `ci_profile=pr-fast`, never publishes prereleases, and does not define `devmode-no-labview-smoke`.
-   - Keep this workflow non-required in branch protection while `CI Pipeline (Composite) / Pipeline Contract` remains the required context.
+   - Uses `ci_profile=pr-fast` and never publishes prereleases.
+   - In solo mode, require both `CI Pipeline (Composite) / Pipeline Contract` and `CI Pipeline (No Smoke) / Pipeline Contract` in branch protection.
 
 
 <a name="setting-up-a-self-hosted-runner"></a>
@@ -201,8 +201,8 @@ With your runner online:
 3. **Build VI Package**
      - Produces `.vip` using the version computed in the **version** job for `full`/`pr-fast` profiles.
      - `release-priority` runs intentionally skip `build-vip`; publish artifacts come from Linux/Windows container packed-library jobs.
-    - Merged-PR merge-commit pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
-    - `workflow_dispatch` backfill publishing requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+    - Prerelease publication is manual-intent per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
+    - `workflow_dispatch` publishing requires `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
     - `release-priority` publish intent requires a successful `full` profile run on `develop` in the prior 24 hours.
     - **Pass** your **org/repo** info (e.g. `-CompanyName "AcmeCorp"` / `-AuthorName "AcmeCorp/IconEditor"`) to embed in the final package.
    - Artifacts appear in the run summary under **Artifacts**.

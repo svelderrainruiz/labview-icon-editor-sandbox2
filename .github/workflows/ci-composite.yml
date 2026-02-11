@@ -295,19 +295,16 @@ jobs:
             }
 
             if (context.eventName === 'push' && context.ref === 'refs/heads/develop') {
-              publishMode = 'auto';
+              publishMode = 'manual-intent';
+              shouldPublish = false;
               if (!isMergeCommit) {
-                shouldPublish = false;
-                publishReason = 'develop-push-not-merge-commit';
+                publishReason = 'manual-intent-required-develop-push-not-merge-commit';
               } else if (mergedPr) {
-                shouldPublish = true;
-                publishReason = 'develop-push-merged-pr-merge-commit';
+                publishReason = 'manual-intent-required-develop-push-merged-pr-detected';
               } else if (hasMergedDevelopPrAssociation) {
-                shouldPublish = false;
-                publishReason = 'develop-push-merged-pr-sha-mismatch';
+                publishReason = 'manual-intent-required-develop-push-merged-pr-sha-mismatch';
               } else {
-                shouldPublish = false;
-                publishReason = 'develop-push-no-merged-pr';
+                publishReason = 'manual-intent-required-develop-push-no-merged-pr';
               }
             } else if (context.eventName === 'workflow_dispatch') {
               publishMode = 'manual';
@@ -353,7 +350,7 @@ jobs:
             }
 
             const shouldDeriveMergedPrBump =
-              (context.eventName === 'push' && context.ref === 'refs/heads/develop' && shouldPublish && !!mergedPr) ||
+              (context.eventName === 'push' && context.ref === 'refs/heads/develop' && !!mergedPr) ||
               (context.eventName === 'workflow_dispatch' && publishInput && shouldPublish && !!mergedPr);
             if (shouldDeriveMergedPrBump) {
               const bumpInfo = deriveBumpFromLabels(mergedPr);
@@ -668,6 +665,10 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-CiPipelineSelectorDevModeContract.ps1" -WriteSummary
+      - name: Validate solo-maintainer workflow contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-SoloMaintainerWorkflowContract.ps1" -WriteSummary
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -2205,6 +2206,14 @@ jobs:
           name: prerelease-publish-status
           path: builds/status/prerelease-publish.json
           if-no-files-found: error
+
+      - name: Upload solo release evidence (if present)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solo-release-evidence
+          path: builds/status/solo-release-evidence.json
+          if-no-files-found: warn
 
   pipeline-contract:
     name: Pipeline Contract
