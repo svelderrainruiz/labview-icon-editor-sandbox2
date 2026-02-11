@@ -641,7 +641,7 @@ jobs:
   # Stage 3: Self-hosted LabVIEW validation/build chain (profile-gated).
 
   unit-tests:
-    name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
+    name: Test Source Using LV ${{ matrix.bitness }}-bit
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
     needs: [run-metadata, prerelease-context, version-gate, changes]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -667,7 +667,7 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
+      - name: Test Source Using LV ${{ matrix.bitness }}-bit
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
