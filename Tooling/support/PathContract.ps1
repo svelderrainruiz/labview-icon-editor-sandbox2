@@ -1,4 +1,7 @@
-#Requires -Version 7.0
+# NOTE: This helper is imported by Tooling/container-parity/runlabview-windows.ps1
+# inside NI Windows containers via powershell.exe (Windows PowerShell 5.1).
+# Keep this file compatible with Windows PowerShell 5.1 and do not add
+# #Requires -Version at file scope.
 <#
 .SYNOPSIS
     Shared path root contract helpers for host and container scripts.

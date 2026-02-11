@@ -112,6 +112,25 @@ foreach ($relativePath in $contractScriptList) {
     }
 }
 
+$pathContractRelativePath = 'Tooling/support/PathContract.ps1'
+$pathContractFullPath = Join-Path -Path $repoRootPath -ChildPath $pathContractRelativePath
+if (Test-Path -LiteralPath $pathContractFullPath -PathType Leaf) {
+    $lineItems = Get-Content -LiteralPath $pathContractFullPath -ErrorAction Stop
+    $lineNumber = 0
+    foreach ($lineText in $lineItems) {
+        $lineNumber++
+        if ($lineText -match '^\s*#\s*requires\s+-version\b') {
+            $violationList.Add([pscustomobject]@{
+                    Type    = 'windows-container-shell-compat'
+                    File    = ($pathContractRelativePath -replace '\\', '/')
+                    Line    = $lineNumber
+                    Pattern = '#Requires -Version'
+                    Message = 'PathContract helper is imported by Windows container parity under powershell 5.1; do not add #Requires -Version.'
+                }) | Out-Null
+        }
+    }
+}
+
 if ($WriteSummary -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
     if ($violationList.Count -eq 0) {
         @(
