@@ -640,7 +640,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        bitness: ${{ fromJson(needs.prerelease-context.outputs.ci_profile == 'full' && '["64","32"]' || '["64"]') }}
+        bitness: ${{ fromJson(needs.prerelease-context.outputs.ci_profile == 'full' && '["32","64"]' || '["64"]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -653,6 +653,14 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
+      - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & ".github\\actions\\set-development-mode\\Set_Development_Mode.ps1" `
+            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
+            -SupportedBitness ${{ matrix.bitness }} `
+            -RepoRoot "$env:REPO_ROOT"
       - name: Run LabVIEWCLI cache-clear + mass compile preflight (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -672,6 +680,8 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
+          revert_dev_mode: 'true'
+          revert_bitness: ${{ matrix.bitness }}
           close_labview: 'true'
           close_bitness: ${{ matrix.bitness }}
 
