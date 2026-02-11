@@ -115,7 +115,7 @@ function Get-LabVIEWInstallRoot {
     return $null
 }
 
-function Resolve-LabVIEWTcpSettings {
+function Resolve-LabVIEWTcpSetting {
     param(
         [string]$IniPath
     )
@@ -239,7 +239,7 @@ function Resolve-CompileTarget {
     }
 }
 
-function Get-LabVIEWCliTempLogs {
+function Get-LabVIEWCliTempLogPath {
     return @(
         Get-ChildItem -Path ([System.IO.Path]::GetTempPath()) -Filter 'lvtemporary_*.log' -File -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTimeUtc -Descending |
@@ -247,14 +247,14 @@ function Get-LabVIEWCliTempLogs {
     )
 }
 
-function Save-NewLabVIEWCliLogs {
+function Save-NewLabVIEWCliLog {
     param(
         [string]$OperationName,
         [string[]]$BeforeLogs,
         [string]$DestinationRoot
     )
 
-    $afterLogs = @(Get-LabVIEWCliTempLogs)
+    $afterLogs = @(Get-LabVIEWCliTempLogPath)
     $newLogs = @()
     foreach ($path in $afterLogs) {
         if ($BeforeLogs -notcontains $path) {
@@ -291,7 +291,7 @@ function Invoke-LabVIEWCliOperation {
         [string]$LabVIEWCliLogRoot
     )
 
-    $beforeLogs = @(Get-LabVIEWCliTempLogs)
+    $beforeLogs = @(Get-LabVIEWCliTempLogPath)
     $start = Get-Date
     $rawOutput = & $LabVIEWCliPath @Arguments 2>&1
     $exitCode = $LASTEXITCODE
@@ -306,7 +306,7 @@ function Invoke-LabVIEWCliOperation {
         }
     }
 
-    $capturedLogs = Save-NewLabVIEWCliLogs -OperationName $OperationName -BeforeLogs $beforeLogs -DestinationRoot $LabVIEWCliLogRoot
+    $capturedLogs = Save-NewLabVIEWCliLog -OperationName $OperationName -BeforeLogs $beforeLogs -DestinationRoot $LabVIEWCliLogRoot
 
     return [pscustomobject]@{
         operation = $OperationName
@@ -318,7 +318,7 @@ function Invoke-LabVIEWCliOperation {
     }
 }
 
-function Normalize-ExcludePatterns {
+function ConvertTo-ExcludePattern {
     param(
         [string[]]$Patterns
     )
@@ -339,7 +339,7 @@ function Normalize-ExcludePatterns {
     return @($normalized.ToArray())
 }
 
-function Apply-StagingExclusions {
+function Remove-StagingExcludedItem {
     param(
         [string]$StagingRoot,
         [string[]]$Patterns
@@ -363,8 +363,8 @@ function Apply-StagingExclusions {
             continue
         }
 
-        $matches = @(Get-ChildItem -Path $StagingRoot -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq $pattern })
-        foreach ($item in $matches) {
+        $matchedItems = @(Get-ChildItem -Path $StagingRoot -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq $pattern })
+        foreach ($item in $matchedItems) {
             Write-Host ("Excluding staged item: {0}" -f $item.FullName)
             Remove-Item -Path $item.FullName -Recurse -Force
             $removed.Add($item.FullName)
@@ -427,7 +427,7 @@ if (-not (Test-Path -Path $labviewPath)) {
     throw "LabVIEW executable not found at $labviewPath"
 }
 
-$tcpSettings = Resolve-LabVIEWTcpSettings -IniPath (Join-Path $installRoot 'LabVIEW.ini')
+$tcpSettings = Resolve-LabVIEWTcpSetting -IniPath (Join-Path $installRoot 'LabVIEW.ini')
 if (-not $tcpSettings.Enabled) {
     throw ("VI Server TCP is disabled for {0} according to {1}. Enable server.tcp.enabled before running preflight." -f $labviewPath, $tcpSettings.IniPath)
 }
@@ -454,7 +454,7 @@ $summaryPath = Join-Path $artifactRoot 'summary.json'
 $stagingDir = Join-Path ([System.IO.Path]::GetTempPath()) ("lvie-masscompile-{0}" -f [Guid]::NewGuid().ToString('N'))
 New-Item -Path $stagingDir -ItemType Directory -Force | Out-Null
 
-$normalizedExcludes = Normalize-ExcludePatterns -Patterns $ExcludeFiles
+$normalizedExcludes = ConvertTo-ExcludePattern -Patterns $ExcludeFiles
 $failure = $null
 $summary = [ordered]@{
     timestamp_utc = (Get-Date).ToUniversalTime().ToString('o')
@@ -506,7 +506,7 @@ try {
         Copy-Item -Path $item.FullName -Destination $stagingDir -Recurse -Force
     }
 
-    $removedExclusions = Apply-StagingExclusions -StagingRoot $stagingDir -Patterns $normalizedExcludes
+    $removedExclusions = Remove-StagingExcludedItem -StagingRoot $stagingDir -Patterns $normalizedExcludes
     $summary['removed_exclusions'] = $removedExclusions
 
     $closeBefore = Invoke-LabVIEWCliOperation -LabVIEWCliPath $labviewCliPath -OperationName 'CloseLabVIEW-before' -Arguments @(
