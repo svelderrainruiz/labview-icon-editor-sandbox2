@@ -77,6 +77,20 @@ Describe 'Test-CiPipelineSelectorDevModeContract.ps1' {
         { & $Script:GuardScript -RepoRoot $Script:TempDir } | Should -Throw '*workflow-devmode-smoke-job*'
     }
 
+    It 'passes in ci-only scope when ci-composite.yml is missing' {
+        $ciCompositePath = Join-Path $Script:TempDir '.github\workflows\ci-composite.yml'
+        Remove-Item -LiteralPath $ciCompositePath -Force
+
+        { & $Script:GuardScript -RepoRoot $Script:TempDir -Scope ci-only } | Should -Not -Throw
+    }
+
+    It 'fails in all scope when ci-composite.yml is missing' {
+        $ciCompositePath = Join-Path $Script:TempDir '.github\workflows\ci-composite.yml'
+        Remove-Item -LiteralPath $ciCompositePath -Force
+
+        { & $Script:GuardScript -RepoRoot $Script:TempDir -Scope all } | Should -Throw '*missing-target-file*'
+    }
+
     It 'fails when runlabview-windows.ps1 contains selector plumbing' {
         $windowsScriptPath = Join-Path $Script:TempDir 'Tooling\container-parity\runlabview-windows.ps1'
         Add-Content -LiteralPath $windowsScriptPath -Value '$selectorViPath = ''Tooling\Run Icon Editor from Source Selector.vi'''
