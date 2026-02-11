@@ -4,6 +4,8 @@ This document lists the PowerShell scripts used to build, test, and distribute t
 
 Local entrypoints enforce short-path worktree usage by default. If a script fails because the repo is not under the worktree root, use `Tooling\New-CIWorktree.ps1` or `Tooling\Invoke-InWorktree.ps1`. Set `LVIE_SKIP_WORKTREE_ROOT_CHECK=1` or pass `-SkipWorktreeRootCheck` only when you intentionally want to bypass the guard.
 
+CI workflows can use a hybrid worktree model where `lvie-job-setup` resolves `LVIE_WORKTREE_ROOT` from `RUNNER_TEMP` (`worktree_root_mode: runner_temp`) while keeping runner contract roots (`LVIE_ARTIFACT_ROOT`, `LVIE_LOCK_ROOT`, `LVIE_LOG_ROOT`) under the stable runner work root. Local runs remain unchanged by default and continue to use `LVIE_WORKTREE_ROOT` or the local fallback (`C:\dev`).
+
 Per-run artifacts are written under `$WORKTREE_ROOT\artifacts\<runid>` when guardrails are active. Use `-RunId` or `-ArtifactRoot` to override, and `-CleanRoom` to purge known output folders before and after a run. Artifact roots are disabled by default inside GitHub Actions unless `LVIE_ENABLE_ARTIFACT_ROOT=1` (or an explicit `-ArtifactRoot`/`-RunId` is provided).
 
 ## Table of Contents
@@ -23,6 +25,7 @@ Per-run artifacts are written under `$WORKTREE_ROOT\artifacts\<runid>` when guar
 - [RevertDevelopmentMode.ps1](#revertdevelopmentmodeps1)
 - [RunUnitTests.ps1](#rununittestsps1)
 - [Run-CICompositeLocal.ps1](#run-cicompositelocalps1)
+- [Invoke-DevModeNoLabVIEWSmoke.ps1](#invoke-devmodenolabviewsmokeps1)
 - [Invoke-InWorktree.ps1](#invoke-inworktreeps1)
 - [WorktreeGuard.ps1](#worktreeguardps1)
 - [Invoke-Preflight.ps1](#invoke-preflightps1)
@@ -33,7 +36,7 @@ Per-run artifacts are written under `$WORKTREE_ROOT\artifacts\<runid>` when guar
 Adds a custom `LocalHost.LibraryPaths` token to the LabVIEW INI file so LabVIEW can find project libraries during development or builds. This script depends on `Tooling/deployment/Create_LV_INI_Token.vi`, which is not present in this repository, so it is not used by the development-mode automation.
 
 ## ApplyVIPC.ps1
-Applies a `.vipc` **VI Package Configuration** to a specific LabVIEW version and bitness using g-cli. The `.vipc` is applied via VIPM and ensures required LabVIEW dependencies (including the G-CLI VIPM package) are installed before building.
+Applies a `.vipc` **VI Package Configuration** to a specific LabVIEW version and bitness using g-cli. The `.vipc` is applied via VIPM and ensures required LabVIEW dependencies (including the G-CLI VIPM package) are installed before building. If `-LabVIEWVersion` is omitted or empty, the script resolves the version from `.lvversion` and logs a warning.
 
 ## Build.ps1
 Top-level script that orchestrates the full build. Cleans previous outputs, builds packed libraries for 32-bit and 64-bit, updates metadata, and produces the final `.vip` package. Depends on many of the other scripts listed here.
@@ -64,15 +67,20 @@ Runs `RestoreSetupLVSource.vi` to unzip the LabVIEW Icon API, restore `lv_icon.s
 
 ## Set_Development_Mode.ps1
 Configures the repository for development by invoking `Prepare_LabVIEW_source.ps1` for both bitnesses. Accepts `-ConnectTimeoutMs` and `-ProcessTimeoutMs` to pass through to g-cli.
+In no-LabVIEW mode, automation enforces a strict `Localhost.LibraryPaths` contract: exactly one entry is written, and it is the repo root/workspace path.
 
 ## RevertDevelopmentMode.ps1
 Undoes development mode by invoking `RestoreSetupLVSource.ps1` for both bitnesses. Helpful when leaving development or before distributing a build. Accepts `-ConnectTimeoutMs` and `-ProcessTimeoutMs` to pass through to g-cli.
+In no-LabVIEW mode, automation removes `Localhost.LibraryPaths` entirely (zero entries) rather than preserving pre-existing custom values.
 
 ## RunUnitTests.ps1
-Runs unit tests through g-cli and outputs a table of results. Requires an explicit `.lvproj` path via `-ProjectPath`. Ensure the LUnit dependency is installed for the selected bitness (apply `runner_dependencies.vipc` for both 32-bit and 64-bit). Used in CI workflows.
+Runs unit tests through LabVIEWCLI (`-OperationName LUnit`) and outputs a table of results. Requires an explicit `.lvproj` path via `-ProjectPath`. Optional g-cli fallback can be enabled with `-EnableGcliFallback`. Escape hatch: set `LVIE_LUNIT_BACKEND=gcli` (or `LVIE_FORCE_GCLI_LUNIT=1`) to bypass LabVIEWCLI and run `g-cli lunit` directly. The script resolves LabVIEWCLI `-PortNumber` from `LVIE_LUNIT_PORT_<BITNESS>`, then `LVIE_LUNIT_PORT`, then `LabVIEW.ini` (`server.tcp.port`), then default `3363`. It resolves the `LUnit` operation root from `LVIE_LUNIT_OPERATION_DIR_<BITNESS>`, then `LVIE_LUNIT_OPERATION_DIR`, then the default LabVIEW CLI operations directory, then VIPM `astemes_lib_lunit_cli/files-installed` hints; when the root is non-default it passes `-AdditionalOperationDirectory`. Ensure `astemes_lib_lunit` and `astemes_lib_lunit_cli` are installed for LabVIEWCLI mode; install `sas_workshops_lib_lunit_for_g_cli` when forced g-cli mode or fallback mode is used (apply `runner_dependencies.vipc` for both 32-bit and 64-bit). Used in CI workflows.
 
 ## Run-CICompositeLocal.ps1
-Runs a local CI parity sequence based on `ci-composite.yml`. This script validates Verify IE Paths, applies VIPC dependencies, runs missing-in-project checks and unit tests for the LabVIEW version declared in `.lvversion` (defaulting to 2021/21.0), 32- and 64-bit, builds packed libraries, and produces the VI package using the 64-bit install of that version. The script always runs both 64-bit and 32-bit steps for the selected LabVIEW version, and most steps can be skipped via switches. Outputs are stored under `TestResults/ci-local`. Use `-ConnectTimeoutMs`, `-ProcessTimeoutMs`, and `-StatusFileTimeoutMs` to tune g-cli and status-file timing for your machine.
+Runs a local CI parity sequence based on `ci-composite.yml`. This script validates Verify IE Paths, applies VIPC dependencies, runs the required DevMode.NoLabVIEW smoke gate, then runs missing-in-project checks and unit tests for the LabVIEW version declared in `.lvversion` (defaulting to 2021/21.0), 32- and 64-bit, builds packed libraries, and produces the VI package using the 64-bit install of that version. The script always runs both 64-bit and 32-bit steps for the selected LabVIEW version, and most steps can be skipped via switches. Use `-SkipDevModeNoLabVIEWSmoke` to bypass the smoke stage and `-DevModeNoLabVIEWSmokeDepth minimal|balanced|full` to tune coverage depth. Use `-ForceGcliLunit` to force g-cli as the primary unit-test backend during parity runs. Before smoke/parity execution, `lv_icon_editor.lvproj` must be clean or the run fails fast. Outputs are stored under `TestResults/ci-local`. Use `-ConnectTimeoutMs`, `-ProcessTimeoutMs`, and `-StatusFileTimeoutMs` to tune g-cli and status-file timing for your machine.
+
+## Invoke-DevModeNoLabVIEWSmoke.ps1
+Runs the dedicated DevMode.NoLabVIEW smoke gate outside of full parity. By default it runs the balanced suite (`DevMode.NoLabVIEW`, `MissingInProject.DevMode.NoLabVIEW.Integration`, and `LUnit.DevMode.NoLabVIEW.Integration`) and enforces integration coverage guards so fully skipped integration smoke fails the gate. The script requires `lv_icon_editor.lvproj` to be clean before execution, loads Pester 5+ (installing in `CurrentUser` scope when needed), and sets `LVIE_SKIP_DEVMODE_PROCESS_CHECK=1` for smoke-stage no-LabVIEW toggles. When the requested suite requires integration coverage but the runner cannot write to the LabVIEW Icon API install path, you can allow automatic downgrade to `minimal` depth by setting `LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE=1` (or by using `LVIE_RUNNER_ACL_WARN_ONLY=1`). Outputs are written to `TestResults/devmode-no-labview-smoke` as NUnit XML plus text/json summaries.
 
 ## Invoke-InWorktree.ps1
 Creates a short-path worktree and runs a command or script from that path. Use this when you want to keep artifacts isolated without manually creating worktrees. Accepts either `-Command` or `-ScriptPath`/`-ScriptArguments` and will reuse the configured worktree root.
@@ -83,6 +91,4 @@ Shared helper used by local entrypoints to enforce that `RepoRoot` is under the 
 ## Invoke-Preflight.ps1
 Shared preflight used by local entrypoints. Enforces worktree root usage, creates per-run artifact roots, logs run context, and supports `-AutoWorktree` and `-CleanRoom` options.
 
-## Run-CICompositeLocal.ps1
-Runs a local CI parity sequence based on `ci-composite.yml`. This script validates Verify IE Paths, applies VIPC dependencies, runs missing-in-project checks and unit tests for LabVIEW 2021 (32- and 64-bit), builds packed libraries, and produces the VI package using LabVIEW 2021 (64-bit). The script always runs both 64-bit and 32-bit steps for LabVIEW 2021, and most steps can be skipped via switches. Outputs are stored under `TestResults/ci-local`. Use `-ConnectTimeoutMs`, `-ProcessTimeoutMs`, and `-StatusFileTimeoutMs` to tune g-cli and status-file timing for your machine.
 
