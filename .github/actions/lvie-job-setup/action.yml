@@ -143,7 +143,16 @@ runs:
           throw "Repo root not found: $repoRoot"
         }
         $repoRoot = (Resolve-Path -Path $repoRoot -ErrorAction Stop).Path
-        $projectPath = Join-Path $repoRoot 'lv_icon_editor.lvproj'
+        $projectRelativePath = if ([string]::IsNullOrWhiteSpace($env:LVIE_PROJECT_RELATIVE_PATH)) {
+          'lv_icon_editor.lvproj'
+        } else {
+          $env:LVIE_PROJECT_RELATIVE_PATH
+        }
+        $projectPath = if ([System.IO.Path]::IsPathRooted($projectRelativePath)) {
+          $projectRelativePath
+        } else {
+          Join-Path $repoRoot $projectRelativePath
+        }
         if (-not (Test-Path -Path $projectPath)) {
           throw "Project file not found at $projectPath"
         }
@@ -155,6 +164,9 @@ runs:
         if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) {
           throw "GITHUB_ENV not set; cannot export REPO_ROOT."
         }
+        "LVIE_REPO_ROOT=$repoRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+        "LVIE_PROJECT_RELATIVE_PATH=$projectRelativePath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+        "LVIE_PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
         "REPO_ROOT=$repoRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
         "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
         "LABVIEW_VERSION_RAW=$($lvInfo.Raw)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
