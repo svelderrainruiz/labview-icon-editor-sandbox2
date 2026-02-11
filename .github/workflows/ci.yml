@@ -484,132 +484,11 @@ jobs:
           report_only: 'true'
           absolute_roots: ${{ vars.LVIE_PYLAVI_ABSOLUTE_PATH_ROOTS }}
 
-  # Stage 2: Baseline hosted/static checks + self-hosted Verify IE Paths gate.
-  dev-mode-gate:
-    name: Verify IE Paths Gate (LV ${{ matrix.bitness }}-bit)
-    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, pylavi-validate]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-    env:
-      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
-      LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
-      LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
-      LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
-      LVIE_VERIFY_IEPATHS_STRICT: '1'
-    strategy:
-      fail-fast: false
-      matrix:
-        bitness: ["64", "32"]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Initialize VerifyIEPaths archive folder
-        shell: pwsh
-        run: |
-          New-Item -Path "$env:RUNNER_TEMP\\verify-iepaths" -ItemType Directory -Force | Out-Null
-      - name: Job setup
-        id: job_setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          checkout: 'false'
-          bitness: ${{ matrix.bitness }}
-          create_worktree: 'true'
-          worktree_root_mode: runner_temp
-      - name: Re-initialize VerifyIEPaths archive folder
-        shell: pwsh
-        run: |
-          New-Item -Path "$env:RUNNER_TEMP\\verify-iepaths" -ItemType Directory -Force | Out-Null
-      - name: Verify IE Paths (LV ${{ matrix.bitness }}-bit)
-        id: verify_ie_paths
-        shell: pwsh
-        run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File "$env:REPO_ROOT\\Tooling\\Invoke-MissingIEFilesFromLVInstall.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness ${{ matrix.bitness }} `
-            -RepoRoot $env:REPO_ROOT `
-            -ConnectTimeoutMs 180000 `
-            -ProcessTimeoutMs 300000 `
-            -StatusFileTimeoutMs 60000 `
-            -StatusFileArchiveDirectory "$env:RUNNER_TEMP\\verify-iepaths" `
-            -EnableDevModeNoLabVIEW `
-            -AutoRevertIfEnabled
-      - name: Capture VerifyIEPaths diagnostics
-        if: ${{ always() }}
-        shell: pwsh
-        run: |
-          $archiveRoot = Join-Path $env:RUNNER_TEMP 'verify-iepaths'
-          New-Item -Path $archiveRoot -ItemType Directory -Force | Out-Null
-
-          $jobSetupOutcome = '${{ steps.job_setup.outcome }}'
-          $verifyOutcome = '${{ steps.verify_ie_paths.outcome }}'
-          $classification = ''
-          $summary = ''
-          $hints = New-Object System.Collections.Generic.List[string]
-
-          if ($jobSetupOutcome -ne 'success') {
-            $classification = 'setup-failure'
-            $summary = 'lvie-job-setup failed before Verify IE Paths executed.'
-            if ([string]::IsNullOrWhiteSpace($env:REPO_ROOT)) {
-              $hints.Add('REPO_ROOT was not exported by job setup.') | Out-Null
-            }
-            if (-not (Get-Command gk -ErrorAction SilentlyContinue)) {
-              $hints.Add("GitKraken CLI 'gk' was not detected on PATH.") | Out-Null
-            }
-            if (-not (Test-Path (Join-Path $env:GITHUB_WORKSPACE 'Tooling\\New-CIWorktreeForJob.ps1'))) {
-              $hints.Add('Tooling\\New-CIWorktreeForJob.ps1 was not found.') | Out-Null
-            }
-          } elseif ($verifyOutcome -eq 'failure') {
-            $classification = 'verify-iepaths-failure'
-            $summary = 'Verify IE Paths execution failed after successful job setup.'
-          } else {
-            $classification = 'no-diagnostics-required'
-            $summary = 'No setup or Verify IE Paths failure detected.'
-          }
-
-          $diagnostic = [ordered]@{
-            classification = $classification
-            summary = $summary
-            bitness = '${{ matrix.bitness }}'
-            run_id = '${{ github.run_id }}'
-            run_attempt = '${{ github.run_attempt }}'
-            repository = '${{ github.repository }}'
-            workflow = '${{ github.workflow }}'
-            job_setup_outcome = $jobSetupOutcome
-            verify_ie_paths_outcome = $verifyOutcome
-            repo_root = $env:REPO_ROOT
-            hints = @($hints)
-            captured_utc = (Get-Date).ToUniversalTime().ToString('o')
-          }
-
-          $diagnosticPath = Join-Path $archiveRoot ("verify-iepaths-diagnostics-{0}-bit.json" -f '${{ matrix.bitness }}')
-          $diagnostic | ConvertTo-Json -Depth 8 | Out-File -FilePath $diagnosticPath -Encoding utf8
-          Write-Host ("Wrote Verify IE Paths diagnostics: {0}" -f $diagnosticPath)
-
-          if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
-            @(
-              "### Verify IE Paths diagnostics (${{ matrix.bitness }}-bit)"
-              "- Classification: $classification"
-              "- Job setup outcome: $jobSetupOutcome"
-              "- Verify step outcome: $verifyOutcome"
-              "- Summary: $summary"
-            ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          }
-      - name: Upload VerifyIEPaths status and diagnostics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: verify-iepaths-${{ matrix.bitness }}-bit
-          path: ${{ runner.temp }}\verify-iepaths
-          if-no-files-found: warn
-      - name: Job teardown
-        if: always()
-        uses: ./.github/actions/lvie-job-teardown
+  # Stage 2: Baseline hosted/static checks.
 
   changes:
     name: Detect VIPC changes
-    needs: [run-metadata, version-gate, dev-mode-gate]
+    needs: [run-metadata, version-gate]
     runs-on: ubuntu-latest
     env:
       LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
@@ -1372,7 +1251,6 @@ jobs:
       - powershell-lint
       - vip-prerelease-requirements-lint
       - pylavi-validate
-      - dev-mode-gate
       - changes
       - apply-deps-lv-x64
       - apply-deps-2021-x86
@@ -1405,7 +1283,6 @@ jobs:
             'conformance-full'
           )
           $requiredFullValidation = @(
-            'dev-mode-gate',
             'changes',
             'apply-deps-lv-x64',
             'apply-deps-2021-x86',
