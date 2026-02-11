@@ -146,42 +146,53 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $repoRoot = $env:GITHUB_WORKSPACE
-          $cliPath = Join-Path $env:RUNNER_TEMP 'runner-cli' 'runner-cli'
-          if (Test-Path $cliPath) {
-            Write-Host "Using prebuilt runner-cli artifact (incremental migration)."
-            chmod +x $cliPath
-            $json = & $cliPath version-gate --repo-root $repoRoot --json
-            $exitCode = $LASTEXITCODE
-            if ($exitCode -ne 0) {
-              exit $exitCode
-            }
-            $info = $json | ConvertFrom-Json
-          } else {
-            $runnerCliProject = Join-Path $repoRoot 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
-            $canUseRunnerCli = (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject)
-            if ($canUseRunnerCli) {
-            Write-Host "Using runner-cli version-gate (incremental migration)."
+          $runnerCliProject = Join-Path $repoRoot 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
+          $canUseRunnerCli = (Get-Command dotnet -ErrorAction SilentlyContinue) -and (Test-Path $runnerCliProject)
+          if ($canUseRunnerCli) {
+            Write-Host "Using runner-cli version-gate (RID-aware path discovery)."
             dotnet build $runnerCliProject --configuration Release | Out-Host
             if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
             }
-            $runnerCliDll = Join-Path (Split-Path $runnerCliProject) 'bin/Release/net8.0/runner-cli.dll'
-            if (-not (Test-Path $runnerCliDll)) {
-              throw "Runner CLI build succeeded but binary not found: $runnerCliDll"
+
+            $buildRoot = Join-Path (Split-Path $runnerCliProject) 'bin/Release'
+            $candidates = Get-ChildItem -Path $buildRoot -Recurse -File -Filter 'runner-cli.dll' -ErrorAction SilentlyContinue | Where-Object {
+              $_.FullName -match '[\\/]net8\.0([\\/]|$)' -or $_.FullName -match '[\\/]net8\.0-[^\\/]+[\\/]'
             }
+            if (-not $candidates) {
+              throw "Runner CLI build succeeded but no runner-cli.dll was found under $buildRoot (expected net8.0* output)."
+            }
+
+            $preferredRid = 'linux-x64'
+            $ridPattern = "[\\/]{0}[\\/]" -f [regex]::Escape($preferredRid)
+            $preferredCandidates = $candidates | Where-Object { $_.FullName -match $ridPattern }
+            $selected = $preferredCandidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+            if (-not $selected) {
+              $selected = $candidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+            }
+            if (-not $selected) {
+              throw "Runner CLI candidate resolution failed unexpectedly under $buildRoot."
+            }
+
+            if ($candidates.Count -gt 1) {
+              $candidateList = ($candidates | Sort-Object FullName | ForEach-Object { " - $($_.FullName)" }) -join [Environment]::NewLine
+              Write-Host ("runner-cli.dll candidates:`n{0}" -f $candidateList)
+            }
+            $runnerCliDll = $selected.FullName
+            Write-Host ("Resolved runner-cli.dll: {0}" -f $runnerCliDll)
+
             $json = & dotnet $runnerCliDll version-gate --repo-root $repoRoot --json
             $exitCode = $LASTEXITCODE
             if ($exitCode -ne 0) {
               exit $exitCode
             }
             $info = $json | ConvertFrom-Json
-            } else {
-              if ($env:LVIE_REQUIRE_RUNNER_CLI -eq '1') {
-                throw "LVIE_REQUIRE_RUNNER_CLI=1 but runner-cli was not available."
-              }
-              Write-Warning "runner-cli unavailable; falling back to Assert-LabVIEWVersion.ps1."
-              $info = & "$repoRoot/Tooling/Assert-LabVIEWVersion.ps1" -RepoRoot $repoRoot -Context 'ci-version-gate' -WriteSummary
+          } else {
+            if ($env:LVIE_REQUIRE_RUNNER_CLI -eq '1') {
+              throw "LVIE_REQUIRE_RUNNER_CLI=1 but runner-cli was not available."
             }
+            Write-Warning "runner-cli unavailable; falling back to Assert-LabVIEWVersion.ps1."
+            $info = & "$repoRoot/Tooling/Assert-LabVIEWVersion.ps1" -RepoRoot $repoRoot -Context 'ci-version-gate' -WriteSummary
           }
           Write-Warning ("labview_version not provided; using .lvversion ({0})." -f $info.Raw)
           "raw=$($info.Raw)" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
@@ -206,34 +217,68 @@ jobs:
           dotnet-version: '8.0.x'
       - id: evidence
         name: Run Core JSON checks (linux)
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          runner_cli_project="${GITHUB_WORKSPACE}/Tooling/runner-cli/RunnerCli/RunnerCli.csproj"
-          if [ ! -f "$runner_cli_project" ]; then
-            echo "runner-cli project missing at ${runner_cli_project}" >&2
-            exit 1
-          fi
-          dotnet build "$runner_cli_project" --configuration Release
-          cli_dll="${GITHUB_WORKSPACE}/Tooling/runner-cli/RunnerCli/bin/Release/net8.0/runner-cli.dll"
-          if [ ! -f "$cli_dll" ]; then
-            echo "runner-cli binary missing at ${cli_dll}" >&2
-            exit 1
-          fi
-          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          evidence="core-linux:${run_url}:attempt-${GITHUB_RUN_ATTEMPT}"
-          dotnet "$cli_dll" version-gate --repo-root "$GITHUB_WORKSPACE" --json > "${RUNNER_TEMP}/core-linux-version-gate.json"
-          dotnet "$cli_dll" pylavi summarize --path "$GITHUB_WORKSPACE/Tooling/pylavi/fixtures/pylavi-offenders.sample.json" --json > "${RUNNER_TEMP}/core-linux-pylavi-summarize.json"
-          cat > "${RUNNER_TEMP}/core-conformance-linux-evidence.json" <<JSON
-          {
-            "platform": "linux",
-            "run_url": "${run_url}",
-            "evidence": "${evidence}",
-            "version_gate_json": "${RUNNER_TEMP}/core-linux-version-gate.json",
-            "pylavi_summarize_json": "${RUNNER_TEMP}/core-linux-pylavi-summarize.json"
+          $ErrorActionPreference = 'Stop'
+          $runnerCliProject = Join-Path $env:GITHUB_WORKSPACE 'Tooling/runner-cli/RunnerCli/RunnerCli.csproj'
+          if (-not (Test-Path $runnerCliProject)) {
+            throw "runner-cli project missing at $runnerCliProject"
           }
-          JSON
-          echo "value=${evidence}" >> "$GITHUB_OUTPUT"
+          dotnet build $runnerCliProject --configuration Release | Out-Host
+          if ($LASTEXITCODE -ne 0) {
+            throw "runner-cli build failed with exit code $LASTEXITCODE"
+          }
+
+          $buildRoot = Join-Path (Split-Path $runnerCliProject) 'bin/Release'
+          $candidates = Get-ChildItem -Path $buildRoot -Recurse -File -Filter 'runner-cli.dll' -ErrorAction SilentlyContinue | Where-Object {
+            $_.FullName -match '[\\/]net8\.0([\\/]|$)' -or $_.FullName -match '[\\/]net8\.0-[^\\/]+[\\/]'
+          }
+          if (-not $candidates) {
+            throw "runner-cli build succeeded but no runner-cli.dll was found under $buildRoot (expected net8.0* output)."
+          }
+
+          $preferredRid = 'linux-x64'
+          $ridPattern = "[\\/]{0}[\\/]" -f [regex]::Escape($preferredRid)
+          $preferredCandidates = $candidates | Where-Object { $_.FullName -match $ridPattern }
+          $selected = $preferredCandidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          if (-not $selected) {
+            $selected = $candidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          }
+          if (-not $selected) {
+            throw "runner-cli candidate resolution failed unexpectedly under $buildRoot."
+          }
+
+          if ($candidates.Count -gt 1) {
+            $candidateList = ($candidates | Sort-Object FullName | ForEach-Object { " - $($_.FullName)" }) -join [Environment]::NewLine
+            Write-Host ("runner-cli.dll candidates:`n{0}" -f $candidateList)
+          }
+          $cli = $selected.FullName
+          Write-Host ("Resolved runner-cli.dll: {0}" -f $cli)
+
+          $runUrl = "{0}/{1}/actions/runs/{2}" -f $env:GITHUB_SERVER_URL, $env:GITHUB_REPOSITORY, $env:GITHUB_RUN_ID
+          $evidence = "core-linux:{0}:attempt-{1}" -f $runUrl, $env:GITHUB_RUN_ATTEMPT
+          $versionOut = Join-Path $env:RUNNER_TEMP 'core-linux-version-gate.json'
+          $pylaviOut = Join-Path $env:RUNNER_TEMP 'core-linux-pylavi-summarize.json'
+          $evidenceOut = Join-Path $env:RUNNER_TEMP 'core-conformance-linux-evidence.json'
+
+          & dotnet $cli version-gate --repo-root $env:GITHUB_WORKSPACE --json | Out-File -FilePath $versionOut -Encoding utf8
+          if ($LASTEXITCODE -ne 0) {
+            throw "runner-cli version-gate failed with exit code $LASTEXITCODE"
+          }
+          & dotnet $cli pylavi summarize --path (Join-Path $env:GITHUB_WORKSPACE 'Tooling/pylavi/fixtures/pylavi-offenders.sample.json') --json | Out-File -FilePath $pylaviOut -Encoding utf8
+          if ($LASTEXITCODE -ne 0) {
+            throw "runner-cli pylavi summarize failed with exit code $LASTEXITCODE"
+          }
+
+          $payload = [ordered]@{
+            platform = 'linux'
+            run_url = $runUrl
+            evidence = $evidence
+            version_gate_json = $versionOut
+            pylavi_summarize_json = $pylaviOut
+          }
+          $payload | ConvertTo-Json -Depth 5 | Out-File -FilePath $evidenceOut -Encoding utf8
+          "value=$evidence" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append -Encoding utf8
       - name: Upload Core conformance linux evidence
         uses: actions/upload-artifact@v4
         with:
@@ -271,10 +316,32 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "runner-cli build failed with exit code $LASTEXITCODE"
           }
-          $cli = Join-Path $env:GITHUB_WORKSPACE 'Tooling/runner-cli/RunnerCli/bin/Release/net8.0/runner-cli.dll'
-          if (-not (Test-Path $cli)) {
-            throw "runner-cli binary missing at $cli"
+
+          $buildRoot = Join-Path (Split-Path $runnerCliProject) 'bin/Release'
+          $candidates = Get-ChildItem -Path $buildRoot -Recurse -File -Filter 'runner-cli.dll' -ErrorAction SilentlyContinue | Where-Object {
+            $_.FullName -match '[\\/]net8\.0([\\/]|$)' -or $_.FullName -match '[\\/]net8\.0-[^\\/]+[\\/]'
           }
+          if (-not $candidates) {
+            throw "runner-cli build succeeded but no runner-cli.dll was found under $buildRoot (expected net8.0* output)."
+          }
+
+          $preferredRid = 'win-x64'
+          $ridPattern = "[\\/]{0}[\\/]" -f [regex]::Escape($preferredRid)
+          $preferredCandidates = $candidates | Where-Object { $_.FullName -match $ridPattern }
+          $selected = $preferredCandidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          if (-not $selected) {
+            $selected = $candidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          }
+          if (-not $selected) {
+            throw "runner-cli candidate resolution failed unexpectedly under $buildRoot"
+          }
+          if ($candidates.Count -gt 1) {
+            $candidateList = ($candidates | Sort-Object FullName | ForEach-Object { " - $($_.FullName)" }) -join [Environment]::NewLine
+            Write-Host ("runner-cli.dll candidates:`n{0}" -f $candidateList)
+          }
+          $cli = $selected.FullName
+          Write-Host ("Resolved runner-cli.dll: {0}" -f $cli)
+
           $runUrl = "{0}/{1}/actions/runs/{2}" -f $env:GITHUB_SERVER_URL, $env:GITHUB_REPOSITORY, $env:GITHUB_RUN_ID
           $evidence = "core-windows:${runUrl}:attempt-$($env:GITHUB_RUN_ATTEMPT)"
           $versionOut = Join-Path $env:RUNNER_TEMP 'core-windows-version-gate.json'
@@ -335,10 +402,32 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "runner-cli build failed with exit code $LASTEXITCODE"
           }
-          $cli = Join-Path $env:GITHUB_WORKSPACE 'Tooling/runner-cli/RunnerCli/bin/Release/net8.0/runner-cli.dll'
-          if (-not (Test-Path $cli)) {
-            throw "runner-cli binary missing at $cli"
+
+          $buildRoot = Join-Path (Split-Path $runnerCliProject) 'bin/Release'
+          $candidates = Get-ChildItem -Path $buildRoot -Recurse -File -Filter 'runner-cli.dll' -ErrorAction SilentlyContinue | Where-Object {
+            $_.FullName -match '[\\/]net8\.0([\\/]|$)' -or $_.FullName -match '[\\/]net8\.0-[^\\/]+[\\/]'
           }
+          if (-not $candidates) {
+            throw "runner-cli build succeeded but no runner-cli.dll was found under $buildRoot (expected net8.0* output)."
+          }
+
+          $preferredRid = 'linux-x64'
+          $ridPattern = "[\\/]{0}[\\/]" -f [regex]::Escape($preferredRid)
+          $preferredCandidates = $candidates | Where-Object { $_.FullName -match $ridPattern }
+          $selected = $preferredCandidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          if (-not $selected) {
+            $selected = $candidates | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          }
+          if (-not $selected) {
+            throw "runner-cli candidate resolution failed unexpectedly under $buildRoot"
+          }
+          if ($candidates.Count -gt 1) {
+            $candidateList = ($candidates | Sort-Object FullName | ForEach-Object { " - $($_.FullName)" }) -join [Environment]::NewLine
+            Write-Host ("runner-cli.dll candidates:`n{0}" -f $candidateList)
+          }
+          $cli = $selected.FullName
+          Write-Host ("Resolved runner-cli.dll: {0}" -f $cli)
+
           $outDir = Join-Path $env:RUNNER_TEMP 'conformance-full'
           New-Item -Path $outDir -ItemType Directory -Force | Out-Null
           $jsonPath = Join-Path $outDir 'conformance-full.json'
