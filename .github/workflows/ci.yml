@@ -496,6 +496,10 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-PathContract.ps1" -WriteSummary
+      - name: Validate CI selector/dev-mode contract
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/Tooling/Test-CiPipelineSelectorDevModeContract.ps1" -WriteSummary
       - name: Install PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -652,14 +656,6 @@ jobs:
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV 32-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github\\actions\\set-development-mode\\Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 32 `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Run LabVIEWCLI cache-clear + mass compile preflight (LV 32-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -679,7 +675,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: 32
           close_labview: 'true'
           close_bitness: 32
@@ -706,14 +701,6 @@ jobs:
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV 64-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github\\actions\\set-development-mode\\Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 64 `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Run LabVIEWCLI cache-clear + mass compile preflight (LV 64-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -733,7 +720,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: 64
           close_labview: 'true'
           close_bitness: 64
@@ -765,14 +751,6 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github\\actions\\set-development-mode\\Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness ${{ matrix.bitness }} `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Resolve LabVIEW project path
         id: proj
         shell: pwsh
@@ -822,7 +800,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: ${{ matrix.bitness }}
           close_labview: 'true'
           close_bitness: ${{ matrix.bitness }}
@@ -854,14 +831,6 @@ jobs:
           bitness: ${{ matrix.bitness }}
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV ${{ matrix.bitness }}-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness ${{ matrix.bitness }} `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Run Unit Tests (LV ${{ matrix.bitness }}-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -909,7 +878,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: ${{ matrix.bitness }}
           close_labview: 'true'
           close_bitness: ${{ matrix.bitness }}
@@ -936,14 +904,6 @@ jobs:
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV 32-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 32 `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Build PPL (LV 32-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -972,7 +932,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: 32
           close_labview: 'true'
           close_bitness: 32
@@ -999,14 +958,6 @@ jobs:
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Enable Development Mode (LV 64-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github/actions/set-development-mode/Set_Development_Mode.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 64 `
-            -RepoRoot "$env:REPO_ROOT"
       - name: Build PPL (LV 64-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
@@ -1035,7 +986,6 @@ jobs:
         if: always()
         uses: ./.github/actions/lvie-job-teardown
         with:
-          revert_dev_mode: 'true'
           revert_bitness: 64
           close_labview: 'true'
           close_bitness: 64

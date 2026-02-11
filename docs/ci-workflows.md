@@ -1,6 +1,6 @@
 # Local CI/CD Workflows
 
-**Last updated:** 2026-02-10
+**Last updated:** 2026-02-11
 
 Quick link: `.github/workflows/runner-cli.yml` (Runner CLI consolidated workflow).
 
@@ -34,6 +34,12 @@ Automating your Icon Editor builds and tests:
 - LabVIEW 2021 SP1 (32-bit and 64-bit) and LabVIEW 2023 (64-bit)
 - PowerShell 7+
 - Git for Windows
+
+### Issue 91 Reconciliation Note (2026-02-11)
+
+- Reconciled branch purpose: forward-port the `456-2020-migration` work onto the current CI/tooling baseline while removing CI selector/dev-mode coupling.
+- CI behavior change: `ci.yml`, `ci-composite.yml`, and container parity CI scripts no longer perform automatic selector mode set/unset or development-mode toggles.
+- Manual development mode support remains available through [`development-mode-toggle.yml`](../.github/workflows/development-mode-toggle.yml).
 
 ---
 
@@ -155,9 +161,8 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **prerelease-context** – computes prerelease publish eligibility, reason, merged-PR bump override context, and the execution profile (`ci_profile`: `release-priority`, `pr-fast`, `full`).
 - **changes** – checks out the repository and detects `.vipc` file changes to determine if dependencies need to be applied.
 - **apply-deps** – installs VIPC dependencies for multiple LabVIEW versions and bitnesses **only when** the `changes` job reports `.vipc` modifications (`if: needs.changes.outputs.vipc == 'true'`).
-- **devmode-no-labview-smoke** – no-LabVIEW smoke gate (full depth). Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
 - **version** – computes the semantic version and build number using commit count and PR labels.
-- **missing-in-project** – verifies every source file is referenced in the `.lvproj` (runs after the smoke gate). Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
+- **missing-in-project** – verifies every source file is referenced in the `.lvproj` (runs after dependency application). Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
 - **unit-tests** – runs LabVIEW unit tests on Windows in LabVIEW 2021 after missing-in-project. Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
   - Each matrix job appends a short `GITHUB_STEP_SUMMARY` line with the effective LUnit backend mode (`labviewcli` or `gcli`).
 - **build-ppl** – uses a matrix to build 32-bit and 64-bit packed libraries, then uses the `rename-file` action to append the bitness to each library’s filename.
