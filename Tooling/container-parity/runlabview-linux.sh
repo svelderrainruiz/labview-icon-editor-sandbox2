@@ -181,6 +181,7 @@ run_selector_mode() {
     -LabVIEWPath "$LABVIEW_PATH" \
     -PortNumber "$port" \
     -VIPath "$SELECTOR_VI_PATH" \
+    -Headless \
     "$mode"
 }
 
