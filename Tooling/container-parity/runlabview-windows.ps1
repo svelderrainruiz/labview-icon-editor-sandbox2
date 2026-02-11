@@ -156,6 +156,149 @@ function Resolve-LabVIEWCliPort {
     }
 }
 
+function Test-LabVIEWCliConnectionFailure {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$OutputText
+    )
+
+    if ([string]::IsNullOrWhiteSpace($OutputText)) {
+        return $false
+    }
+
+    return $OutputText -match '(?i)Error\s*code\s*:\s*-350000'
+}
+
+function Get-LabVIEWCliSelectorPortAttemptList {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$PrimaryPortNumber
+    )
+
+    $attemptPorts = New-Object System.Collections.Generic.List[int]
+    $seenPorts = @{}
+
+    foreach ($candidatePort in @($PrimaryPortNumber, 3370, 3363)) {
+        if ($candidatePort -lt 1 -or $candidatePort -gt 65535) {
+            continue
+        }
+
+        if ($seenPorts.ContainsKey($candidatePort)) {
+            continue
+        }
+
+        $attemptPorts.Add($candidatePort) | Out-Null
+        $seenPorts[$candidatePort] = $true
+    }
+
+    return @($attemptPorts.ToArray())
+}
+
+function Invoke-LabVIEWCliSelectorMode {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('set', 'unset')]
+        [string]$Mode,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWExecutablePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SelectorViAbsolutePath,
+
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$PrimaryPort,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WorkspaceRootPath
+    )
+
+    $attemptSummaries = New-Object System.Collections.Generic.List[string]
+    $lastResult = $null
+    $lastPortNumber = $null
+    $lastPortSource = $null
+    $sawConnectionFailure = $false
+
+    $portAttempts = @(Get-LabVIEWCliSelectorPortAttemptList -PrimaryPortNumber $PrimaryPort.PortNumber)
+    foreach ($portNumber in $portAttempts) {
+        $portSource = if ($portNumber -eq $PrimaryPort.PortNumber) {
+            $PrimaryPort.Source
+        } else {
+            "fallback:$portNumber"
+        }
+
+        Write-Output ("Running selector mode '{0}' via LabVIEWCLI on port {1} (source: {2})." -f $Mode, $portNumber, $portSource)
+        $selectorArgs = @(
+            '-LogToConsole', 'TRUE',
+            '-OperationName', 'RunVI',
+            '-LabVIEWPath', $LabVIEWExecutablePath,
+            '-PortNumber', $portNumber.ToString(),
+            '-VIPath', $SelectorViAbsolutePath,
+            '-Headless',
+            $Mode
+        )
+        $selectorResult = Invoke-LabVIEWCliOperation -OperationName ("Selector-{0}-Port{1}" -f $Mode, $portNumber) -Arguments $selectorArgs -WorkspaceRootPath $WorkspaceRootPath
+        $lastResult = $selectorResult
+        $lastPortNumber = $portNumber
+        $lastPortSource = $portSource
+
+        if ($selectorResult.ExitCode -eq 0) {
+            return [pscustomobject]@{
+                ExitCode         = 0
+                PortNumber       = $portNumber
+                PortSource       = $portSource
+                UsedImplicitPort = $false
+                Attempts         = @($attemptSummaries)
+            }
+        }
+
+        $attemptSummaries.Add(("port:{0} source:{1} exit:{2}" -f $portNumber, $portSource, $selectorResult.ExitCode)) | Out-Null
+        if (Test-LabVIEWCliConnectionFailure -OutputText $selectorResult.OutputText) {
+            $sawConnectionFailure = $true
+            continue
+        }
+
+        break
+    }
+
+    if ($sawConnectionFailure) {
+        Write-Warning ("Selector mode '{0}' failed to connect on explicit ports. Retrying without explicit -PortNumber." -f $Mode)
+        $implicitArgs = @(
+            '-LogToConsole', 'TRUE',
+            '-OperationName', 'RunVI',
+            '-LabVIEWPath', $LabVIEWExecutablePath,
+            '-VIPath', $SelectorViAbsolutePath,
+            '-Headless',
+            $Mode
+        )
+        $implicitResult = Invoke-LabVIEWCliOperation -OperationName ("Selector-{0}-ImplicitPort" -f $Mode) -Arguments $implicitArgs -WorkspaceRootPath $WorkspaceRootPath
+        $lastResult = $implicitResult
+        $lastPortNumber = $null
+        $lastPortSource = 'implicit-default'
+
+        if ($implicitResult.ExitCode -eq 0) {
+            return [pscustomobject]@{
+                ExitCode         = 0
+                PortNumber       = $null
+                PortSource       = 'implicit-default'
+                UsedImplicitPort = $true
+                Attempts         = @($attemptSummaries)
+            }
+        }
+
+        $attemptSummaries.Add(("port:implicit source:implicit-default exit:{0}" -f $implicitResult.ExitCode)) | Out-Null
+    }
+
+    return [pscustomobject]@{
+        ExitCode         = if ($null -eq $lastResult) { 1 } else { $lastResult.ExitCode }
+        PortNumber       = $lastPortNumber
+        PortSource       = $lastPortSource
+        UsedImplicitPort = $false
+        Attempts         = @($attemptSummaries)
+    }
+}
+
 function Sync-IconEditorSourcesForBuildSpec {
     param(
         [string]$WorkspaceRootPath,
@@ -277,13 +420,22 @@ function Invoke-LabVIEWCliOperation {
     )
 
     $beforeLogPaths = @(Get-LabVIEWCliTempLogPath)
-    & LabVIEWCLI @Arguments
+    $outputLines = & LabVIEWCLI @Arguments 2>&1
     $exitCode = $LASTEXITCODE
+    $outputText = if ($null -eq $outputLines) {
+        ''
+    } else {
+        @($outputLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+    }
+    if (-not [string]::IsNullOrWhiteSpace($outputText)) {
+        Write-Output $outputText
+    }
     $copiedLogs = Save-LabVIEWCliLog -WorkspaceRootPath $WorkspaceRootPath -OperationName $OperationName -BeforeLogPaths $beforeLogPaths
 
     return [pscustomobject]@{
         ExitCode   = $exitCode
         CopiedLogs = $copiedLogs
+        OutputText = $outputText
     }
 }
 
@@ -379,8 +531,12 @@ if (-not (Test-Path -LiteralPath $selectorViPath -PathType Leaf)) {
     Write-Error "Selector VI does not exist: $selectorViPath"
 }
 
-$selectorPort = Resolve-LabVIEWCliPort -LabVIEWExecutablePath $LabVIEWPath
-Write-Output ("Using selector VI Server port: {0} ({1})" -f $selectorPort.PortNumber, $selectorPort.Source)
+$selectorPrimaryPort = Resolve-LabVIEWCliPort -LabVIEWExecutablePath $LabVIEWPath
+Write-Output ("Using selector VI Server primary port: {0} ({1})" -f $selectorPrimaryPort.PortNumber, $selectorPrimaryPort.Source)
+$selectorPortAttempts = @(Get-LabVIEWCliSelectorPortAttemptList -PrimaryPortNumber $selectorPrimaryPort.PortNumber)
+if ($selectorPortAttempts.Count -gt 1) {
+    Write-Output ("Selector port fallback order: {0}" -f (($selectorPortAttempts | ForEach-Object { $_.ToString() }) -join ', '))
+}
 
 $excludeRaw = $env:CONTAINER_PARITY_EXCLUDE_FILES
 if ([string]::IsNullOrWhiteSpace($excludeRaw)) {
@@ -404,19 +560,29 @@ try {
     $massCompileStageError = $null
     $selectorUnsetErrorMessage = $null
     $selectorSetSucceeded = $false
+    $selectorSetContext = $null
     try {
-        Write-Output ("Running selector mode 'set' via LabVIEWCLI on port {0} (source: {1})." -f $selectorPort.PortNumber, $selectorPort.Source)
-        $selectorSet = Invoke-LabVIEWCliOperation -OperationName 'Selector-Set' -Arguments @(
-            '-LogToConsole', 'TRUE',
-            '-OperationName', 'RunVI',
-            '-LabVIEWPath', $LabVIEWPath,
-            '-PortNumber', $selectorPort.PortNumber.ToString(),
-            '-VIPath', $selectorViPath,
-            'set'
-        ) -WorkspaceRootPath $WorkspaceRoot
+        $selectorSet = Invoke-LabVIEWCliSelectorMode `
+            -Mode 'set' `
+            -LabVIEWExecutablePath $LabVIEWPath `
+            -SelectorViAbsolutePath $selectorViPath `
+            -PrimaryPort $selectorPrimaryPort `
+            -WorkspaceRootPath $WorkspaceRoot
         if ($selectorSet.ExitCode -ne 0) {
-            throw "LabVIEWCLI selector set failed with exit code $($selectorSet.ExitCode)."
+            $selectorSetAttempts = if ($selectorSet.Attempts.Count -gt 0) {
+                " Attempts: $($selectorSet.Attempts -join '; ')"
+            } else {
+                ''
+            }
+            throw ("LabVIEWCLI selector set failed with exit code {0}.{1}" -f $selectorSet.ExitCode, $selectorSetAttempts)
         }
+
+        if ($selectorSet.UsedImplicitPort) {
+            Write-Output "Selector mode 'set' succeeded without explicit -PortNumber."
+        } elseif ($selectorSet.PortNumber -ne $selectorPrimaryPort.PortNumber) {
+            Write-Output ("Selector mode 'set' succeeded on fallback port {0} (source: {1})." -f $selectorSet.PortNumber, $selectorSet.PortSource)
+        }
+        $selectorSetContext = $selectorSet
         $selectorSetSucceeded = $true
 
         Write-Output "Running LabVIEWCLI MassCompile in headless mode."
@@ -439,17 +605,27 @@ try {
         $massCompileStageError = $_
     } finally {
         if ($selectorSetSucceeded) {
-            Write-Output ("Running selector mode 'unset' via LabVIEWCLI on port {0} (source: {1})." -f $selectorPort.PortNumber, $selectorPort.Source)
-            $selectorUnset = Invoke-LabVIEWCliOperation -OperationName 'Selector-Unset' -Arguments @(
-                '-LogToConsole', 'TRUE',
-                '-OperationName', 'RunVI',
-                '-LabVIEWPath', $LabVIEWPath,
-                '-PortNumber', $selectorPort.PortNumber.ToString(),
-                '-VIPath', $selectorViPath,
-                'unset'
-            ) -WorkspaceRootPath $WorkspaceRoot
+            $unsetPrimaryPort = $selectorPrimaryPort
+            if ($null -ne $selectorSetContext -and -not $selectorSetContext.UsedImplicitPort -and $null -ne $selectorSetContext.PortNumber) {
+                $unsetPrimaryPort = [pscustomobject]@{
+                    PortNumber = [int]$selectorSetContext.PortNumber
+                    Source     = "selector-set-success:$($selectorSetContext.PortSource)"
+                }
+            }
+
+            $selectorUnset = Invoke-LabVIEWCliSelectorMode `
+                -Mode 'unset' `
+                -LabVIEWExecutablePath $LabVIEWPath `
+                -SelectorViAbsolutePath $selectorViPath `
+                -PrimaryPort $unsetPrimaryPort `
+                -WorkspaceRootPath $WorkspaceRoot
             if ($selectorUnset.ExitCode -ne 0) {
-                $selectorUnsetErrorMessage = "LabVIEWCLI selector unset failed with exit code $($selectorUnset.ExitCode)."
+                $selectorUnsetAttempts = if ($selectorUnset.Attempts.Count -gt 0) {
+                    " Attempts: $($selectorUnset.Attempts -join '; ')"
+                } else {
+                    ''
+                }
+                $selectorUnsetErrorMessage = ("LabVIEWCLI selector unset failed with exit code {0}.{1}" -f $selectorUnset.ExitCode, $selectorUnsetAttempts)
             }
         }
     }
