@@ -11,7 +11,9 @@ fi
 # shellcheck disable=SC1090
 source "$PATH_CONTRACT_SCRIPT"
 
-LVIE_REPO_ROOT="$(resolve_lvie_repo_root "/workspace")"
+resolve_lvie_repo_root "/workspace" > /dev/null
+LVIE_REPO_ROOT="${LVIE_RESOLVED_REPO_ROOT:-}"
+LVIE_REPO_ROOT_SOURCE="${LVIE_RESOLVED_REPO_ROOT_SOURCE:-unknown}"
 WORKSPACE_ROOT="$LVIE_REPO_ROOT"
 export LVIE_REPO_ROOT
 export WORKSPACE_ROOT
