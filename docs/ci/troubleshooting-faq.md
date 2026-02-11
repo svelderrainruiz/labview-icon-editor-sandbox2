@@ -168,10 +168,12 @@ gh workflow run ci-composite.yml --repo $repo `
 1. Have the required reviewers approve your Pull Request.
 2. Ensure the required branch-protection status context is green:
    - `CI Pipeline (Composite) / Pipeline Contract`
+   - `CI Pipeline (No Smoke) / Pipeline Contract` is companion-only and should remain non-required.
 3. Verify branch-protection configuration with:
    - `pwsh -NoProfile -File .\Tooling\Test-CiBranchProtection.ps1`
 4. If branch protection is configured with stale per-job contexts, ask a repository admin to update required contexts to:
    - `CI Pipeline (Composite) / Pipeline Contract`
+   - Remove any required `CI Pipeline (No Smoke) / Pipeline Contract` entry if present.
 5. Update your `CONTRIBUTING.md` to specify the merging rules so contributors know what’s needed.
 
 ---
@@ -314,6 +316,7 @@ gh workflow run ci-composite.yml --repo $repo `
   - `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`) intentionally skips heavy self-hosted validation/build jobs.
   - `pr-fast` (`pull_request`) keeps the jobs but uses 64-bit-only matrices for smoke/missing/unit tests.
   - `full` runs the full matrix and full self-hosted flow.
+- You are looking at `CI Pipeline (No Smoke)` (`ci.yml`), where `devmode-no-labview-smoke` is intentionally absent.
 
 **Solution**:
 1. Check `prerelease-context` outputs for `ci_profile`.

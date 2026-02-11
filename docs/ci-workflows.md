@@ -51,11 +51,12 @@ Automating your Icon Editor builds and tests:
 
 4. **Run Tests**
    Use the main CI workflow (`ci-composite.yml`) to confirm your environment is valid.
-   - The workflow triggers on pushes to or pull requests targeting the branches configured in `ci-composite.yml` (`on.push.branches` / `on.pull_request.branches`), and supports manual `workflow_dispatch` runs.
+   - `ci-composite.yml` is the canonical publish-capable workflow. It triggers on pushes to or pull requests targeting configured branches and supports manual `workflow_dispatch` runs.
      - Typically run with Dev Mode **disabled** unless you’re testing dev features specifically.
      - Concurrency is isolated by repository, runner label, event name, and ref.
      - Pull request runs auto-cancel earlier runs for the same PR ref.
      - Push and `workflow_dispatch` runs are isolated by event/ref and are not canceled by pull request updates.
+   - `ci.yml` (`CI Pipeline (No Smoke)`) is a PR-only companion workflow that increases validation signal without publication side effects. It intentionally excludes `devmode-no-labview-smoke` and all publish-path jobs.
 
 5. **Build VI Package**
    - Produces `.vip` artifacts automatically using the Windows/self-hosted `build-vip` job in `ci-composite.yml` for `full` and `pr-fast` profiles.
@@ -87,6 +88,7 @@ This document is the canonical source for release/publication policy.
 - Release-priority publish-intent guardrail: `workflow_dispatch` publish intent in `release-priority` requires a successful `full` profile run on `develop` completed within the previous 24 hours.
 - Asset contract: published prereleases in `full`/`pr-fast` attach `.vip`, release notes, `gcli-logs`, `vip-build-status`, and container packed libraries; `release-priority` publishes container packed libraries only.
 - Branch trigger reality for `ci-composite.yml`: `push` and `pull_request` run on `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*`, plus `workflow_dispatch`.
+- Companion trigger reality for `ci.yml`: `pull_request` only; no `push` or `workflow_dispatch`.
 
 #### Deterministic Merge + Publish Procedure
 
@@ -166,6 +168,8 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **publish-prerelease** – upserts GitHub prereleases for eligible runs, attaches required assets (including Linux and Windows container packed libraries), and emits `prerelease-publish-status`.
 - **pipeline-contract** – validates required-job outcomes using profile-specific expectations so intentionally skipped jobs in `release-priority` do not fail the run.
 
+Companion workflow note: [`ci.yml`](../.github/workflows/ci.yml) provides PR-only validation signal. It does not define `devmode-no-labview-smoke`, container publish jobs, `publish-gate`, or `publish-prerelease`, and is intentionally non-publishing.
+
 Windows self-hosted build jobs (`build-ppl-*` and `build-vip`) run a `close-labview` step after their build actions finish but before any steps that rename files or upload artifacts, so it is not the final step.
 
 The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct jobs.
@@ -179,7 +183,7 @@ The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct
 | `workflow_dispatch` (`full`, `force_gcli_lunit=false`) | Runs (required) |
 | `workflow_dispatch` (`release-priority`, `force_gcli_lunit=true`) | Skipped intentionally |
 
-Branch protection recommendation: require only `CI Pipeline (Composite) / Pipeline Contract` for pull requests.
+Branch protection recommendation: require only `CI Pipeline (Composite) / Pipeline Contract` for pull requests. Keep `CI Pipeline (No Smoke) / Pipeline Contract` non-required during rollout.
 
 *(The **Run Unit Tests** workflow has been consolidated into the main CI process.)*
 

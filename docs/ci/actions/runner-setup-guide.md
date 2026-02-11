@@ -55,9 +55,10 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - (Optional) Toggle LabVIEW dev mode (`Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`) via the **Development Mode Toggle** workflow.
 
 5. **Run Tests**
-   - Run tests using **CI Pipeline (Composite)**.
-   - `pull_request` runs use the `pr-fast` profile (64-bit smoke/missing/unit).
-   - `workflow_dispatch` with `force_gcli_lunit=true` uses `release-priority` and skips heavy self-hosted validation jobs.
+    - Run tests using **CI Pipeline (Composite)**.
+    - `pull_request` runs use the `pr-fast` profile (64-bit smoke/missing/unit).
+    - `workflow_dispatch` with `force_gcli_lunit=true` uses `release-priority` and skips heavy self-hosted validation jobs.
+    - **CI Pipeline (No Smoke)** (`.github/workflows/ci.yml`) runs on `pull_request` only as a companion signal and intentionally excludes `devmode-no-labview-smoke` and publish-path jobs.
 
 6. **Build VI Package**
      - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
@@ -108,9 +109,14 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - **Fork-friendly**: runs on forks without requiring signing keys.
     - Produces `.vip` and release-notes artifacts in CI.
    - Publish contract: `publish-prerelease` job behavior is defined in [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
-   - **Branding the Package**:
-     - You can **pass** metadata parameters like `-CompanyName` and `-AuthorName` into the build script. These map to fields in the **VI Package** (e.g., “Company Name,” “Author Name (Person or Company)”).
-     - This means each package can show the **organization** and **repository** that produced it, providing a **unique ID** if you have multiple forks or parallel versions.
+    - **Branding the Package**:
+      - You can **pass** metadata parameters like `-CompanyName` and `-AuthorName` into the build script. These map to fields in the **VI Package** (e.g., “Company Name,” “Author Name (Person or Company)”).
+      - This means each package can show the **organization** and **repository** that produced it, providing a **unique ID** if you have multiple forks or parallel versions.
+
+3. **CI Pipeline (No Smoke)**
+   - PR-only companion workflow (`.github/workflows/ci.yml`) for additional validation signal.
+   - Uses `ci_profile=pr-fast`, never publishes prereleases, and does not define `devmode-no-labview-smoke`.
+   - Keep this workflow non-required in branch protection while `CI Pipeline (Composite) / Pipeline Contract` remains the required context.
 
 
 <a name="setting-up-a-self-hosted-runner"></a>
