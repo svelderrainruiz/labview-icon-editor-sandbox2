@@ -1,13 +1,16 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Creates a short-path worktree for a CI job and exports REPO_ROOT/PROJECT_PATH.
+    Creates a short-path worktree for a CI job and exports canonical path contract variables.
 
 .DESCRIPTION
     Centralizes CI worktree creation so workflows only need to pass a bitness and
     (optionally) a variant label. The script resolves the worktree root, creates
     a deterministic folder name, calls New-CIWorktree.ps1, and exports:
       - LVIE_WORKTREE_ROOT
+      - LVIE_REPO_ROOT
+      - LVIE_PROJECT_RELATIVE_PATH
+      - LVIE_PROJECT_PATH
       - REPO_ROOT
       - PROJECT_PATH
 
@@ -30,7 +33,8 @@
     Run attempt. Defaults to GITHUB_RUN_ATTEMPT.
 
 .PARAMETER ProjectFile
-    Project file name to export as PROJECT_PATH. Defaults to lv_icon_editor.lvproj.
+    Project file relative path to export as LVIE_PROJECT_PATH/PROJECT_PATH.
+    Defaults to lv_icon_editor.lvproj.
 
 .PARAMETER WorktreeRoot
     Optional explicit worktree root. If omitted, LVIE_WORKTREE_ROOT or a
@@ -68,17 +72,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$gitKrakenScript = Join-Path $PSScriptRoot 'support\GitKrakenCli.ps1'
-if (-not (Test-Path -Path $gitKrakenScript)) {
-    throw "GitKraken CLI helper not found at $gitKrakenScript"
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git was not found on PATH."
 }
-. $gitKrakenScript
-$requireGitKraken = $env:LVIE_REQUIRE_GITKRAKEN_CLI -eq '1'
-$gitKrakenEnabled = Enable-GitKrakenGitShim -Require:$requireGitKraken
-if (-not $gitKrakenEnabled) {
-    Write-Warning "GitKraken CLI 'gk' not found. Using system git. Set LVIE_REQUIRE_GITKRAKEN_CLI=1 to enforce gk."
-}
-
 function Resolve-RepoRoot {
     param([string]$BasePath)
 
@@ -389,6 +385,9 @@ if (Test-Path -Path $ensureRunnerCli) {
 
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) {
     "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+    "LVIE_REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+    "LVIE_PROJECT_RELATIVE_PATH=$ProjectFile" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+    "LVIE_PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "LABVIEW_VERSION_RAW=$($lvInfo.Raw)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii

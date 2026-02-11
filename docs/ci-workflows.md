@@ -51,15 +51,16 @@ Automating your Icon Editor builds and tests:
 
 4. **Run Tests**
    Use the main CI workflow (`ci-composite.yml`) to confirm your environment is valid.
-   - The workflow triggers on pushes to or pull requests targeting the branches configured in `ci-composite.yml` (`on.push.branches` / `on.pull_request.branches`), and supports manual `workflow_dispatch` runs.
+   - `ci-composite.yml` is the canonical publish-capable workflow. It triggers on pushes to or pull requests targeting configured branches and supports manual `workflow_dispatch` runs.
      - Typically run with Dev Mode **disabled** unless you’re testing dev features specifically.
      - Concurrency is isolated by repository, runner label, event name, and ref.
      - Pull request runs auto-cancel earlier runs for the same PR ref.
      - Push and `workflow_dispatch` runs are isolated by event/ref and are not canceled by pull request updates.
+   - `ci.yml` (`CI Pipeline (No Smoke)`) is a PR-only companion workflow that increases validation signal without publication side effects. It intentionally excludes `devmode-no-labview-smoke` and all publish-path jobs.
 
 5. **Build VI Package**
-   - Produces `.vip` artifacts automatically using the Windows/self-hosted `build-vip` job in `ci-composite.yml`.
-   - The `build-vip` job runs for pull requests, pushes, and manual `workflow_dispatch` runs.
+   - Produces `.vip` artifacts automatically using the Windows/self-hosted `build-vip` job in `ci-composite.yml` for `full` and `pr-fast` profiles.
+   - The `release-priority` profile (`workflow_dispatch` with `force_gcli_lunit=true`) intentionally skips `build-vip` and publishes prereleases from container packed-library assets.
    - By default, the workflow populates the **“Company Name”** with `github.repository_owner` and the **“Author Name”** with `github.event.repository.name`, so each build is branded with your GitHub account and repository.
    - To use different branding, edit the **“Generate display information JSON”** step in [`.github/workflows/ci-composite.yml`](../.github/workflows/ci-composite.yml) and supply custom values for these fields.
    - Uses **label-based** version bumping (major/minor/patch) on pull requests.
@@ -79,9 +80,15 @@ This document is the canonical source for release/publication policy.
 - Merge strategy contract: pull requests intended to drive prerelease publication to `develop` must use merge commits (`--merge`), not squash or rebase.
 - Auto publish contract: prerelease publication runs for `push` events on `develop` when the pushed SHA is the merged `develop` SHA from a merged pull request targeting `develop`.
 - Manual publish contract: `workflow_dispatch` supports explicit prerelease backfill only with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
-- LUnit escape hatch: `workflow_dispatch` also supports `force_gcli_lunit=true` to force g-cli in unit-test jobs while exercising release paths.
-- Asset contract: published prereleases attach `.vip`, release notes, `gcli-logs`, and `vip-build-status` assets from the same CI run.
+- Execution profiles (`prerelease-context` output `ci_profile`):
+  - `release-priority`: `workflow_dispatch` with `force_gcli_lunit=true`; skips self-hosted heavy jobs (`Verify IE Paths`, smoke, missing-in-project, unit-tests, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) and targets <= 25 minutes.
+  - `pr-fast`: `pull_request`; keeps validation coverage but uses 64-bit-only matrices for smoke/missing-in-project/unit-tests, targeting <= 35 minutes.
+  - `full`: default for `push` and `workflow_dispatch` without `force_gcli_lunit=true`; preserves full publish-eligible flow.
+- LUnit escape hatch: `workflow_dispatch` with `force_gcli_lunit=true` selects the `release-priority` profile.
+- Release-priority publish-intent guardrail: `workflow_dispatch` publish intent in `release-priority` requires a successful `full` profile run on `develop` completed within the previous 24 hours.
+- Asset contract: published prereleases in `full`/`pr-fast` attach `.vip`, release notes, `gcli-logs`, `vip-build-status`, and container packed libraries; `release-priority` publishes container packed libraries only.
 - Branch trigger reality for `ci-composite.yml`: `push` and `pull_request` run on `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*`, plus `workflow_dispatch`.
+- Companion trigger reality for `ci.yml`: `pull_request` only; no `push` or `workflow_dispatch`.
 
 #### Deterministic Merge + Publish Procedure
 
@@ -145,19 +152,23 @@ Below are the **key GitHub Actions** provided in this repository:
 The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks the build into several jobs:
 
 - **pylavi-validate** – report-only LabVIEW file validation using `vi_validate` (strict + legacy profiles) with `.lvversion`-synced version gating and optional baseline/delta reporting.
+- **prerelease-context** – computes prerelease publish eligibility, reason, merged-PR bump override context, and the execution profile (`ci_profile`: `release-priority`, `pr-fast`, `full`).
 - **changes** – checks out the repository and detects `.vipc` file changes to determine if dependencies need to be applied.
 - **apply-deps** – installs VIPC dependencies for multiple LabVIEW versions and bitnesses **only when** the `changes` job reports `.vipc` modifications (`if: needs.changes.outputs.vipc == 'true'`).
-- **devmode-no-labview-smoke** – required per-bitness (`64`, `32`) no-LabVIEW smoke gate (full depth) that fails on test failures or fully skipped integration smoke. For runners with known ACL limitations, set `LVIE_DEVMODE_SMOKE_ALLOW_ACL_DOWNGRADE=1` (or `LVIE_RUNNER_ACL_WARN_ONLY=1`) to allow an explicit downgrade to `minimal` depth with warning telemetry.
-- **prerelease-context** – computes prerelease publish eligibility, reason, and merged-PR bump override context.
+- **devmode-no-labview-smoke** – no-LabVIEW smoke gate (full depth). Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
 - **version** – computes the semantic version and build number using commit count and PR labels.
-- **missing-in-project-check** – verifies every source file is referenced in the `.lvproj` (runs after the smoke gate).
-- **test** – runs LabVIEW unit tests on Windows in LabVIEW 2021 (32- and 64-bit) after missing-in-project.
+- **missing-in-project** – verifies every source file is referenced in the `.lvproj` (runs after the smoke gate). Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
+- **unit-tests** – runs LabVIEW unit tests on Windows in LabVIEW 2021 after missing-in-project. Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
   - Each matrix job appends a short `GITHUB_STEP_SUMMARY` line with the effective LUnit backend mode (`labviewcli` or `gcli`).
 - **build-ppl** – uses a matrix to build 32-bit and 64-bit packed libraries, then uses the `rename-file` action to append the bitness to each library’s filename.
 - **build-ppl-linux-container** – builds the Linux container packed library (`lv_icon.lvlibp`) for publish-eligible runs and emits a versioned artifact for prerelease attachment.
 - **build-ppl-windows-container** – builds the Windows container packed library (`lv_icon.lvlibp`) for publish-eligible runs and emits a versioned artifact for prerelease attachment.
-- **build-vip** – Windows/self-hosted VI Package packaging path. This job requires both PPL artifacts (`lv_icon_x86.lvlibp`, `lv_icon_x64.lvlibp`) and runs for pull requests, pushes, and manual dispatch.
+- **build-vip** – Windows/self-hosted VI Package packaging path. This job requires both PPL artifacts (`lv_icon_x86.lvlibp`, `lv_icon_x64.lvlibp`) and runs for `full`/`pr-fast`; it is intentionally skipped in `release-priority`.
+- **publish-gate** – evaluates profile-required prepublish job outcomes and blocks prerelease publication when required checks are missing or non-success.
 - **publish-prerelease** – upserts GitHub prereleases for eligible runs, attaches required assets (including Linux and Windows container packed libraries), and emits `prerelease-publish-status`.
+- **pipeline-contract** – validates required-job outcomes using profile-specific expectations so intentionally skipped jobs in `release-priority` do not fail the run.
+
+Companion workflow note: [`ci.yml`](../.github/workflows/ci.yml) provides PR-only validation signal. It does not define `devmode-no-labview-smoke`, container publish jobs, `publish-gate`, or `publish-prerelease`, and is intentionally non-publishing.
 
 Windows self-hosted build jobs (`build-ppl-*` and `build-vip`) run a `close-labview` step after their build actions finish but before any steps that rename files or upload artifacts, so it is not the final step.
 
@@ -165,13 +176,14 @@ The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct
 
 #### Event matrix (VIP packaging)
 
-| Event | `build-vip` (Windows) |
+| Event / profile | `build-vip` (Windows) |
 | --- | --- |
-| `pull_request` | Runs (required) |
-| `push` | Runs (required) |
-| `workflow_dispatch` | Runs (required) |
+| `pull_request` (`pr-fast`) | Runs (required) |
+| `push` (`full`) | Runs (required) |
+| `workflow_dispatch` (`full`, `force_gcli_lunit=false`) | Runs (required) |
+| `workflow_dispatch` (`release-priority`, `force_gcli_lunit=true`) | Skipped intentionally |
 
-Branch protection recommendation: require `CI Pipeline (Composite) / Build VI Package` for pull requests, and keep Docker parity checks required as configured.
+Branch protection recommendation: require only `CI Pipeline (Composite) / Pipeline Contract` for pull requests. Keep `CI Pipeline (No Smoke) / Pipeline Contract` non-required during rollout.
 
 *(The **Run Unit Tests** workflow has been consolidated into the main CI process.)*
 

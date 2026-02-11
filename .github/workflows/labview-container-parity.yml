@@ -64,8 +64,14 @@ jobs:
           LV_YEAR="${LV_RELEASE:0:4}"
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
+            -e LVIE_REPO_ROOT=/workspace \
             -e WORKSPACE_ROOT=/workspace \
-            -e TARGET_DIR=/workspace/Test/Templates \
+            -e REPO_ROOT=/workspace \
+            -e "LVIE_PROJECT_RELATIVE_PATH=lv_icon_editor.lvproj" \
+            -e "PROJECT_PATH_REL=lv_icon_editor.lvproj" \
+            -e "LVIE_PROJECT_PATH=/workspace/lv_icon_editor.lvproj" \
+            -e "PROJECT_PATH=/workspace/lv_icon_editor.lvproj" \
+            -e "TARGET_DIR_REL=Test/Templates" \
             -e "LV_YEAR=${LV_YEAR}" \
             -e "CONTAINER_PARITY_EXCLUDE_FILES=Polymorphic Template.vi" \
             -e "CONTAINER_PARITY_BUILD_SPEC=${RUN_BUILD_SPEC}" \
@@ -149,8 +155,14 @@ jobs:
           $lvYear = if ($env:LV_RELEASE -match '^(?<year>\d{4})') { $Matches['year'] } else { '2026' }
           docker run --rm `
             -v "${env:GITHUB_WORKSPACE}:C:\workspace" `
+            -e LVIE_REPO_ROOT=C:\workspace `
             -e WORKSPACE_ROOT=C:\workspace `
-            -e TARGET_DIR=C:\workspace\Test\Templates `
+            -e REPO_ROOT=C:\workspace `
+            -e "LVIE_PROJECT_RELATIVE_PATH=lv_icon_editor.lvproj" `
+            -e "PROJECT_PATH_REL=lv_icon_editor.lvproj" `
+            -e "LVIE_PROJECT_PATH=C:\workspace\lv_icon_editor.lvproj" `
+            -e "PROJECT_PATH=C:\workspace\lv_icon_editor.lvproj" `
+            -e "TARGET_DIR_REL=Test\Templates" `
             -e "CONTAINER_PARITY_EXCLUDE_FILES=Polymorphic Template.vi" `
             -e "CONTAINER_PARITY_BUILD_SPEC=${env:RUN_BUILD_SPEC}" `
             -e "CONTAINER_PARITY_BUILD_SPEC_NAME=Editor Packed Library" `
@@ -158,7 +170,7 @@ jobs:
             -e "CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH=resource\plugins\lv_icon.lvlibp" `
             -e "CONTAINER_PARITY_LABVIEW_VERSION=$lvYear" `
             $env:IMAGE `
-            powershell -NoProfile -ExecutionPolicy Bypass -File C:\workspace\Tooling\container-parity\runlabview-windows.ps1 -WorkspaceRoot C:\workspace
+            powershell -NoProfile -ExecutionPolicy Bypass -File C:\workspace\Tooling\container-parity\runlabview-windows.ps1
 
           if ($LASTEXITCODE -ne 0) {
             throw "Windows container parity run failed with exit code $LASTEXITCODE."

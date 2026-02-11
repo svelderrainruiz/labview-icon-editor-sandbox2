@@ -55,14 +55,18 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - (Optional) Toggle LabVIEW dev mode (`Set_Development_Mode.ps1` or `RevertDevelopmentMode.ps1`) via the **Development Mode Toggle** workflow.
 
 5. **Run Tests**
-   - Run the tests using the **CI Pipeline (Composite)** workflow; its dedicated **test** job executes the unit tests.
+    - Run tests using **CI Pipeline (Composite)**.
+    - `pull_request` runs use the `pr-fast` profile (64-bit smoke/missing/unit).
+    - `workflow_dispatch` with `force_gcli_lunit=true` uses `release-priority` and skips heavy self-hosted validation jobs.
+    - **CI Pipeline (No Smoke)** (`.github/workflows/ci.yml`) runs on `pull_request` only as a companion signal and intentionally excludes `devmode-no-labview-smoke` and publish-path jobs.
 
 6. **Build VI Package**
-    - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
-   - Pre-release publication behavior is specified by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, assets, and failure policy.
-   - Prerelease-driving PRs into `develop` must be merged with a merge commit (`--merge`), not squash/rebase.
-   - Manual prerelease backfill requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
-   - **You can also** pass in **org/repository** info (e.g., `-CompanyName "MyOrg"` or `-AuthorName "myorg/myrepo"`) to brand the resulting package with your unique identifiers.
+     - Invoke the **Build VI Package** job within the CI Pipeline (Composite) workflow to produce a `.vip` using the version computed by the workflow's separate **version** job (see that job's output for the generated version).
+    - Pre-release publication behavior is specified by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, assets, and failure policy.
+    - Prerelease-driving PRs into `develop` must be merged with a merge commit (`--merge`), not squash/rebase.
+    - Manual prerelease backfill requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+    - `release-priority` publish intent (`force_gcli_lunit=true`) additionally requires a successful `full` profile run on `develop` within the previous 24 hours.
+    - **You can also** pass in **org/repository** info (e.g., `-CompanyName "MyOrg"` or `-AuthorName "myorg/myrepo"`) to brand the resulting package with your unique identifiers.
 
 7. **Disable Dev Mode** (Optional)  
    - Revert environment once building/testing is done.
@@ -93,15 +97,26 @@ Additionally, **you can pass metadata fields** (like **organization** or **repos
    - Great for reconfiguring LabVIEW for local dev vs. distribution builds.
 
 2. **CI Pipeline (Composite)**
-   - Includes a **test** job for unit tests, a **version** job that computes semantic versioning, and a **build-vi-package** job that packages the `.vip` using the version job's outputs.
+   - Includes `unit-tests`, `version`, and `build-vip` jobs, plus container packed-library and prerelease publication jobs.
+   - Execution profile is computed as `ci_profile`:
+     - `release-priority` = `workflow_dispatch` + `force_gcli_lunit=true` (target <= 25 minutes).
+     - `pr-fast` = `pull_request` (target <= 35 minutes).
+     - `full` = all other events.
+    - `pipeline-contract` enforces profile-specific required-job outcomes so intentional profile skips do not fail the run.
+    - `publish-gate` enforces profile-required prepublish outcomes before `publish-prerelease`.
    - **Label-based** semantic versioning (`major`, `minor`, `patch`). Defaults to `patch` if no label.
    - **Derives build number from total commit count** (`git rev-list --count HEAD`).
    - **Fork-friendly**: runs on forks without requiring signing keys.
     - Produces `.vip` and release-notes artifacts in CI.
    - Publish contract: `publish-prerelease` job behavior is defined in [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
-   - **Branding the Package**:
-     - You can **pass** metadata parameters like `-CompanyName` and `-AuthorName` into the build script. These map to fields in the **VI Package** (e.g., “Company Name,” “Author Name (Person or Company)”).
-     - This means each package can show the **organization** and **repository** that produced it, providing a **unique ID** if you have multiple forks or parallel versions.
+    - **Branding the Package**:
+      - You can **pass** metadata parameters like `-CompanyName` and `-AuthorName` into the build script. These map to fields in the **VI Package** (e.g., “Company Name,” “Author Name (Person or Company)”).
+      - This means each package can show the **organization** and **repository** that produced it, providing a **unique ID** if you have multiple forks or parallel versions.
+
+3. **CI Pipeline (No Smoke)**
+   - PR-only companion workflow (`.github/workflows/ci.yml`) for additional validation signal.
+   - Uses `ci_profile=pr-fast`, never publishes prereleases, and does not define `devmode-no-labview-smoke`.
+   - Keep this workflow non-required in branch protection while `CI Pipeline (Composite) / Pipeline Contract` remains the required context.
 
 
 <a name="setting-up-a-self-hosted-runner"></a>
@@ -181,13 +196,15 @@ With your runner online:
    - `labview_version` must match `.lvversion` if provided.
 
 2. **Run Tests via CI Pipeline (Composite)**
-   - Execute the workflow and review the **test** job logs to confirm all unit tests pass.
+   - Execute the workflow and review `unit-tests` logs (`pr-fast`: 64-bit only, `full`: 64/32).
 
 3. **Build VI Package**
-    - Produces `.vip` using the version computed in the **version** job (review that job's output for version details).
-   - Merged-PR merge-commit pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
-   - `workflow_dispatch` backfill publishing requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
-   - **Pass** your **org/repo** info (e.g. `-CompanyName "AcmeCorp"` / `-AuthorName "AcmeCorp/IconEditor"`) to embed in the final package.
+     - Produces `.vip` using the version computed in the **version** job for `full`/`pr-fast` profiles.
+     - `release-priority` runs intentionally skip `build-vip`; publish artifacts come from Linux/Windows container packed-library jobs.
+    - Merged-PR merge-commit pushes to `develop` publish prereleases per [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
+    - `workflow_dispatch` backfill publishing requires `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+    - `release-priority` publish intent requires a successful `full` profile run on `develop` in the prior 24 hours.
+    - **Pass** your **org/repo** info (e.g. `-CompanyName "AcmeCorp"` / `-AuthorName "AcmeCorp/IconEditor"`) to embed in the final package.
    - Artifacts appear in the run summary under **Artifacts**.
 
 4. **Disable Dev Mode** (if used)  

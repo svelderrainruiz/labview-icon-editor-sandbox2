@@ -22,7 +22,8 @@ This document provides a collection of common **troubleshooting** scenarios (wit
    13. [No. 13: Repository Forks Not Displaying Correct Metadata](#no-13-repository-forks-not-displaying-correct-metadata)
    14. [No. 14: Dev Mode Failure Missing Paths](#no-14-dev-mode-failure-missing-paths)
    15. [No. 15: Verify IE Paths Gate Fails in CI](#no-15-verify-ie-paths-gate-fails-in-ci)
-   16. [No. 16: PR Merge Blocked Despite Green Required Checks](#no-16-pr-merge-blocked-despite-green-required-checks)
+   16. [No. 16: Expected Job Is Skipped (Profile-Based Behavior)](#no-16-expected-job-is-skipped-profile-based-behavior)
+   17. [No. 17: PR Merge Blocked Despite Green Required Checks](#no-17-pr-merge-blocked-despite-green-required-checks)
 
 
 2. [FAQ](#faq)
@@ -45,7 +46,7 @@ This document provides a collection of common **troubleshooting** scenarios (wit
 
 ## Troubleshooting
 
-Below are 16 possible issues you might encounter, along with suggested steps to resolve them.
+Below are 17 possible issues you might encounter, along with suggested steps to resolve them.
 
 ### No. 1: LabVIEW Not Found on Runner
 
@@ -133,13 +134,14 @@ Below are 16 possible issues you might encounter, along with suggested steps to 
 
 **Possible Causes**:
 - The run was not a merge to `develop`, so the pre-release publication policy was not expected to run.
-- The publish step failed or was skipped due to eligibility, assets, or API errors.
+- The publish step failed or was skipped due to eligibility, profile-specific gate checks, freshness requirements, assets, or API errors.
 
 **Solution**:
 1. Confirm the PR was merged into `develop` using a merge commit (not squash/rebase) and identify the merged `develop` SHA.
 2. Confirm the run is an eligible publish path (`develop` merged-PR push, or `workflow_dispatch` with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`).
-3. Inspect the `publish-prerelease` job logs for explicit failure/skip reason output.
-4. Inspect the `prerelease-publish-status` artifact for machine-readable failure details and required-asset validation results.
+3. For `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`), confirm there is a successful `full` profile run on `develop` in the previous 24 hours.
+4. Inspect the `publish-gate` and `publish-prerelease` job logs for explicit failure/skip reason output.
+5. Inspect the `prerelease-publish-status` artifact for machine-readable failure details and required-asset validation results.
 
 Deterministic backfill command:
 ```powershell
@@ -160,17 +162,19 @@ gh workflow run ci-composite.yml --repo $repo `
 
 **Possible Causes**:
 - Strict branch protection rules require approvals or passing checks before merging.
-- You’re lacking the required PR reviews or status checks.
+- The branch-protection required status-check contexts are misconfigured for the profile-aware CI contract.
 
 **Solution**:
 1. Have the required reviewers approve your Pull Request.
-2. Ensure all required status checks pass:
-   - [`changes`](../../.github/workflows/ci-composite.yml#changes) – detects `.vipc` file changes.
-   - [`apply-deps`](../../.github/workflows/ci-composite.yml#apply-deps) – applies VIPC dependencies when needed.
-   - [`missing-in-project`](../../.github/workflows/ci-composite.yml#missing-in-project) – validates project file membership.
-   - [`Run Unit Tests`](../../.github/workflows/ci-composite.yml#test) – executes unit tests.
-   - [`Build VI Package`](../../.github/workflows/ci-composite.yml#build-vi-package) – produces the `.vip` artifact.
-3. Update your `CONTRIBUTING.md` to specify the merging rules so contributors know what’s needed.
+2. Ensure the required branch-protection status context is green:
+   - `CI Pipeline (Composite) / Pipeline Contract`
+   - `CI Pipeline (No Smoke) / Pipeline Contract` is companion-only and should remain non-required.
+3. Verify branch-protection configuration with:
+   - `pwsh -NoProfile -File .\Tooling\Test-CiBranchProtection.ps1`
+4. If branch protection is configured with stale per-job contexts, ask a repository admin to update required contexts to:
+   - `CI Pipeline (Composite) / Pipeline Contract`
+   - Remove any required `CI Pipeline (No Smoke) / Pipeline Contract` entry if present.
+5. Update your `CONTRIBUTING.md` to specify the merging rules so contributors know what’s needed.
 
 ---
 
@@ -301,7 +305,27 @@ gh workflow run ci-composite.yml --repo $repo `
 
 ---
 
-### No. 16: PR Merge Blocked Despite Green Required Checks
+### No. 16: Expected Job Is Skipped (Profile-Based Behavior)
+
+**Symptoms**:
+- One or more jobs show `skipped`, but the workflow still proceeds to publish checks.
+- Common examples: `dev-mode-gate`, `devmode-no-labview-smoke`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`.
+
+**Possible Causes**:
+- The run used a different `ci_profile`:
+  - `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`) intentionally skips heavy self-hosted validation/build jobs.
+  - `pr-fast` (`pull_request`) keeps the jobs but uses 64-bit-only matrices for smoke/missing/unit tests.
+  - `full` runs the full matrix and full self-hosted flow.
+- You are looking at `CI Pipeline (No Smoke)` (`ci.yml`), where `devmode-no-labview-smoke` is intentionally absent.
+
+**Solution**:
+1. Check `prerelease-context` outputs for `ci_profile`.
+2. For `release-priority`, confirm skipped jobs are from the intentional skip list and that required jobs (`run-metadata`, `prerelease-context`, `version`, container packed-library jobs, `publish-gate`, `publish-prerelease`, `pipeline-contract`) succeeded.
+3. If full validation is required, rerun without `force_gcli_lunit=true` (or use a `pull_request`/`push` run path).
+
+---
+
+### No. 17: PR Merge Blocked Despite Green Required Checks
 
 **Symptoms**:
 - Pull request is `MERGEABLE` but `BLOCKED` even though required checks are green.

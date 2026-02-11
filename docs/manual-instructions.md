@@ -31,16 +31,15 @@ This document provides **manual** steps to configure, edit, and distribute the L
    C:\labview-icon-editor
    ```
 
-2. **Run** the following VI to prepare your environment:
+2. **Run** the following VI to point the launcher to source:
 
    ```
-   Tooling\Prepare LV to Use Icon Editor Source.vi
+   Tooling\Set Run Icon Editor from Source.vi
    ```
 
    This VI will:
-   - Remove `<LabVIEW>\resource\plugins\lv_icon.lvlibp`
-   - Remove `<LabVIEW>\vi.lib\LabVIEW Icon API`
-   - Set `LocalHost.LibraryPaths` in your **LabVIEW.ini** to a single repository path entry
+   - Configure the Icon Editor launcher path to your repository source location.
+   - Route Icon Editor launches through the source tree while you edit.
 
 3. **Open** the project file:
 
@@ -91,7 +90,11 @@ To **manually distribute** your custom Icon Editor:
 
 When you're finished developing or distributing, you can return LabVIEW to its default state:
 
-1. **Restore the Packed Library:** Rename your backup `lv_icon.lvlibp.ship` back to `lv_icon.lvlibp` (or reinstall the original file).
-2. **Restore the Icon API:** Replace the `<LabVIEW>\vi.lib\LabVIEW Icon API` folder with the original copy you archived or from a LabVIEW installation source.
-3. **Revert `LabVIEW.ini` Changes:** Open `<LabVIEW>\LabVIEW.ini` and remove the `LocalHost.LibraryPaths` token entirely when leaving source-mode usage.
-4. **Restart LabVIEW** to confirm the built-in Icon Editor loads correctly.
+1. **Run**:
+   ```
+   Tooling\Unset Run Icon Editor from Source.vi
+   ```
+2. **If you manually replaced install files**, restore them:
+   - Rename backup `lv_icon.lvlibp.ship` back to `lv_icon.lvlibp` (or reinstall the original file).
+   - Restore `<LabVIEW>\vi.lib\LabVIEW Icon API` from your archived copy or installation source.
+3. **Restart LabVIEW** to confirm the built-in Icon Editor loads correctly.

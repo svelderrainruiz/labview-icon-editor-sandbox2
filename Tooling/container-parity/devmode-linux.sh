@@ -3,7 +3,31 @@ set -euo pipefail
 
 MODE="${1:-}"
 LABVIEW_ROOT="${2:-${LABVIEW_ROOT:-}}"
-WORKSPACE_ROOT="${3:-${WORKSPACE_ROOT:-/workspace}}"
+REPO_ROOT_INPUT="${3:-}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATH_CONTRACT_SCRIPT="$SCRIPT_DIR/path-contract.sh"
+if [[ ! -f "$PATH_CONTRACT_SCRIPT" ]]; then
+  echo "ERROR: Path contract helper was not found: $PATH_CONTRACT_SCRIPT" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$PATH_CONTRACT_SCRIPT"
+
+if [[ -n "$REPO_ROOT_INPUT" ]]; then
+  LVIE_REPO_ROOT="$REPO_ROOT_INPUT"
+  LVIE_REPO_ROOT_SOURCE="arg:repo_root_input"
+else
+  resolve_lvie_repo_root "/workspace" > /dev/null
+  LVIE_REPO_ROOT="${LVIE_RESOLVED_REPO_ROOT:-}"
+  LVIE_REPO_ROOT_SOURCE="${LVIE_RESOLVED_REPO_ROOT_SOURCE:-unknown}"
+fi
+
+WORKSPACE_ROOT="$LVIE_REPO_ROOT"
+export LVIE_REPO_ROOT
+export WORKSPACE_ROOT
+export REPO_ROOT="$LVIE_REPO_ROOT"
 
 if [[ -z "$MODE" ]]; then
   echo "Usage: $0 <enable|revert> [labview_root] [workspace_root]" >&2

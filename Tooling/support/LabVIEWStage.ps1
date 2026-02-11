@@ -248,6 +248,235 @@ function Get-LabVIEWInstallRoot {
     return $null
 }
 
+function ConvertTo-LabVIEWCliPortNumber {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RawValue,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Source
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RawValue)) {
+        return $null
+    }
+
+    $parsedPort = 0
+    if (-not [int]::TryParse($RawValue.Trim(), [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
+        Write-Warning ("Ignoring invalid port value '{0}' from {1}. Expected integer range 1-65535." -f $RawValue, $Source)
+        return $null
+    }
+
+    return $parsedPort
+}
+
+function Get-LabVIEWIniTcpSetting {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWExecutablePath
+    )
+
+    $iniPath = Join-Path -Path (Split-Path -Path $LabVIEWExecutablePath -Parent) -ChildPath 'LabVIEW.ini'
+    $portRaw = $null
+    $enabledRaw = $null
+    $enabledValue = $null
+
+    if (-not (Test-Path -Path $iniPath -PathType Leaf)) {
+        return [pscustomobject]@{
+            IniPath      = $iniPath
+            PortRaw      = $portRaw
+            EnabledRaw   = $enabledRaw
+            EnabledValue = $enabledValue
+        }
+    }
+
+    try {
+        $lines = Get-Content -Path $iniPath -ErrorAction Stop
+    } catch {
+        Write-Warning ("Unable to read LabVIEW.ini at {0}: {1}" -f $iniPath, $_.Exception.Message)
+        return [pscustomobject]@{
+            IniPath      = $iniPath
+            PortRaw      = $portRaw
+            EnabledRaw   = $enabledRaw
+            EnabledValue = $enabledValue
+        }
+    }
+
+    foreach ($line in $lines) {
+        if ($null -eq $line) {
+            continue
+        }
+        if ($line -match '^\s*server\.tcp\.port\s*=\s*(.+?)\s*$') {
+            $portRaw = $Matches[1].Trim()
+            continue
+        }
+        if ($line -match '^\s*server\.tcp\.enabled\s*=\s*(.+?)\s*$') {
+            $enabledRaw = $Matches[1].Trim()
+            continue
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($enabledRaw)) {
+        $normalized = $enabledRaw.Trim().ToLowerInvariant()
+        if (@('true', 't', '1', 'yes', 'y') -contains $normalized) {
+            $enabledValue = $true
+        } elseif (@('false', 'f', '0', 'no', 'n') -contains $normalized) {
+            $enabledValue = $false
+        } else {
+            Write-Warning ("Ignoring unrecognized server.tcp.enabled value '{0}' in {1}." -f $enabledRaw, $iniPath)
+        }
+    }
+
+    return [pscustomobject]@{
+        IniPath      = $iniPath
+        PortRaw      = $portRaw
+        EnabledRaw   = $enabledRaw
+        EnabledValue = $enabledValue
+    }
+}
+
+function Resolve-LabVIEWCliPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWExecutablePath
+    )
+
+    $bitnessEnvName = "LVIE_LUNIT_PORT_{0}" -f $Bitness
+    $bitnessEnvValue = [Environment]::GetEnvironmentVariable($bitnessEnvName)
+    $bitnessPort = ConvertTo-LabVIEWCliPortNumber -RawValue $bitnessEnvValue -Source ('$env:{0}' -f $bitnessEnvName)
+    if ($null -ne $bitnessPort) {
+        return [pscustomobject]@{
+            PortNumber     = $bitnessPort
+            Source         = ('$env:{0}' -f $bitnessEnvName)
+            HasEnvOverride = $true
+            IniPath        = $null
+            ViServerEnabled = $null
+        }
+    }
+
+    $genericEnvValue = [Environment]::GetEnvironmentVariable('LVIE_LUNIT_PORT')
+    $genericPort = ConvertTo-LabVIEWCliPortNumber -RawValue $genericEnvValue -Source '$env:LVIE_LUNIT_PORT'
+    if ($null -ne $genericPort) {
+        return [pscustomobject]@{
+            PortNumber      = $genericPort
+            Source          = '$env:LVIE_LUNIT_PORT'
+            HasEnvOverride  = $true
+            IniPath         = $null
+            ViServerEnabled = $null
+        }
+    }
+
+    $iniSettings = Get-LabVIEWIniTcpSetting -LabVIEWExecutablePath $LabVIEWExecutablePath
+    $iniPort = ConvertTo-LabVIEWCliPortNumber -RawValue $iniSettings.PortRaw -Source ('{0} (server.tcp.port)' -f $iniSettings.IniPath)
+    if ($null -ne $iniPort) {
+        return [pscustomobject]@{
+            PortNumber      = $iniPort
+            Source          = ('{0} (server.tcp.port)' -f $iniSettings.IniPath)
+            HasEnvOverride  = $false
+            IniPath         = $iniSettings.IniPath
+            ViServerEnabled = $iniSettings.EnabledValue
+        }
+    }
+
+    if ($iniSettings.EnabledValue -eq $false) {
+        throw ("VI Server TCP is disabled in {0}. Set LVIE_LUNIT_PORT_{1} or LVIE_LUNIT_PORT to override." -f $iniSettings.IniPath, $Bitness)
+    }
+
+    return [pscustomobject]@{
+        PortNumber      = 3363
+        Source          = 'default:3363'
+        HasEnvOverride  = $false
+        IniPath         = $iniSettings.IniPath
+        ViServerEnabled = $iniSettings.EnabledValue
+    }
+}
+
+function Invoke-LabVIEWCli {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $labviewCliCommand = Get-Command LabVIEWCLI -ErrorAction SilentlyContinue
+    if (-not $labviewCliCommand) {
+        throw "LabVIEWCLI is not available on PATH."
+    }
+
+    $rawOutput = & $labviewCliCommand.Source @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    $lines = @()
+    foreach ($entry in $rawOutput) {
+        if ($null -ne $entry) {
+            $lines += [string]$entry
+        }
+    }
+    $lines | Out-Host
+
+    return [pscustomobject]@{
+        ExitCode    = $exitCode
+        OutputLines = $lines
+    }
+}
+
+function Invoke-RunIconEditorFromSourceSelector {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWVersion,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('32', '64')]
+        [string]$Bitness,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('enable', 'disable')]
+        [string]$Mode
+    )
+
+    try {
+        $selectorViPath = Join-Path $RepoRoot 'Tooling\Run Icon Editor from Source Selector.vi'
+        if (-not (Test-Path -Path $selectorViPath -PathType Leaf)) {
+            throw "Selector VI not found at $selectorViPath"
+        }
+
+        $installRoot = Get-LabVIEWInstallRoot -Version $LabVIEWVersion -Bitness $Bitness
+        if ([string]::IsNullOrWhiteSpace($installRoot)) {
+            throw "LabVIEW $LabVIEWVersion ($Bitness-bit) install not found."
+        }
+
+        $labviewExecutablePath = Join-Path $installRoot 'LabVIEW.exe'
+        if (-not (Test-Path -Path $labviewExecutablePath -PathType Leaf)) {
+            throw "LabVIEW executable not found at $labviewExecutablePath"
+        }
+
+        $portResolution = Resolve-LabVIEWCliPort -Bitness $Bitness -LabVIEWExecutablePath $labviewExecutablePath
+        $selectorMode = if ($Mode -eq 'enable') { 'set' } else { 'unset' }
+        Write-Host ("Running selector VI mode '{0}' ({1}-bit) via LabVIEWCLI on port {2} (source: {3})" -f $selectorMode, $Bitness, $portResolution.PortNumber, $portResolution.Source)
+
+        return Invoke-LabVIEWCli -Arguments @(
+            '-OperationName', 'RunVI',
+            '-LabVIEWPath', $labviewExecutablePath,
+            '-PortNumber', $portResolution.PortNumber.ToString(),
+            '-VIPath', $selectorViPath,
+            $selectorMode
+        )
+    } catch {
+        $message = $_.Exception.Message
+        Write-Error $message
+        return [pscustomobject]@{
+            ExitCode    = 1
+            OutputLines = @($message)
+        }
+    }
+}
+
 function Invoke-LabVIEWScript {
     param(
         [string]$ScriptPath,
@@ -298,26 +527,15 @@ function Invoke-DevModeNoLabVIEW {
         [switch]$SkipProcessCheck
     )
 
-    $scriptPath = if ($Mode -eq 'enable') {
-        Join-Path $RepoRoot 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
-    } else {
-        Join-Path $RepoRoot 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
-    }
-
-    if (-not (Test-Path -Path $scriptPath)) {
-        throw "Dev mode script not found at $scriptPath"
-    }
-
-    $arguments = @(
-        '-LabVIEWVersion', $LabVIEWVersion,
-        '-SupportedBitness', $Bitness,
-        '-RepoRoot', $RepoRoot
-    )
     if ($SkipProcessCheck) {
-        $arguments += '-SkipProcessCheck'
+        Write-Verbose "SkipProcessCheck is ignored for selector-based dev-mode toggles."
     }
 
-    return Invoke-LabVIEWScript -ScriptPath $scriptPath -Arguments $arguments
+    return Invoke-RunIconEditorFromSourceSelector `
+        -RepoRoot $RepoRoot `
+        -LabVIEWVersion $LabVIEWVersion `
+        -Bitness $Bitness `
+        -Mode $Mode
 }
 
 function New-LabVIEWStageContext {

@@ -2,17 +2,16 @@
   "schema_version": "1.0",
   "signatures": [
     {
-      "id": "powershell-lint.gk-missing",
+      "id": "powershell-lint.git-missing",
       "job": "PowerShell Lint",
       "containsAny": [
-        "GitKraken CLI 'gk' not found. Install it or add it to PATH.",
-        "GitKraken CLI helper not found"
+        "git was not found on PATH."
       ],
       "classification": "fatal-tool-dependency",
       "severity": "high",
       "recommendedActions": [
-        "Make gk optional by default and fall back to system git unless explicitly required.",
-        "Use LVIE_REQUIRE_GITKRAKEN_CLI=1 only on call paths that truly require gk behavior."
+        "Install git and ensure it is available on PATH for CI jobs.",
+        "Validate PATH and tool bootstrap steps before running lint."
       ],
       "preventiveCheck": "CI Debt Policy Gate / Root Cause Contract"
     },

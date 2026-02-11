@@ -2,11 +2,11 @@
 
 This playbook is the deterministic remediation guide used by CI debt analysis.
 
-## Signature: `powershell-lint.gk-missing`
-- Symptom: `PowerShell Lint` fails with `GitKraken CLI 'gk' not found`.
+## Signature: `powershell-lint.git-missing`
+- Symptom: `PowerShell Lint` fails with `git was not found on PATH`.
 - Detection rule: Job contains one of the signature fragments in `signatures.json`.
-- Fix: Keep `gk` optional by default and use system `git` fallback unless `LVIE_REQUIRE_GITKRAKEN_CLI=1`.
-- Prevention: `CI Debt Policy Gate / Root Cause Contract` rejects strict-only `gk` assumptions in critical scripts.
+- Fix: Install `git` and ensure PATH setup is correct in the failing environment.
+- Prevention: `CI Debt Policy Gate / Root Cause Contract` rejects legacy git-shim assumptions in critical scripts.
 
 ## Signature: `powershell-lint.new-issues`
 - Symptom: `PowerShell Lint` reports newly introduced PSScriptAnalyzer findings.

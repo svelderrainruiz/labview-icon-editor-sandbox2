@@ -1,7 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATH_CONTRACT_SCRIPT="$SCRIPT_DIR/path-contract.sh"
+if [[ ! -f "$PATH_CONTRACT_SCRIPT" ]]; then
+  echo "ERROR: Path contract helper was not found: $PATH_CONTRACT_SCRIPT" >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$PATH_CONTRACT_SCRIPT"
+
+resolve_lvie_repo_root "/workspace" > /dev/null
+LVIE_REPO_ROOT="${LVIE_RESOLVED_REPO_ROOT:-}"
+LVIE_REPO_ROOT_SOURCE="${LVIE_RESOLVED_REPO_ROOT_SOURCE:-unknown}"
+WORKSPACE_ROOT="$LVIE_REPO_ROOT"
+export LVIE_REPO_ROOT
+export WORKSPACE_ROOT
+export REPO_ROOT="$LVIE_REPO_ROOT"
+
 LV_RELEASE="${LV_RELEASE:-2026q1}"
 LV_YEAR="${LV_YEAR:-${LV_RELEASE:0:4}}"
 CONTAINER_VIPB_PATH="${CONTAINER_VIPB_PATH:-Tooling/deployment/NI Icon editor.vipb}"
@@ -9,22 +26,13 @@ CONTAINER_VIP_VERSION="${CONTAINER_VIP_VERSION:-}"
 CONTAINER_RELEASE_NOTES_PATH="${CONTAINER_RELEASE_NOTES_PATH:-Tooling/deployment/release_notes.md}"
 CONTAINER_VIPM_TIMEOUT_SECONDS="${CONTAINER_VIPM_TIMEOUT_SECONDS:-900}"
 
-LOG_DIR="${WORKSPACE_ROOT}/builds/logs"
+LOG_DIR="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "builds/logs")"
 GCLI_LOG="${LOG_DIR}/gcli-build-linux.log"
-VIP_OUTPUT_DIR="${WORKSPACE_ROOT}/builds/VI Package"
+VIP_OUTPUT_DIR="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "builds/VI Package")"
 
 fail() {
   echo "ERROR: $*" >&2
   exit 1
-}
-
-resolve_workspace_path() {
-  local path_value="$1"
-  if [[ "$path_value" = /* ]]; then
-    printf '%s\n' "$path_value"
-  else
-    printf '%s\n' "${WORKSPACE_ROOT}/${path_value}"
-  fi
 }
 
 require_file() {
@@ -47,10 +55,10 @@ if ! command -v g-cli >/dev/null 2>&1; then
   fail "g-cli is not available on PATH in this container."
 fi
 
-VIPB_PATH="$(resolve_workspace_path "$CONTAINER_VIPB_PATH")"
-RELEASE_NOTES_PATH="$(resolve_workspace_path "$CONTAINER_RELEASE_NOTES_PATH")"
-PPL_X86_PATH="${WORKSPACE_ROOT}/resource/plugins/lv_icon_x86.lvlibp"
-PPL_X64_PATH="${WORKSPACE_ROOT}/resource/plugins/lv_icon_x64.lvlibp"
+VIPB_PATH="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "$CONTAINER_VIPB_PATH")"
+RELEASE_NOTES_PATH="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "$CONTAINER_RELEASE_NOTES_PATH")"
+PPL_X86_PATH="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "resource/plugins/lv_icon_x86.lvlibp")"
+PPL_X64_PATH="$(join_lvie_repo_path "$LVIE_REPO_ROOT" "resource/plugins/lv_icon_x64.lvlibp")"
 
 require_file "$VIPB_PATH" "VIPB file"
 require_file "$RELEASE_NOTES_PATH" "Release notes file"
@@ -77,7 +85,7 @@ gcli_args=(
 )
 
 echo "Building VI Package on Linux container."
-echo "Workspace root: $WORKSPACE_ROOT"
+echo "Workspace root: $WORKSPACE_ROOT (source: $LVIE_REPO_ROOT_SOURCE)"
 echo "LabVIEW release/year: $LV_RELEASE / $LV_YEAR"
 echo "VIPB path: $VIPB_PATH"
 echo "Release notes path: $RELEASE_NOTES_PATH"

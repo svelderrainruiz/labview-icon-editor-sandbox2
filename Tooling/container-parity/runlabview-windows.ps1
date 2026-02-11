@@ -1,5 +1,5 @@
 param(
-    [string]$WorkspaceRoot = "C:\workspace",
+    [string]$WorkspaceRoot = "",
     [string]$TargetDir = "",
     [string]$LabVIEWPath = "C:\Program Files\National Instruments\LabVIEW 2026\LabVIEW.exe",
     [string]$ProjectPath = "",
@@ -10,6 +10,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+$pathContractScript = Join-Path -Path $PSScriptRoot -ChildPath '..\support\PathContract.ps1'
+if (-not (Test-Path -LiteralPath $pathContractScript -PathType Leaf)) {
+    throw "Path contract helper was not found: $pathContractScript"
+}
+. $pathContractScript
 
 function Test-EnabledValue {
     param(
@@ -45,6 +51,109 @@ function Resolve-LabVIEWVersionYear {
     }
 
     return ''
+}
+
+function ConvertTo-LabVIEWCliPortNumber {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RawValue,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Source
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RawValue)) {
+        return $null
+    }
+
+    $parsedPort = 0
+    if (-not [int]::TryParse($RawValue.Trim(), [ref]$parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
+        Write-Warning ("Ignoring invalid port value '{0}' from {1}. Expected integer range 1-65535." -f $RawValue, $Source)
+        return $null
+    }
+
+    return $parsedPort
+}
+
+function Get-LabVIEWIniTcpPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWExecutablePath
+    )
+
+    $iniPath = Join-Path -Path (Split-Path -Path $LabVIEWExecutablePath -Parent) -ChildPath 'LabVIEW.ini'
+    $portRaw = $null
+
+    if (-not (Test-Path -LiteralPath $iniPath -PathType Leaf)) {
+        return [pscustomobject]@{
+            IniPath = $iniPath
+            PortRaw = $portRaw
+        }
+    }
+
+    try {
+        $lines = Get-Content -LiteralPath $iniPath -ErrorAction Stop
+    } catch {
+        Write-Warning ("Unable to read LabVIEW.ini at {0}: {1}" -f $iniPath, $_.Exception.Message)
+        return [pscustomobject]@{
+            IniPath = $iniPath
+            PortRaw = $portRaw
+        }
+    }
+
+    foreach ($line in $lines) {
+        if ($null -eq $line) {
+            continue
+        }
+
+        if ($line -match '^\s*server\.tcp\.port\s*=\s*(.+?)\s*$') {
+            $portRaw = $Matches[1].Trim()
+            break
+        }
+    }
+
+    return [pscustomobject]@{
+        IniPath = $iniPath
+        PortRaw = $portRaw
+    }
+}
+
+function Resolve-LabVIEWCliPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LabVIEWExecutablePath
+    )
+
+    $bitnessPort = ConvertTo-LabVIEWCliPortNumber -RawValue $env:LVIE_LUNIT_PORT_64 -Source '$env:LVIE_LUNIT_PORT_64'
+    if ($null -ne $bitnessPort) {
+        return [pscustomobject]@{
+            PortNumber = $bitnessPort
+            Source     = '$env:LVIE_LUNIT_PORT_64'
+        }
+    }
+
+    $genericPort = ConvertTo-LabVIEWCliPortNumber -RawValue $env:LVIE_LUNIT_PORT -Source '$env:LVIE_LUNIT_PORT'
+    if ($null -ne $genericPort) {
+        return [pscustomobject]@{
+            PortNumber = $genericPort
+            Source     = '$env:LVIE_LUNIT_PORT'
+        }
+    }
+
+    $iniPortInfo = Get-LabVIEWIniTcpPort -LabVIEWExecutablePath $LabVIEWExecutablePath
+    $iniPort = ConvertTo-LabVIEWCliPortNumber -RawValue $iniPortInfo.PortRaw -Source ('{0} (server.tcp.port)' -f $iniPortInfo.IniPath)
+    if ($null -ne $iniPort) {
+        return [pscustomobject]@{
+            PortNumber = $iniPort
+            Source     = ('{0} (server.tcp.port)' -f $iniPortInfo.IniPath)
+        }
+    }
+
+    return [pscustomobject]@{
+        PortNumber = 3363
+        Source     = 'default:3363'
+    }
 }
 
 function Sync-IconEditorSourcesForBuildSpec {
@@ -178,13 +287,59 @@ function Invoke-LabVIEWCliOperation {
     }
 }
 
-if ([string]::IsNullOrWhiteSpace($TargetDir)) {
-    $TargetDir = Join-Path $WorkspaceRoot 'Test\Templates'
+$repoRootResolution = Resolve-LvieRepoRoot `
+    -LvieRepoRoot $env:LVIE_REPO_ROOT `
+    -WorkspaceRoot $WorkspaceRoot `
+    -RepoRoot $env:REPO_ROOT `
+    -DefaultRepoRoot 'C:\workspace'
+$WorkspaceRoot = $repoRootResolution.Path
+
+$projectRelativePath = if ([string]::IsNullOrWhiteSpace($env:LVIE_PROJECT_RELATIVE_PATH)) {
+    if ([string]::IsNullOrWhiteSpace($env:PROJECT_PATH_REL)) {
+        'lv_icon_editor.lvproj'
+    } else {
+        $env:PROJECT_PATH_REL
+    }
+} else {
+    $env:LVIE_PROJECT_RELATIVE_PATH
 }
 
-if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
-    $ProjectPath = Join-Path $WorkspaceRoot 'lv_icon_editor.lvproj'
+$projectPathCanonicalCandidate = if ([string]::IsNullOrWhiteSpace($ProjectPath)) { $env:LVIE_PROJECT_PATH } else { $ProjectPath }
+$projectPathAliasCandidate = if ([string]::IsNullOrWhiteSpace($ProjectPath)) { $env:PROJECT_PATH } else { $null }
+$projectPathResolution = Resolve-LvieProjectPath `
+    -LvieProjectPath $projectPathCanonicalCandidate `
+    -ProjectPath $projectPathAliasCandidate `
+    -RepoRoot $WorkspaceRoot `
+    -ProjectRelativePath $projectRelativePath `
+    -DefaultProjectRelativePath 'lv_icon_editor.lvproj'
+$ProjectPath = $projectPathResolution.Path
+
+$targetDirRelativePath = if ([string]::IsNullOrWhiteSpace($env:TARGET_DIR_REL)) {
+    'Test\Templates'
+} else {
+    $env:TARGET_DIR_REL
 }
+$targetDirSource = 'parameter:TargetDir'
+if ([string]::IsNullOrWhiteSpace($TargetDir)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:TARGET_DIR)) {
+        $TargetDir = $env:TARGET_DIR
+        $targetDirSource = '$env:TARGET_DIR'
+    } else {
+        $TargetDir = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath $targetDirRelativePath
+        $targetDirSource = '$env:TARGET_DIR_REL'
+    }
+}
+
+$env:LVIE_REPO_ROOT = $WorkspaceRoot
+$env:LVIE_PROJECT_PATH = $ProjectPath
+$env:LVIE_PROJECT_RELATIVE_PATH = $projectPathResolution.RelativePath
+$env:WORKSPACE_ROOT = $WorkspaceRoot
+$env:REPO_ROOT = $WorkspaceRoot
+$env:PROJECT_PATH = $ProjectPath
+
+Write-Output ("Resolved repo root: {0} (source: {1})" -f $WorkspaceRoot, $repoRootResolution.Source)
+Write-Output ("Resolved project path: {0} (source: {1})" -f $ProjectPath, $projectPathResolution.Source)
+Write-Output ("Resolved target directory: {0} (source: {1})" -f $TargetDir, $targetDirSource)
 
 if ([string]::IsNullOrWhiteSpace($BuildSpecName)) {
     $BuildSpecName = if ([string]::IsNullOrWhiteSpace($env:CONTAINER_PARITY_BUILD_SPEC_NAME)) {
@@ -209,7 +364,7 @@ $buildOutputRelativePath = if ([string]::IsNullOrWhiteSpace($env:CONTAINER_PARIT
 } else {
     $env:CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH
 }
-$buildOutputPath = Join-Path $WorkspaceRoot $buildOutputRelativePath
+$buildOutputPath = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath $buildOutputRelativePath
 
 if (-not (Get-Command LabVIEWCLI -ErrorAction SilentlyContinue)) {
     Write-Error "LabVIEWCLI is not available on PATH inside the container."
@@ -218,6 +373,14 @@ if (-not (Get-Command LabVIEWCLI -ErrorAction SilentlyContinue)) {
 if (-not (Test-Path -LiteralPath $TargetDir -PathType Container)) {
     Write-Error "Target directory does not exist: $TargetDir"
 }
+
+$selectorViPath = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Run Icon Editor from Source Selector.vi'
+if (-not (Test-Path -LiteralPath $selectorViPath -PathType Leaf)) {
+    Write-Error "Selector VI does not exist: $selectorViPath"
+}
+
+$selectorPort = Resolve-LabVIEWCliPort -LabVIEWExecutablePath $LabVIEWPath
+Write-Output ("Using selector VI Server port: {0} ({1})" -f $selectorPort.PortNumber, $selectorPort.Source)
 
 $excludeRaw = $env:CONTAINER_PARITY_EXCLUDE_FILES
 if ([string]::IsNullOrWhiteSpace($excludeRaw)) {
@@ -238,21 +401,67 @@ try {
         }
     }
 
-    Write-Output "Running LabVIEWCLI MassCompile in headless mode."
-    Write-Output "Target directory: $TargetDir"
-    Write-Output "LabVIEW path: $LabVIEWPath"
-    Write-Output ("Excluded templates: {0}" -f ($excludeFiles -join '; '))
-    Write-Output "Staging directory: $stagingDir"
+    $massCompileStageError = $null
+    $selectorUnsetErrorMessage = $null
+    $selectorSetSucceeded = $false
+    try {
+        Write-Output ("Running selector mode 'set' via LabVIEWCLI on port {0} (source: {1})." -f $selectorPort.PortNumber, $selectorPort.Source)
+        $selectorSet = Invoke-LabVIEWCliOperation -OperationName 'Selector-Set' -Arguments @(
+            '-LogToConsole', 'TRUE',
+            '-OperationName', 'RunVI',
+            '-LabVIEWPath', $LabVIEWPath,
+            '-PortNumber', $selectorPort.PortNumber.ToString(),
+            '-VIPath', $selectorViPath,
+            'set'
+        ) -WorkspaceRootPath $WorkspaceRoot
+        if ($selectorSet.ExitCode -ne 0) {
+            throw "LabVIEWCLI selector set failed with exit code $($selectorSet.ExitCode)."
+        }
+        $selectorSetSucceeded = $true
 
-    $massCompile = Invoke-LabVIEWCliOperation -OperationName 'MassCompile' -Arguments @(
-        '-LogToConsole', 'TRUE',
-        '-OperationName', 'MassCompile',
-        '-DirectoryToCompile', $stagingDir,
-        '-LabVIEWPath', $LabVIEWPath,
-        '-Headless'
-    ) -WorkspaceRootPath $WorkspaceRoot
-    if ($massCompile.ExitCode -ne 0) {
-        throw "LabVIEWCLI MassCompile failed with exit code $($massCompile.ExitCode)."
+        Write-Output "Running LabVIEWCLI MassCompile in headless mode."
+        Write-Output "Target directory: $TargetDir"
+        Write-Output "LabVIEW path: $LabVIEWPath"
+        Write-Output ("Excluded templates: {0}" -f ($excludeFiles -join '; '))
+        Write-Output "Staging directory: $stagingDir"
+
+        $massCompile = Invoke-LabVIEWCliOperation -OperationName 'MassCompile' -Arguments @(
+            '-LogToConsole', 'TRUE',
+            '-OperationName', 'MassCompile',
+            '-DirectoryToCompile', $stagingDir,
+            '-LabVIEWPath', $LabVIEWPath,
+            '-Headless'
+        ) -WorkspaceRootPath $WorkspaceRoot
+        if ($massCompile.ExitCode -ne 0) {
+            throw "LabVIEWCLI MassCompile failed with exit code $($massCompile.ExitCode)."
+        }
+    } catch {
+        $massCompileStageError = $_
+    } finally {
+        if ($selectorSetSucceeded) {
+            Write-Output ("Running selector mode 'unset' via LabVIEWCLI on port {0} (source: {1})." -f $selectorPort.PortNumber, $selectorPort.Source)
+            $selectorUnset = Invoke-LabVIEWCliOperation -OperationName 'Selector-Unset' -Arguments @(
+                '-LogToConsole', 'TRUE',
+                '-OperationName', 'RunVI',
+                '-LabVIEWPath', $LabVIEWPath,
+                '-PortNumber', $selectorPort.PortNumber.ToString(),
+                '-VIPath', $selectorViPath,
+                'unset'
+            ) -WorkspaceRootPath $WorkspaceRoot
+            if ($selectorUnset.ExitCode -ne 0) {
+                $selectorUnsetErrorMessage = "LabVIEWCLI selector unset failed with exit code $($selectorUnset.ExitCode)."
+            }
+        }
+    }
+
+    if ($massCompileStageError -and $selectorUnsetErrorMessage) {
+        throw ("{0} Selector unset error: {1}" -f $massCompileStageError.Exception.Message, $selectorUnsetErrorMessage)
+    }
+    if ($massCompileStageError) {
+        throw $massCompileStageError.Exception
+    }
+    if ($selectorUnsetErrorMessage) {
+        throw $selectorUnsetErrorMessage
     }
 
     Write-Output "MassCompile completed successfully."
@@ -274,8 +483,8 @@ try {
     $labviewYear = $null
     $devModeEnabled = $false
     if ($enableDevMode) {
-        $setDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
-        $revertDevModeScript = Join-Path $WorkspaceRoot 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
+        $setDevModeScript = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
+        $revertDevModeScript = Join-LvieRepoPath -RepoRoot $WorkspaceRoot -RelativePath 'Tooling\Revert-DevelopmentMode-NoLabVIEW.ps1'
         if (-not (Test-Path -LiteralPath $setDevModeScript -PathType Leaf)) {
             throw "Required script not found: $setDevModeScript"
         }
