@@ -35,9 +35,6 @@
     Arguments forwarded to the run script.
 #>
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git was not found on PATH."
-}
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
@@ -70,6 +67,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git was not found on PATH."
+}
 
 function Resolve-RepoRoot {
     param([string]$BasePath)
