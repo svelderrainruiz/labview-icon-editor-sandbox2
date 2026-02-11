@@ -11,6 +11,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if (-not [string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
+    Write-Host ("LabVIEW version hint: {0}" -f $LabVIEWVersion)
+}
+
 $pathContractScript = Join-Path -Path $PSScriptRoot -ChildPath '..\support\PathContract.ps1'
 if (-not (Test-Path -LiteralPath $pathContractScript -PathType Leaf)) {
     throw "Path contract helper was not found: $pathContractScript"
