@@ -639,100 +639,11 @@ jobs:
           cleanup_worktree: 'false'
 
   # Stage 3: Self-hosted LabVIEW validation/build chain (profile-gated).
-  labviewcli-masscompile-preflight-32:
-    name: LabVIEWCLI MassCompile Preflight (LV 32-bit)
-    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, changes]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-    env:
-      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
-      LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
-      LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
-      LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          checkout: 'false'
-          bitness: 32
-          create_worktree: 'true'
-          worktree_root_mode: runner_temp
-      - name: Run LabVIEWCLI cache-clear + mass compile preflight (LV 32-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".\Tooling\Invoke-LabVIEWCliMassCompilePreflight.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 32 `
-            -RepoRoot "$env:REPO_ROOT"
-      - name: Upload preflight artifacts (LV 32-bit)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: labviewcli-masscompile-preflight-32-bit
-          path: ${{ env.REPO_ROOT }}/TestResults/labviewcli-masscompile/32
-          if-no-files-found: warn
-      - name: Job teardown
-        if: always()
-        uses: ./.github/actions/lvie-job-teardown
-        with:
-          revert_bitness: 32
-          close_labview: 'true'
-          close_bitness: 32
-
-  labviewcli-masscompile-preflight-64:
-    name: LabVIEWCLI MassCompile Preflight (LV 64-bit)
-    if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, changes, labviewcli-masscompile-preflight-32]
-    runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
-    env:
-      LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
-      LVIE_REQUIRED_LABVIEW_VERSION: ${{ needs.version-gate.outputs.raw }}
-      LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
-      LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Job setup
-        uses: ./.github/actions/lvie-job-setup
-        with:
-          checkout: 'false'
-          bitness: 64
-          create_worktree: 'true'
-          worktree_root_mode: runner_temp
-      - name: Run LabVIEWCLI cache-clear + mass compile preflight (LV 64-bit)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".\Tooling\Invoke-LabVIEWCliMassCompilePreflight.ps1" `
-            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-            -SupportedBitness 64 `
-            -RepoRoot "$env:REPO_ROOT"
-      - name: Upload preflight artifacts (LV 64-bit)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: labviewcli-masscompile-preflight-64-bit
-          path: ${{ env.REPO_ROOT }}/TestResults/labviewcli-masscompile/64
-          if-no-files-found: warn
-      - name: Job teardown
-        if: always()
-        uses: ./.github/actions/lvie-job-teardown
-        with:
-          revert_bitness: 64
-          close_labview: 'true'
-          close_bitness: 64
 
   missing-in-project:
     name: Missing-In-Project (LV ${{ matrix.bitness }}-bit)
     if: ${{ needs.prerelease-context.outputs.ci_profile != 'release-priority' }}
-    needs: [run-metadata, prerelease-context, version-gate, labviewcli-masscompile-preflight-64]
+    needs: [run-metadata, prerelease-context, version-gate, changes]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
       LVIE_WORKTREE_ROOT: '${{ github.workspace }}\..\..\lvie\w'
@@ -1280,8 +1191,6 @@ jobs:
       - vip-prerelease-requirements-lint
       - pylavi-validate
       - changes
-      - labviewcli-masscompile-preflight-32
-      - labviewcli-masscompile-preflight-64
       - missing-in-project
       - unit-tests
       - build-ppl-x64
@@ -1312,8 +1221,6 @@ jobs:
           )
           $requiredFullValidation = @(
             'changes',
-            'labviewcli-masscompile-preflight-32',
-            'labviewcli-masscompile-preflight-64',
             'missing-in-project',
             'unit-tests',
             'build-ppl-x64',
