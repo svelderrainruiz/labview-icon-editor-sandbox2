@@ -77,8 +77,7 @@ Issue-type labels:
 
 ## Local GitHub Auth and Fork Remotes
 
-Most tooling can fall back to system `git` when GitKraken CLI (`gk`) is missing.
-Set `LVIE_REQUIRE_GITKRAKEN_CLI=1` only when a call path must require `gk`.
+Tooling requires system `git` on PATH.
 
 Some tooling fetches GitHub artifacts or queries workflow runs. Configure auth and ensure your fork remotes are correct.
 

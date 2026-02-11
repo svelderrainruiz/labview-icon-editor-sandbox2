@@ -28,7 +28,7 @@ Describe 'Invoke-CiDebtAnalysis' {
 
         $analysis = Get-Content -Path $outJson -Raw | ConvertFrom-Json
         $incidentIds = @($analysis.incidents | ForEach-Object { $_.id })
-        $incidentIds | Should -Contain 'powershell-lint.gk-missing'
+        $incidentIds | Should -Contain 'powershell-lint.git-missing'
         $incidentIds | Should -Contain 'verify-iepaths.setup-failed'
         $incidentIds | Should -Contain 'pipeline-contract.cascade-failure'
         $analysis.unknown_incident_count | Should -Be 0

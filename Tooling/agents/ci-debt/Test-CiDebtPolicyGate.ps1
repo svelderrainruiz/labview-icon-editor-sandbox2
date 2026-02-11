@@ -141,9 +141,9 @@ foreach ($scriptPath in $criticalScripts) {
     Test-ForbidPattern `
         -Root $resolvedRoot `
         -RelativePath $scriptPath `
-        -Pattern 'Enable-GitKrakenGitShim\s+-Require(?!:)' `
-        -Rule 'fatal-gk-assumption' `
-        -Message "Critical scripts must not hard-require gk without a fallback guard." `
+        -Pattern '(?i)\bgk\b|support[\\/]+git\.cmd|Enable-.*GitShim|LVIE_REQUIRE_.*GIT.*CLI' `
+        -Rule 'fatal-legacy-git-shim-reference' `
+        -Message "Critical scripts must not reference legacy git-shim tooling." `
         -Findings $findings
 }
 

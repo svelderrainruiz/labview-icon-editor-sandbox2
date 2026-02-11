@@ -16,7 +16,7 @@
       "name": "PowerShell Lint",
       "status": "completed",
       "conclusion": "failure",
-      "log": "Exception: GitKraken CLI 'gk' not found. Install it or add it to PATH."
+      "log": "Exception: git was not found on PATH."
     },
     {
       "databaseId": 63024513106,

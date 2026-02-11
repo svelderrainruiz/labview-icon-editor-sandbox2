@@ -272,7 +272,7 @@ function New-CiDebtMarkdown {
     $lines.Add('') | Out-Null
 
     $signatureIds = @($Incidents | ForEach-Object { $_.id })
-    $hasLint = ($signatureIds -contains 'powershell-lint.gk-missing') -or ($signatureIds -contains 'powershell-lint.new-issues')
+    $hasLint = ($signatureIds -contains 'powershell-lint.git-missing') -or ($signatureIds -contains 'powershell-lint.new-issues')
     $hasVerify = $signatureIds -contains 'verify-iepaths.setup-failed'
     $hasPipeline = $signatureIds -contains 'pipeline-contract.cascade-failure'
 

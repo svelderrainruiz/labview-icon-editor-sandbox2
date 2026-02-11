@@ -112,13 +112,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$gitKrakenScript = Join-Path $PSScriptRoot 'support\GitKrakenCli.ps1'
-if (-not (Test-Path -Path $gitKrakenScript)) {
-    throw "GitKraken CLI helper not found at $gitKrakenScript"
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git was not found on PATH."
 }
-. $gitKrakenScript
-Enable-GitKrakenGitShim -Require | Out-Null
-
 function Resolve-RepoRoot {
     param([string]$PathOverride)
 
