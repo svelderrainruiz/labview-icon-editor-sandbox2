@@ -41,6 +41,12 @@ Automating your Icon Editor builds and tests:
 - CI behavior change: `ci.yml`, `ci-composite.yml`, and container parity CI scripts no longer perform automatic selector mode set/unset or development-mode toggles.
 - Manual development mode support remains available through [`development-mode-toggle.yml`](../.github/workflows/development-mode-toggle.yml).
 
+### Solo Maintainer Mode (2026-02-11)
+
+- Repository operation is optimized for a single maintainer with PR-gated integration and manual publish intent.
+- Normative policy: [`docs/ci/solo-maintainer-mode.md`](ci/solo-maintainer-mode.md)
+- LLM runbook: [`docs/ci/llm-operator-runbook.md`](ci/llm-operator-runbook.md)
+
 ---
 
 ## 2. Quickstart
@@ -62,7 +68,7 @@ Automating your Icon Editor builds and tests:
      - Concurrency is isolated by repository, runner label, event name, and ref.
      - Pull request runs auto-cancel earlier runs for the same PR ref.
      - Push and `workflow_dispatch` runs are isolated by event/ref and are not canceled by pull request updates.
-   - `ci.yml` (`CI Pipeline (No Smoke)`) is a PR-only companion workflow that increases validation signal without publication side effects. It intentionally excludes `devmode-no-labview-smoke` and all publish-path jobs.
+   - `ci.yml` (`CI Pipeline (No Smoke)`) is a PR-only companion workflow that increases validation signal without publication side effects.
 
 5. **Build VI Package**
    - Produces `.vip` artifacts automatically using the Windows/self-hosted `build-vip` job in `ci-composite.yml` for `full` and `pr-fast` profiles.
@@ -84,8 +90,7 @@ This document is the canonical source for release/publication policy.
 
 - Normative contract: [VI Package Pre-Release Requirements](vip-prerelease-requirements.md).
 - Merge strategy contract: pull requests intended to drive prerelease publication to `develop` must use merge commits (`--merge`), not squash or rebase.
-- Auto publish contract: prerelease publication runs for `push` events on `develop` when the pushed SHA is the merged `develop` SHA from a merged pull request targeting `develop`.
-- Manual publish contract: `workflow_dispatch` supports explicit prerelease backfill only with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+- Publish contract: prerelease publication is **manual-intent only** via `workflow_dispatch` with `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
 - Execution profiles (`prerelease-context` output `ci_profile`):
   - `release-priority`: `workflow_dispatch` with `force_gcli_lunit=true`; skips self-hosted heavy jobs (`Verify IE Paths`, smoke, missing-in-project, unit-tests, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) and targets <= 25 minutes.
   - `pr-fast`: `pull_request`; keeps validation coverage but uses 64-bit-only matrices for smoke/missing-in-project/unit-tests, targeting <= 35 minutes.
@@ -96,22 +101,18 @@ This document is the canonical source for release/publication policy.
 - Branch trigger reality for `ci-composite.yml`: `push` and `pull_request` run on `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*`, plus `workflow_dispatch`.
 - Companion trigger reality for `ci.yml`: `pull_request` only; no `push` or `workflow_dispatch`.
 
-#### Deterministic Merge + Publish Procedure
+#### Deterministic Manual Publish Procedure
 
-1. Merge the PR into `develop` with a merge commit:
-   ```powershell
-   gh pr merge <pr-number> --merge --delete-branch
-   ```
-2. Read the merged `develop` SHA:
+1. Resolve the target SHA to publish:
    ```powershell
    $repo = pwsh -NoProfile -File .\Tooling\Resolve-GitHubRepo.ps1
-   $mergeSha = gh pr view <pr-number> --repo $repo --json mergeCommit --jq .mergeCommit.oid
+   $sha = (git rev-parse HEAD).Trim()
    ```
-3. Use manual publish/backfill only when needed, pinned to that merged SHA:
+2. Dispatch publish intent explicitly:
    ```powershell
    gh workflow run ci-composite.yml --repo $repo `
      -f publish_prerelease=true `
-     -f expected_sha=$mergeSha `
+     -f expected_sha=$sha `
      -f strict_sha=true
    ```
 
@@ -173,7 +174,7 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **publish-prerelease** – upserts GitHub prereleases for eligible runs, attaches required assets (including Linux and Windows container packed libraries), and emits `prerelease-publish-status`.
 - **pipeline-contract** – validates required-job outcomes using profile-specific expectations so intentionally skipped jobs in `release-priority` do not fail the run.
 
-Companion workflow note: [`ci.yml`](../.github/workflows/ci.yml) provides PR-only validation signal. It does not define `devmode-no-labview-smoke`, container publish jobs, `publish-gate`, or `publish-prerelease`, and is intentionally non-publishing.
+Companion workflow note: [`ci.yml`](../.github/workflows/ci.yml) provides PR-only validation signal and is intentionally non-publishing.
 
 Windows self-hosted build jobs (`build-ppl-*` and `build-vip`) run a `close-labview` step after their build actions finish but before any steps that rename files or upload artifacts, so it is not the final step.
 
@@ -188,7 +189,7 @@ The `build-ppl` job uses a matrix to produce both bitnesses rather than distinct
 | `workflow_dispatch` (`full`, `force_gcli_lunit=false`) | Runs (required) |
 | `workflow_dispatch` (`release-priority`, `force_gcli_lunit=true`) | Skipped intentionally |
 
-Branch protection recommendation: require only `CI Pipeline (Composite) / Pipeline Contract` for pull requests. Keep `CI Pipeline (No Smoke) / Pipeline Contract` non-required during rollout.
+Branch protection recommendation for solo mode: require only `CI Pipeline (Composite) / Pipeline Contract` and `CI Pipeline (No Smoke) / Pipeline Contract` for pull requests.
 
 *(The **Run Unit Tests** workflow has been consolidated into the main CI process.)*
 
@@ -259,11 +260,10 @@ Although GitHub Actions primarily run on GitHub-hosted or self-hosted agents, yo
    - Assign `major`, `minor`, or `patch` to control the version bump.
    - The CI validates your code and produces versioned build artifacts.
 
-4. **Merge the PR into `develop` with a merge commit**:
+4. **Merge the PR into your target integration branch with a merge commit**:
      - The **Build VI Package** workflow builds and uploads the `.vip` artifact.
-     - Use merge commits only (`gh pr merge <pr-number> --merge --delete-branch`); do not use squash/rebase for prerelease-driving PRs.
-     - Merged PR commits into `develop` publish a GitHub prerelease automatically when eligibility checks pass.
-     - Manual backfill is available through `workflow_dispatch` using `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`.
+     - Use merge commits only (`gh pr merge <pr-number> --merge --delete-branch`); do not use squash/rebase for prerelease-driving changes.
+     - Prerelease publication is manual-intent only via `workflow_dispatch` using `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
      - **Inside** that `.vip`, the **“Company Name”** and **“Author Name (Person or Company)”** fields are filled automatically using `github.repository_owner` and `github.event.repository.name`. Modify the “Generate display information JSON” step in `.github/workflows/ci-composite.yml` to override them.
 
 5. **Disable Development Mode**:  

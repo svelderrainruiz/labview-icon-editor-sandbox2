@@ -17,9 +17,6 @@ on:
         required: false
         default: true
         type: boolean
-  schedule:
-    - cron: "30 9 * * 1"
-
 permissions:
   actions: read
   contents: read

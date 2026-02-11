@@ -94,8 +94,8 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 
 ### 3.1 How the Action Is Triggered
 The `build-vi-package` directory defines a **composite action**. It does not listen for events on its own; instead, the CI workflow in [`ci-composite.yml`](../../../.github/workflows/ci-composite.yml) invokes it.
-That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Early jobs like `run-metadata`, `prerelease-context`, `version-gate`, and `changes` run on GitHub-hosted `ubuntu-latest`. Windows self-hosted jobs handle LabVIEW validation and packaging (`dev-mode-gate`, `devmode-no-labview-smoke`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) when the active `ci_profile` requires them. Current branch filters for push/PR triggers are `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*` in `ci-composite.yml`.
-Companion workflow note: [`ci.yml`](../../../.github/workflows/ci.yml) is PR-only (`pull_request`) and intentionally omits `devmode-no-labview-smoke` plus all publish-path jobs.
+That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Early jobs like `run-metadata`, `prerelease-context`, `version-gate`, and `changes` run on GitHub-hosted `ubuntu-latest`. Windows self-hosted jobs handle LabVIEW validation and packaging (`dev-mode-gate`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) when the active `ci_profile` requires them. Current branch filters for push/PR triggers are `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*` in `ci-composite.yml`.
+Companion workflow note: [`ci.yml`](../../../.github/workflows/ci.yml) is PR-only (`pull_request`) and intentionally omits publish-path jobs.
 
 ### 3.2 Configurable Inputs / Parameters
 `ci-composite.yml` calls this action and provides all required inputs automatically. When invoking
@@ -133,7 +133,7 @@ components remain unchanged and only the build number increases.
 ### 3.4 Artifact Publication
 - Packaging output: the `.vip` is uploaded as a run artifact by `build-vip`.
 - Publication contract: prerelease publication is defined by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md), including eligibility, version binding, and required asset rules.
-- Manual backfill: `workflow_dispatch` can republish eligible assets only when `publish_prerelease=true`, `expected_sha` is set to the merged `develop` SHA, and `strict_sha=true`.
+- Manual publish intent: `workflow_dispatch` can publish eligible assets only when `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
 - `ci_profile` behavior:
   - `full` and `pr-fast` runs include `build-vip` and full prerelease asset expectations.
   - `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`) intentionally skips `build-vip` and publishes container packed-library assets only.
@@ -182,7 +182,7 @@ components remain unchanged and only the build number increases.
 ### 4.3 Pre-Release vs. Final Release
 
 - Develop prereleases are governed by [`vip-prerelease-requirements.md`](../../vip-prerelease-requirements.md).
-- Eligible merged-PR pushes to `develop` publish an upserted prerelease using `needs.version.outputs.VERSION` as both tag and title.
+- Prerelease publication is manual-intent via `workflow_dispatch` (`publish_prerelease=true`, `expected_sha=<sha>`, `strict_sha=true`) and uses `needs.version.outputs.VERSION` as tag/title.
 - Optional legacy behavior: `compute-version` still supports alpha/beta/rc suffixes for `release-alpha/*`, `release-beta/*`, and `release-rc/*` branch names.
 - Merging to `main` remains the stable/final release path.
 
@@ -235,9 +235,9 @@ components remain unchanged and only the build number increases.
 ## 7. **Usage & Examples**
 
 ### 7.1 Pull Requests with Labels
-- **Scenario**: You create a PR from a feature branch into `develop`.
+- **Scenario**: You create a PR from a feature branch into an integration branch.
 - **Action**: Add a label like `major` or `minor`.
-- **Result**: Upon merge-commit merge (`--merge`), the workflow updates that version field (major/minor/patch) and applies a commit-based build number. If the PR has no version label, the patch version is bumped by default. The `.vip` artifact is uploaded, and the target policy is to publish a GitHub pre-release from that merged `develop` SHA.
+- **Result**: Upon merge-commit merge (`--merge`), the workflow updates that version field (major/minor/patch) and applies a commit-based build number. If the PR has no version label, the patch version is bumped by default. The `.vip` artifact is uploaded. Publication remains manual-intent via `workflow_dispatch`.
 
 #### Example:
 1. PR labeled `minor`:
@@ -273,7 +273,7 @@ components remain unchanged and only the build number increases.
 ### 8.2 Main Repo Testing
 1. Merge a labeled PR (e.g., `patch`) into `develop`.  
 2. Observe the workflow’s console output: the version should increment patch by 1, and the build number increments from commit count.  
-3. Verify that the `.vip` artifact is available and that prerelease publication behavior matches policy (`develop` merged-PR runs publish automatically; manual dispatch is for explicit backfill).
+3. Verify that the `.vip` artifact is available and that prerelease publication behavior matches policy (manual `workflow_dispatch` with explicit publish intent and SHA binding).
 
 ### 8.3 LabVIEW-Specific QA
 - If you have LabVIEW unit tests, integrate them by adding a step in the YAML:
@@ -326,7 +326,7 @@ components remain unchanged and only the build number increases.
 
 ## 11. **Conclusion**
 
-By properly setting up environment variables, referencing your LabVIEW environment on a self-hosted runner, and using label-based version increments plus a commit-based build number, this GitHub Action automates `.vip` build and artifact handoff. Use `docs/ci-workflows.md` as the canonical release/publication policy source (including active `develop` prerelease automation and manual backfill controls).
+By properly setting up environment variables, referencing your LabVIEW environment on a self-hosted runner, and using label-based version increments plus a commit-based build number, this GitHub Action automates `.vip` build and artifact handoff. Use `docs/ci-workflows.md` as the canonical release/publication policy source (manual-intent prerelease publication and explicit dispatch controls).
 
 
 

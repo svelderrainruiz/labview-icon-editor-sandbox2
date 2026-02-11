@@ -1,8 +1,6 @@
 name: Label Metadata Audit
 
 on:
-  schedule:
-    - cron: "15 5 * * *"
   workflow_dispatch:
 
 permissions:

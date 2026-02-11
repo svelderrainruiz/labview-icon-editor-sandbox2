@@ -119,7 +119,7 @@ Below are 17 possible issues you might encounter, along with suggested steps to 
 
 **Possible Causes**:
 - You forgot to run the “disable” step of the Development Mode Toggle.  
-- Another step re-applied the `Set_Development_Mode.ps1` script.
+- A manual/local script re-applied `Set_Development_Mode.ps1`.
 
 **Solution**:
 1. Manually run the “Development Mode Toggle” workflow with `mode=disable`.  
@@ -133,12 +133,12 @@ Below are 17 possible issues you might encounter, along with suggested steps to 
 - The workflow completes, but you see no new release in GitHub’s “Releases” section.
 
 **Possible Causes**:
-- The run was not a merge to `develop`, so the pre-release publication policy was not expected to run.
+- The run did not include explicit publish intent (`workflow_dispatch` + publish inputs).
 - The publish step failed or was skipped due to eligibility, profile-specific gate checks, freshness requirements, assets, or API errors.
 
 **Solution**:
-1. Confirm the PR was merged into `develop` using a merge commit (not squash/rebase) and identify the merged `develop` SHA.
-2. Confirm the run is an eligible publish path (`develop` merged-PR push, or `workflow_dispatch` with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`).
+1. Identify the exact SHA you want to publish.
+2. Confirm the run is an eligible publish path: `workflow_dispatch` with `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
 3. For `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`), confirm there is a successful `full` profile run on `develop` in the previous 24 hours.
 4. Inspect the `publish-gate` and `publish-prerelease` job logs for explicit failure/skip reason output.
 5. Inspect the `prerelease-publish-status` artifact for machine-readable failure details and required-asset validation results.
@@ -309,14 +309,14 @@ gh workflow run ci-composite.yml --repo $repo `
 
 **Symptoms**:
 - One or more jobs show `skipped`, but the workflow still proceeds to publish checks.
-- Common examples: `dev-mode-gate`, `devmode-no-labview-smoke`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`.
+- Common examples: `dev-mode-gate`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`.
 
 **Possible Causes**:
 - The run used a different `ci_profile`:
   - `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`) intentionally skips heavy self-hosted validation/build jobs.
   - `pr-fast` (`pull_request`) keeps the jobs but uses 64-bit-only matrices for smoke/missing/unit tests.
   - `full` runs the full matrix and full self-hosted flow.
-- You are looking at `CI Pipeline (No Smoke)` (`ci.yml`), where `devmode-no-labview-smoke` is intentionally absent.
+- You are looking at `CI Pipeline (No Smoke)` (`ci.yml`), which is a PR-only non-publishing companion workflow.
 
 **Solution**:
 1. Check `prerelease-context` outputs for `ci_profile`.
@@ -371,7 +371,7 @@ By default, the workflow calculates the build number with `git rev-list --count 
 ### Q2: How Do I Create a Release?
 
 **Answer**:
-Repository policy publishes a GitHub prerelease for eligible `develop` publication events from merge commits. Merge PRs with `--merge` (not squash/rebase) when commit-number determinism matters. For explicit backfill, dispatch `ci-composite.yml` with `publish_prerelease=true`, `expected_sha=<merged-develop-sha>`, and `strict_sha=true`, then review `prerelease-publish-status` when troubleshooting.
+Repository policy uses manual publish intent. Dispatch `ci-composite.yml` with `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`, then review `prerelease-publish-status` when troubleshooting.
 
 ---
 

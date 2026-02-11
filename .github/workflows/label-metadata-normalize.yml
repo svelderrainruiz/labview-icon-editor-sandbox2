@@ -1,24 +1,6 @@
 name: Label Metadata Normalize
 
 on:
-  pull_request_target:
-    branches:
-      - develop
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - edited
-      - labeled
-      - unlabeled
-      - ready_for_review
-  issues:
-    types:
-      - opened
-      - reopened
-      - edited
-      - labeled
-      - unlabeled
   workflow_dispatch:
     inputs:
       mode:
