@@ -803,8 +803,8 @@ jobs:
             if ([string]::IsNullOrWhiteSpace($env:REPO_ROOT)) {
               $hints.Add('REPO_ROOT was not exported by job setup.') | Out-Null
             }
-            if (-not (Get-Command gk -ErrorAction SilentlyContinue)) {
-              $hints.Add("GitKraken CLI 'gk' was not detected on PATH.") | Out-Null
+            if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+              $hints.Add("git was not detected on PATH.") | Out-Null
             }
             if (-not (Test-Path (Join-Path $env:GITHUB_WORKSPACE 'Tooling\\New-CIWorktreeForJob.ps1'))) {
               $hints.Add('Tooling\\New-CIWorktreeForJob.ps1 was not found.') | Out-Null
