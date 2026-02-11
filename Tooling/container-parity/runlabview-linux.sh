@@ -16,6 +16,9 @@ ENABLE_DEVMODE_RAW="${CONTAINER_PARITY_ENABLE_DEVMODE:-false}"
 LOG_ROOT="$WORKSPACE_ROOT/TestResults/container-parity/linux/logs"
 LABVIEW_ROOT="$(dirname "$LABVIEW_PATH")"
 DEVMODE_SCRIPT="$WORKSPACE_ROOT/Tooling/container-parity/devmode-linux.sh"
+SELECTOR_VI_PATH="$WORKSPACE_ROOT/Tooling/Run Icon Editor from Source Selector.vi"
+SELECTOR_PORT="3363"
+SELECTOR_PORT_SOURCE="default:3363"
 
 is_enabled_value() {
   local value="${1:-}"
@@ -77,6 +80,110 @@ list_labviewcli_temp_logs() {
   fi
 }
 
+is_valid_port_number() {
+  local value="${1:-}"
+  if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+
+  if (( value < 1 || value > 65535 )); then
+    return 1
+  fi
+
+  return 0
+}
+
+resolve_labview_ini_path_for_port() {
+  local labview_dir
+  labview_dir="$(dirname "$LABVIEW_PATH")"
+
+  if [[ -f "$labview_dir/LabVIEW.ini" ]]; then
+    printf '%s' "$labview_dir/LabVIEW.ini"
+    return
+  fi
+
+  if [[ -f "$labview_dir/labviewprofull.ini" ]]; then
+    printf '%s' "$labview_dir/labviewprofull.ini"
+    return
+  fi
+
+  printf '%s' "$labview_dir/LabVIEW.ini"
+}
+
+read_labview_ini_tcp_port() {
+  local ini_path="$1"
+  if [[ ! -f "$ini_path" ]]; then
+    return 0
+  fi
+
+  awk '
+    BEGIN { IGNORECASE = 1 }
+    /^[[:space:]]*server\.tcp\.port[[:space:]]*=/ {
+      sub(/^[^=]*=/, "")
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      print
+      exit
+    }
+  ' "$ini_path"
+}
+
+resolve_selector_port() {
+  local candidate
+  local ini_path
+  local ini_port_raw
+
+  candidate="${LVIE_LUNIT_PORT_64:-}"
+  if [[ -n "$candidate" ]]; then
+    if is_valid_port_number "$candidate"; then
+      SELECTOR_PORT="$candidate"
+      SELECTOR_PORT_SOURCE="\$LVIE_LUNIT_PORT_64"
+      return 0
+    fi
+
+    echo "WARNING: Ignoring invalid port value '$candidate' from \$LVIE_LUNIT_PORT_64. Expected integer range 1-65535." >&2
+  fi
+
+  candidate="${LVIE_LUNIT_PORT:-}"
+  if [[ -n "$candidate" ]]; then
+    if is_valid_port_number "$candidate"; then
+      SELECTOR_PORT="$candidate"
+      SELECTOR_PORT_SOURCE="\$LVIE_LUNIT_PORT"
+      return 0
+    fi
+
+    echo "WARNING: Ignoring invalid port value '$candidate' from \$LVIE_LUNIT_PORT. Expected integer range 1-65535." >&2
+  fi
+
+  ini_path="$(resolve_labview_ini_path_for_port)"
+  ini_port_raw="$(read_labview_ini_tcp_port "$ini_path")"
+  if [[ -n "$ini_port_raw" ]]; then
+    if is_valid_port_number "$ini_port_raw"; then
+      SELECTOR_PORT="$ini_port_raw"
+      SELECTOR_PORT_SOURCE="$ini_path (server.tcp.port)"
+      return 0
+    fi
+
+    echo "WARNING: Ignoring invalid port value '$ini_port_raw' from $ini_path (server.tcp.port). Expected integer range 1-65535." >&2
+  fi
+
+  SELECTOR_PORT="3363"
+  SELECTOR_PORT_SOURCE="default:3363"
+}
+
+run_selector_mode() {
+  local mode="$1"
+  local port="$2"
+
+  echo "Running selector mode '$mode' via LabVIEWCLI on port $port (source: $SELECTOR_PORT_SOURCE)."
+  invoke_labviewcli "selector-$mode" \
+    -LogToConsole TRUE \
+    -OperationName RunVI \
+    -LabVIEWPath "$LABVIEW_PATH" \
+    -PortNumber "$port" \
+    -VIPath "$SELECTOR_VI_PATH" \
+    "$mode"
+}
+
 invoke_labviewcli() {
   local operation="$1"
   shift
@@ -133,10 +240,13 @@ if [[ ! -d "$TARGET_DIR" ]]; then
   exit 1
 fi
 
-echo "Running LabVIEWCLI MassCompile in headless mode."
-echo "Target directory: $TARGET_DIR"
-echo "LabVIEW path: $LABVIEW_PATH"
-echo "Excluded templates: $EXCLUDE_LIST"
+if [[ ! -f "$SELECTOR_VI_PATH" ]]; then
+  echo "ERROR: Selector VI does not exist: $SELECTOR_VI_PATH" >&2
+  exit 1
+fi
+
+resolve_selector_port
+echo "Using selector VI Server port: $SELECTOR_PORT ($SELECTOR_PORT_SOURCE)"
 
 STAGING_DIR="$(mktemp -d)"
 DEVMODE_ENABLED=0
@@ -174,13 +284,43 @@ for _item in "${_exclude_items[@]}"; do
   fi
 done
 
+if ! run_selector_mode "set" "$SELECTOR_PORT"; then
+  echo "ERROR: LabVIEWCLI selector set failed." >&2
+  exit 1
+fi
+
+masscompile_error=""
+unset_error=""
+echo "Running LabVIEWCLI MassCompile in headless mode."
+echo "Target directory: $TARGET_DIR"
+echo "LabVIEW path: $LABVIEW_PATH"
+echo "Excluded templates: $EXCLUDE_LIST"
+echo "Staging directory: $STAGING_DIR"
 if ! invoke_labviewcli "MassCompile" \
   -LogToConsole TRUE \
   -OperationName MassCompile \
   -DirectoryToCompile "$STAGING_DIR" \
   -LabVIEWPath "$LABVIEW_PATH" \
   -Headless; then
-  echo "ERROR: LabVIEWCLI MassCompile failed." >&2
+  masscompile_error="LabVIEWCLI MassCompile failed."
+fi
+
+if ! run_selector_mode "unset" "$SELECTOR_PORT"; then
+  unset_error="LabVIEWCLI selector unset failed."
+fi
+
+if [[ -n "$masscompile_error" && -n "$unset_error" ]]; then
+  echo "ERROR: $masscompile_error Selector unset error: $unset_error" >&2
+  exit 1
+fi
+
+if [[ -n "$masscompile_error" ]]; then
+  echo "ERROR: $masscompile_error" >&2
+  exit 1
+fi
+
+if [[ -n "$unset_error" ]]; then
+  echo "ERROR: $unset_error" >&2
   exit 1
 fi
 
