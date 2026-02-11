@@ -363,7 +363,7 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
     $status = 'success'
     $startTime = Get-Date
     try {
-        $attemptRunId = if ($preflight -and $preflight.RunId) { \"{0}-{1}\" -f $preflight.RunId, $attemptLabel } else { $null }
+        $attemptRunId = if ($preflight -and $preflight.RunId) { "{0}-{1}" -f $preflight.RunId, $attemptLabel } else { $null }
         & $runScript `
             -LabVIEWVersion $LabVIEWVersion `
             -LabVIEWBitness $LabVIEWBitness `
