@@ -96,7 +96,7 @@ foreach ($relativePath in $contractScriptList) {
                         Line    = $lineNumber
                         Pattern = '$WORKSPACE_ROOT/...'
                         Message = 'Use join_lvie_repo_path helper instead of direct workspace-root concatenation.'
-                    }) | Out-Null
+                }) | Out-Null
             }
         } else {
             if ($lineText -match '(?<![A-Za-z0-9_])\$WorkspaceRoot(?![A-Za-z0-9_])\\' -or $lineText -match 'Join-Path\s+(-Path\s+)?\$WorkspaceRoot(?![A-Za-z0-9_])') {
@@ -108,6 +108,25 @@ foreach ($relativePath in $contractScriptList) {
                         Message = 'Use Join-LvieRepoPath helper instead of direct workspace-root concatenation.'
                     }) | Out-Null
             }
+        }
+    }
+}
+
+$pathContractRelativePath = 'Tooling/support/PathContract.ps1'
+$pathContractFullPath = Join-Path -Path $repoRootPath -ChildPath $pathContractRelativePath
+if (Test-Path -LiteralPath $pathContractFullPath -PathType Leaf) {
+    $lineItems = Get-Content -LiteralPath $pathContractFullPath -ErrorAction Stop
+    $lineNumber = 0
+    foreach ($lineText in $lineItems) {
+        $lineNumber++
+        if ($lineText -match '^\s*#\s*requires\s+-version\b') {
+            $violationList.Add([pscustomobject]@{
+                    Type    = 'windows-container-shell-compat'
+                    File    = ($pathContractRelativePath -replace '\\', '/')
+                    Line    = $lineNumber
+                    Pattern = '#Requires -Version'
+                    Message = 'PathContract helper is imported by Windows container parity under powershell 5.1; do not add #Requires -Version.'
+                }) | Out-Null
         }
     }
 }
