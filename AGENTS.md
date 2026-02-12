@@ -106,22 +106,22 @@ Metadata quick-checks:
     ```
 
 ## CI Debt Training (Issue #74)
-- Canonical signatures are stored in:
-  - `Tooling/agents/ci-debt/signatures.json`
-- Remediation notes are stored in:
-  - `Tooling/agents/ci-debt/playbook.md`
+- Install/update the pinned Codex skill layer:
+  - `pwsh -NoProfile -File .\Tooling\Install-CodexSkillLayer.ps1`
+- Codex skill layer preflight (required; hard-fails when missing or invalid):
+  - `pwsh -NoProfile -File .\Tooling\Assert-CodexSkillLayer.ps1`
 - Analyze a specific CI run:
-  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
+  - `pwsh -NoProfile -File .\Tooling\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
 - Use fixture-only local validation (no live API calls):
-  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FixturePath .\Tooling\agents\ci-debt\fixtures\run-21840801109.json`
+  - `pwsh -NoProfile -File .\Tooling\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FixturePath .\Tooling\tests\fixtures\ci-debt\run-21840801109.json`
 - Enforce unknown-signature failures during training:
-  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FailOnUnknown`
+  - `pwsh -NoProfile -File .\Tooling\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FailOnUnknown`
 - Run training workflow manually:
   - `gh workflow run ci-debt-train.yml --repo $repo -f run_id=21840801109 -f issue_number=74 -f post_comment=true`
 - Run policy gate manually:
   - `gh workflow run ci-debt-policy-gate.yml --repo $repo -f mode=warn`
 - Local policy check:
-  - `pwsh -NoProfile -File .\Tooling\agents\ci-debt\Test-CiDebtPolicyGate.ps1 -Mode warn`
+  - `pwsh -NoProfile -File .\Tooling\Test-CiDebtPolicyGate.ps1 -Mode warn`
 
 ## pylavi / vi_validate gate
 - The local CI parity run includes a fast LabVIEW file validation step powered by `pylavi` (`vi_validate`) and runs **before** any g-cli/LabVIEW work.
@@ -226,7 +226,7 @@ Notes:
 - Outputs go to `$WORKTREE_ROOT\artifacts\<runid>\ci-local` when guardrails are active (default for local runs).
 - GitHub Actions disables artifact roots by default unless `LVIE_ENABLE_ARTIFACT_ROOT=1` or an explicit `-RunId`/`-ArtifactRoot` is passed.
 - The script always runs both 64-bit and 32-bit steps for LabVIEW 2021 (21.0).
-- The script handles Verify IE Paths, VIPC audit, missing-in-project, unit tests, PPL builds, and VIP build.
+- The script handles Verify IE Paths, VIPC audit, unit tests, PPL builds, and VIP build.
 - VIPC default behavior is audit-first (`-VipcMode audit`); optional diagnostics are available via `-VipcMode apply-info` or strict apply via `-VipcMode apply-enforce`.
 - The script runs `vi_validate` (pylavi) and uses `.lvversion` as the canonical LabVIEW version. Skip with `-SkipViValidate`.
 - If you pass `-LabVIEWVersion`, it must match `.lvversion` or the run will fail fast.
@@ -271,27 +271,40 @@ try {
 }
 ```
 
-## Proactive run loop (success = VI package produced)
-When running locally, keep iterating until a `.vip` is produced. Do not kill background automation; wait if LabVIEW or g-cli is already running.
+## Proactive belt-and-suspenders loop (standard)
+Use the canonical wrapper to run local parity first, then remote CI for the exact same SHA, then automatic CI debt analysis on remote failure.
 
-Success criteria:
-- A new `.vip` exists under `builds\VI Package`. The local parity script copies the latest `.vip` into `builds\VI Package` after a successful VIP build.
+Standard command:
+```
+pwsh -NoProfile -File .\Tooling\Invoke-BeltAndSuspendersCI.ps1 `
+  -Sha HEAD
+```
 
-Automated loop (PowerShell):
+What it does:
+- Runs `Run-CICompositeLocal-Auto.ps1` in standardized local mode (`-SuccessTarget ppl -SkipVerifyIEPaths -SkipMissingInProject -SkipBuildVip`) unless `-SkipLocalParity` is set.
+- Dispatches `CI Pipeline (Composite)` for the exact target SHA via a temp `ci-run/*` branch.
+- Waits for completion and runs `Tooling\Invoke-CiDebtAnalysis.ps1` automatically on non-success.
+
+Useful switches:
+- `-SkipLocalParity` for remote-only verification.
+- `-FullLocalParity` to override the standardized local mode and require full VIP-producing parity.
+- `-DispatchCleanupRemote` to delete the temporary dispatch branch after completion.
+- `-CiDebtFailOnUnknown` to hard-fail on unknown CI debt signatures.
+- `-MaxLocalAttempts <n>` to tune local parity retries.
+
+Local-only fallback:
 ```
 pwsh -NoProfile -File .\Tooling\Run-CICompositeLocal-Auto.ps1 `
   -MaxAttempts 5
 ```
 
 Notes:
-- Logs to `TestResults\agent-logs` (see `auto-run-history.csv` plus parity logs).
-- Timeouts grow on each failed attempt; caps are configurable in the script parameters.
-- The script waits for existing `g-cli`/`LabVIEW` processes and never terminates them.
-- By default, the loop creates a *new* worktree under the configured worktree root (`C:\dev` unless `LVIE_WORKTREE_ROOT` is set).
+- Logs/status are written under `TestResults\agent-logs`.
+- The local loop waits for existing `g-cli`/`LabVIEW` processes and never terminates them.
+- By default, local parity auto-loop creates a *new* short-path worktree under the configured worktree root (`C:\dev` unless `LVIE_WORKTREE_ROOT` is set).
   - Naming: `<repo>-ci-parity-auto-<yyyyMMdd-HHmmss>`
-  - This is intentional so each run uses a short path and prints `C:\dev\...` in logs (e.g. missing-in-project).
   - Old worktrees accumulate over time; see **Worktree cleanup** below.
-- Set `-UseWorktree:$false` to run directly from the current repo path.
+- Set `-LocalUseWorktree:$false` (wrapper) or `-UseWorktree:$false` (local-only script) to run directly from the current repo path.
 
 ## Worktree cleanup
 To keep `C:\dev` tidy, remove old worktrees after you’re done with them.

@@ -380,7 +380,7 @@ function Invoke-CiDebtAnalysis {
             severity = 'unknown'
             matched_fragments = @()
             recommended_actions = @(
-                'Add a deterministic signature in Tooling/agents/ci-debt/signatures.json.',
+                'Add a deterministic signature in ci-debt/signatures.json.',
                 'Add a fixture and playbook entry in the remediation PR.'
             )
             preventive_check = 'CI Debt Policy Gate / Root Cause Contract'

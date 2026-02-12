@@ -671,37 +671,32 @@ jobs:
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
-          $backendMode = 'labviewcli'
-          if ('${{ needs.prerelease-context.outputs.ci_profile }}' -eq 'release-priority') {
-            $backendMode = 'gcli'
+          $reportPath = Join-Path $env:REPO_ROOT '.github/actions/run-unit-tests/UnitTestReport.xml'
+          if (Test-Path -Path $reportPath) {
+            Remove-Item -Path $reportPath -Force -ErrorAction SilentlyContinue
           }
-          "LVIE_LUNIT_BACKEND=$backendMode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          $env:LVIE_LUNIT_BACKEND = $backendMode
-          Write-Host ("LUnit backend mode for unit-tests job: {0}" -f $env:LVIE_LUNIT_BACKEND)
 
-          if ($backendMode -ne 'gcli') {
-            Write-Host 'Enabled LUnit g-cli fallback for labviewcli mode.'
-            & ".github/actions/run-unit-tests/RunUnitTests.ps1" `
-              -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-              -SupportedBitness ${{ matrix.bitness }} `
-              -ProjectPath "$env:PROJECT_PATH" `
-              -EnableGcliFallback
-          } else {
-            & ".github/actions/run-unit-tests/RunUnitTests.ps1" `
-              -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
-              -SupportedBitness ${{ matrix.bitness }} `
-              -ProjectPath "$env:PROJECT_PATH"
+          & g-cli --lv-ver $env:LABVIEW_VERSION_YEAR --arch ${{ matrix.bitness }} lunit -- -r $reportPath "$env:PROJECT_PATH"
+          $gcliExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+          Write-Host ("g-cli lunit exit code: {0}" -f $gcliExitCode)
+
+          & pwsh -NoProfile -File ".github/actions/run-unit-tests/RunUnitTests.ps1" `
+            -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
+            -SupportedBitness ${{ matrix.bitness }} `
+            -ReportPath $reportPath
+          $parserExitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
+          Write-Host ("RunUnitTests parser exit code: {0}" -f $parserExitCode)
+
+          if ($gcliExitCode -ne 0) {
+            exit $gcliExitCode
           }
-      - name: Summarize unit-test backend mode
+
+          exit $parserExitCode
+      - name: Summarize unit-test executor
         if: always()
         shell: pwsh
         run: |
-          $effectiveBackend = $env:LVIE_LUNIT_BACKEND
-          if ([string]::IsNullOrWhiteSpace($effectiveBackend)) {
-            Write-Warning 'LVIE_LUNIT_BACKEND is not set for this unit-tests job; reporting backend mode as unknown.'
-            $effectiveBackend = 'unknown'
-          }
-          $summaryLine = "- Unit Tests (LV {0}-bit): LUnit backend mode = {1}" -f '${{ matrix.bitness }}', $effectiveBackend
+          $summaryLine = "- Unit Tests (LV {0}-bit): LUnit executor = g-cli" -f '${{ matrix.bitness }}'
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summaryLine
       - name: Upload unit test report (LV ${{ matrix.bitness }}-bit)
         if: failure()
@@ -1047,7 +1042,7 @@ jobs:
           name: ${{ steps.locate-vip.outputs.vip_artifact }}
           path: ${{ steps.locate-vip.outputs.vip_path }}
           if-no-files-found: error
-      - name: Ensure g-cli logs evidence exists
+      - name: Ensure LabVIEWCLI logs evidence exists
         if: always()
         shell: pwsh
         run: |
@@ -1057,21 +1052,21 @@ jobs:
 
           $existingFiles = Get-ChildItem -Path $logsDir -Recurse -File -ErrorAction SilentlyContinue
           if (-not $existingFiles) {
-            $placeholderPath = Join-Path $logsDir 'gcli-logs-placeholder.txt'
+            $placeholderPath = Join-Path $logsDir 'labviewcli-logs-placeholder.txt'
             $runUrl = "{0}/{1}/actions/runs/{2}" -f $env:GITHUB_SERVER_URL, $env:GITHUB_REPOSITORY, $env:GITHUB_RUN_ID
             @(
-              'No g-cli log files were produced by this run.'
-              'This placeholder preserves the prerelease gcli-logs asset contract.'
+              'No LabVIEWCLI log files were produced by this run.'
+              'This placeholder preserves the prerelease labviewcli-logs asset contract.'
               ("Run URL: {0}" -f $runUrl)
               ("Generated UTC: {0}" -f (Get-Date).ToUniversalTime().ToString('o'))
             ) | Out-File -FilePath $placeholderPath -Encoding utf8
-            Write-Host ("Created g-cli logs placeholder at {0}" -f $placeholderPath)
+            Write-Host ("Created LabVIEWCLI logs placeholder at {0}" -f $placeholderPath)
           }
-      - name: Upload g-cli logs (if present)
+      - name: Upload LabVIEWCLI logs (if present)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gcli-logs
+          name: labviewcli-logs
           path: ${{ env.REPO_ROOT }}/builds/logs
           if-no-files-found: error
       - name: Validate tag matches computed version (if provided)
@@ -1100,6 +1095,96 @@ jobs:
           close_labview: 'true'
           close_bitness: 64
 
+  codex-skill-layer-asset:
+    name: Resolve Codex Skill Layer Asset
+    needs: [run-metadata, prerelease-context]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: ${{ steps.meta.outputs.artifact_name }}
+      asset_file_name: ${{ steps.meta.outputs.asset_file_name }}
+    steps:
+      - id: meta
+        name: Resolve artifact metadata
+        shell: pwsh
+        run: |
+          "artifact_name=codex-skill-layer" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "asset_file_name=lvie-codex-skill-layer.zip" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+
+      - name: Checkout code
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        uses: actions/checkout@v4
+
+      - id: resolve
+        name: Download and validate pinned skill layer
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lockPath = Join-Path $env:GITHUB_WORKSPACE 'Tooling/codex-skill-layer.lock.json'
+          if (-not (Test-Path -Path $lockPath -PathType Leaf)) {
+            throw "Codex skill lock file not found: $lockPath"
+          }
+
+          $lock = Get-Content -Raw -Path $lockPath | ConvertFrom-Json
+          foreach ($key in @('repo', 'tag', 'asset_name', 'sha256', 'required_files', 'license_spdx')) {
+            if (-not ($lock.PSObject.Properties.Name -contains $key)) {
+              throw "Codex skill lock file is missing required key '$key'."
+            }
+          }
+
+          $destDir = Join-Path $env:RUNNER_TEMP 'prerelease-codex-skill-layer'
+          New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+
+          gh release download $lock.tag --repo $lock.repo --pattern $lock.asset_name --dir $destDir --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw ("Failed to download codex skill layer asset '{0}' from {1} tag {2}." -f $lock.asset_name, $lock.repo, $lock.tag)
+          }
+
+          $assetPath = Join-Path $destDir $lock.asset_name
+          if (-not (Test-Path -Path $assetPath -PathType Leaf)) {
+            throw "Downloaded codex skill layer asset is missing at $assetPath"
+          }
+
+          $actualHash = (Get-FileHash -Path $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expectedHash = ([string]$lock.sha256).ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw ("Codex skill layer hash mismatch. expected={0} actual={1}" -f $expectedHash, $actualHash)
+          }
+
+          $extractDir = Join-Path $destDir 'extract'
+          Expand-Archive -Path $assetPath -DestinationPath $extractDir -Force
+
+          $manifestPath = Join-Path $extractDir 'manifest.json'
+          if (-not (Test-Path -Path $manifestPath -PathType Leaf)) {
+            throw "Codex skill layer manifest missing: $manifestPath"
+          }
+
+          $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$manifest.license_spdx) -or [string]$manifest.license_spdx -ne [string]$lock.license_spdx) {
+            throw ("Codex skill layer license mismatch. expected={0} actual={1}" -f [string]$lock.license_spdx, [string]$manifest.license_spdx)
+          }
+
+          foreach ($relative in @($lock.required_files)) {
+            $requiredPath = Join-Path $extractDir ([string]$relative)
+            if (-not (Test-Path -Path $requiredPath)) {
+              throw ("Codex skill layer required file missing: {0}" -f $relative)
+            }
+          }
+
+          "asset_path=$assetPath" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+
+      - name: Upload codex skill layer artifact
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: ${{ steps.resolve.outputs.asset_path }}
+          if-no-files-found: error
+
   pipeline-contract:
     name: Pipeline Contract
     if: always()
@@ -1115,6 +1200,7 @@ jobs:
       - build-ppl-x64
       - build-ppl-x86
       - build-vip
+      - codex-skill-layer-asset
       - version
       - conformance-full
     runs-on: ubuntu-latest
@@ -1135,6 +1221,7 @@ jobs:
             'powershell-lint',
             'vip-prerelease-requirements-lint',
             'pylavi-validate',
+            'codex-skill-layer-asset',
             'version',
             'conformance-full'
           )

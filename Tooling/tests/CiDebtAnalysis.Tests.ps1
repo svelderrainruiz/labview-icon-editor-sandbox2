@@ -3,10 +3,21 @@
 
 BeforeAll {
     $Script:ToolingRoot = Split-Path -Parent $PSScriptRoot
-    $Script:AnalysisScript = Join-Path $Script:ToolingRoot 'agents/ci-debt/Invoke-CiDebtAnalysis.ps1'
-    $Script:FixturePath = Join-Path $Script:ToolingRoot 'agents/ci-debt/fixtures/run-21840801109.json'
+    $Script:AnalysisScript = Join-Path $Script:ToolingRoot 'Invoke-CiDebtAnalysis.ps1'
+    $Script:FixturePath = Join-Path $Script:ToolingRoot 'tests/fixtures/ci-debt/run-21840801109.json'
+    $Script:LayerRoot = Join-Path $Script:ToolingRoot 'tests/fixtures/codex-skill-layer'
+    $Script:OriginalLayerRoot = $env:LVIE_CODEX_SKILL_LAYER_ROOT
+    $env:LVIE_CODEX_SKILL_LAYER_ROOT = $Script:LayerRoot
 
     . $Script:AnalysisScript
+}
+
+AfterAll {
+    if ($null -eq $Script:OriginalLayerRoot) {
+        Remove-Item Env:LVIE_CODEX_SKILL_LAYER_ROOT -ErrorAction SilentlyContinue
+    } else {
+        $env:LVIE_CODEX_SKILL_LAYER_ROOT = $Script:OriginalLayerRoot
+    }
 }
 
 Describe 'Invoke-CiDebtAnalysis' {

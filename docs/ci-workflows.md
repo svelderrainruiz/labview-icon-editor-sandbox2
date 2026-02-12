@@ -1,6 +1,6 @@
 # Local CI/CD Workflows
 
-**Last updated:** 2026-02-11
+**Last updated:** 2026-02-12
 
 Quick link: `.github/workflows/runner-cli.yml` (Runner CLI consolidated workflow).
 
@@ -92,12 +92,12 @@ This document is the canonical source for release/publication policy.
 - Merge strategy contract: pull requests intended to drive prerelease publication to `develop` must use merge commits (`--merge`), not squash or rebase.
 - Publish contract: prerelease publication is **manual-intent only** via `workflow_dispatch` with `publish_prerelease=true`, `expected_sha=<sha>`, and `strict_sha=true`.
 - Execution profiles (`prerelease-context` output `ci_profile`):
-  - `release-priority`: `workflow_dispatch` with `force_gcli_lunit=true`; skips self-hosted heavy jobs (`Verify IE Paths`, smoke, missing-in-project, unit-tests, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) and targets <= 25 minutes.
-  - `pr-fast`: `pull_request`; keeps validation coverage but uses 64-bit-only matrices for smoke/missing-in-project/unit-tests, targeting <= 35 minutes.
+  - `release-priority`: `workflow_dispatch` with `force_gcli_lunit=true`; skips self-hosted heavy jobs (`Verify IE Paths`, smoke, unit-tests, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) and targets <= 25 minutes.
+  - `pr-fast`: `pull_request`; keeps validation coverage but uses 64-bit-only matrices for smoke/unit-tests, targeting <= 35 minutes.
   - `full`: default for `push` and `workflow_dispatch` without `force_gcli_lunit=true`; preserves full publish-eligible flow.
-- LUnit escape hatch: `workflow_dispatch` with `force_gcli_lunit=true` selects the `release-priority` profile.
+- Profile routing note: `force_gcli_lunit=true` is now used only to select the `release-priority` profile; unit-test execution is standardized on direct `g-cli lunit` in workflows that run tests.
 - Release-priority publish-intent guardrail: `workflow_dispatch` publish intent in `release-priority` requires a successful `full` profile run on `develop` completed within the previous 24 hours.
-- Asset contract: published prereleases in `full`/`pr-fast` attach `.vip`, release notes, `gcli-logs`, `vip-build-status`, and container packed libraries; `release-priority` publishes container packed libraries only.
+- Asset contract: published prereleases in `full`/`pr-fast` attach `.vip`, release notes, `labviewcli-logs`, `vip-build-status`, Linux and Windows container packed libraries, and `codex-skill-layer`; `release-priority` publishes Linux and Windows container packed libraries plus `codex-skill-layer`.
 - Branch trigger reality for `ci-composite.yml`: `push` and `pull_request` run on `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*`, plus `workflow_dispatch`.
 - Companion trigger reality for `ci.yml`: `pull_request` only; no `push` or `workflow_dispatch`.
 
@@ -163,12 +163,12 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **changes** – checks out the repository and detects `.vipc` file changes for diagnostics/reporting in downstream jobs.
 - **apply-deps** – runs VIPC audit (`Assert-VipcApplied`) for both bitnesses on every run (hard-stop on mismatch), then optionally runs informational VIPC apply diagnostics when manually dispatched with `vipc_apply_info=true`.
 - **version** – computes the semantic version and build number using commit count and PR labels.
-- **missing-in-project** – verifies every source file is referenced in the `.lvproj` (runs after dependency application). Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
-- **unit-tests** – runs LabVIEW unit tests on Windows in LabVIEW 2021 after missing-in-project. Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
-  - Each matrix job appends a short `GITHUB_STEP_SUMMARY` line with the effective LUnit backend mode (`labviewcli` or `gcli`).
+- **unit-tests** – runs LabVIEW unit tests on Windows in LabVIEW 2021 after dependency application. Runs 64-bit in `full` and `pr-fast`, and is skipped in `release-priority`.
+  - Each matrix job appends a short `GITHUB_STEP_SUMMARY` line stating the fixed executor (`g-cli`).
 - **build-ppl** – uses a matrix to build 32-bit and 64-bit packed libraries, then uses the `rename-file` action to append the bitness to each library’s filename.
 - **build-ppl-linux-container** – builds the Linux container packed library (`lv_icon.lvlibp`) for publish-eligible runs and emits a versioned artifact for prerelease attachment.
 - **build-ppl-windows-container** – builds the Windows container packed library (`lv_icon.lvlibp`) for publish-eligible runs and emits a versioned artifact for prerelease attachment.
+- **codex-skill-layer-asset** – downloads the pinned Codex skill-layer release asset (`lvie-codex-skill-layer.zip`), validates SHA256 + required files + `0BSD` manifest license, and publishes artifact `codex-skill-layer` for prerelease attachment.
 - **build-vip** – Windows/self-hosted VI Package packaging path. This job requires both PPL artifacts (`lv_icon_x86.lvlibp`, `lv_icon_x64.lvlibp`) and runs for `full`/`pr-fast`; it is intentionally skipped in `release-priority`.
 - **publish-gate** – evaluates profile-required prepublish job outcomes and blocks prerelease publication when required checks are missing or non-success.
 - **publish-prerelease** – upserts GitHub prereleases for eligible runs, attaches required assets (including Linux and Windows container packed libraries), and emits `prerelease-publish-status`.

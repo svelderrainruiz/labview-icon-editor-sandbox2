@@ -4,10 +4,21 @@
 BeforeAll {
     $Script:ToolingRoot = Split-Path -Parent $PSScriptRoot
     $Script:ResolverScript = Join-Path $Script:ToolingRoot 'Resolve-GitHubRepo.ps1'
-    $Script:CiDebtScript = Join-Path $Script:ToolingRoot 'agents/ci-debt/Invoke-CiDebtAnalysis.ps1'
-    $Script:FixturePath = Join-Path $Script:ToolingRoot 'agents/ci-debt/fixtures/run-21840801109.json'
+    $Script:CiDebtScript = Join-Path $Script:ToolingRoot 'Invoke-CiDebtAnalysis.ps1'
+    $Script:FixturePath = Join-Path $Script:ToolingRoot 'tests/fixtures/ci-debt/run-21840801109.json'
+    $Script:LayerRoot = Join-Path $Script:ToolingRoot 'tests/fixtures/codex-skill-layer'
+    $Script:OriginalLayerRoot = $env:LVIE_CODEX_SKILL_LAYER_ROOT
+    $env:LVIE_CODEX_SKILL_LAYER_ROOT = $Script:LayerRoot
 
     . $Script:CiDebtScript
+}
+
+AfterAll {
+    if ($null -eq $Script:OriginalLayerRoot) {
+        Remove-Item Env:LVIE_CODEX_SKILL_LAYER_ROOT -ErrorAction SilentlyContinue
+    } else {
+        $env:LVIE_CODEX_SKILL_LAYER_ROOT = $Script:OriginalLayerRoot
+    }
 }
 
 Describe 'Resolve-GitHubRepo' {
@@ -76,7 +87,7 @@ Describe 'Resolve-GitHubRepo' {
 Describe 'Invoke-CiDebtAnalysis repository resolution' {
     It 'uses deterministic resolver path and not gh repo view fallback' {
         $scriptContent = Get-Content -Path $Script:CiDebtScript -Raw
-        $scriptContent | Should -Match 'Resolve-GitHubRepo\.ps1'
+        $scriptContent | Should -Match 'CodexSkillLayer\.ps1'
         $scriptContent | Should -Not -Match 'gh repo view --json nameWithOwner --jq \.nameWithOwner'
     }
 

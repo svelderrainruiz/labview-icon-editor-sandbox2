@@ -69,6 +69,11 @@ jobs:
             core.setOutput('issue_number', String(issueNumber));
             core.setOutput('post_comment', postComment);
 
+      - name: Install pinned codex skill layer
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Install-CodexSkillLayer.ps1"
+
       - name: Analyze run
         id: analyze
         shell: pwsh
@@ -84,7 +89,9 @@ jobs:
           $outJson = Join-Path $outDir "$runId.analysis.json"
           $outMarkdown = Join-Path $outDir "$runId.analysis.md"
 
-          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\agents\ci-debt\Invoke-CiDebtAnalysis.ps1" `
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Assert-CodexSkillLayer.ps1"
+
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Invoke-CiDebtAnalysis.ps1" `
             -Repo "${{ github.repository }}" `
             -RunId $runId `
             -OutJson $outJson `
