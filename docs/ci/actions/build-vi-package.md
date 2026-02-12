@@ -75,7 +75,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 - (Optional) Additional Windows components (like .NET or Visual Studio) if your pipeline references them.
 
 ### 2.3 Additional Software & Tools
-- **Build Tools**: The composite workflow uses the `build-lvlibp` and `build-vi-package` GitHub actions to compile libraries and create the `.vip` package.
+- **Build Tools**: The composite workflow uses the `build-project-spec` and `build-vi-package` GitHub actions to compile libraries and create the `.vip` package.
 - **Chocolatey** or other package managers only if your script references them.
 - The workflow interacts with GitHub using built-in actions; no `gh` CLI is required.
 
@@ -94,7 +94,7 @@ It eliminates confusion around versioning, keeps everything in one pipeline, and
 
 ### 3.1 How the Action Is Triggered
 The `build-vi-package` directory defines a **composite action**. It does not listen for events on its own; instead, the CI workflow in [`ci-composite.yml`](../../../.github/workflows/ci-composite.yml) invokes it.
-That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Early jobs like `run-metadata`, `prerelease-context`, `version-gate`, and `changes` run on GitHub-hosted `ubuntu-latest`. Windows self-hosted jobs handle LabVIEW validation and packaging (`dev-mode-gate`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) when the active `ci_profile` requires them. Current branch filters for push/PR triggers are `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*` in `ci-composite.yml`.
+That workflow runs on `push`, `pull_request`, and `workflow_dispatch` events. Early jobs like `run-metadata`, `prerelease-context`, `version-gate`, and `changes` run on GitHub-hosted `ubuntu-latest`. Windows self-hosted jobs handle LabVIEW validation and packaging (`dev-mode-gate`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`) when the active `ci_profile` requires them. Current branch filters for push/PR triggers are `main`, `develop`, `release/*`, `feature/*`, and `hotfix/*` in `ci-composite.yml`.
 Companion workflow note: [`ci.yml`](../../../.github/workflows/ci.yml) is PR-only (`pull_request`) and intentionally omits publish-path jobs.
 
 ### 3.2 Configurable Inputs / Parameters
@@ -162,7 +162,7 @@ components remain unchanged and only the build number increases.
    - Always adds `-build<BUILD_NUMBER>` last (for example, `v1.2.3-build37` or `v1.2.3-rc.37-build37` when legacy channel suffixes are used).
 
 5. **Build the Icon Editor VI Package**
-   - Uses the `build-lvlibp` action to compile the packed libraries.
+   - Uses the `build-project-spec` action to compile the packed libraries.
    - Downloads both packed libraries (`lv_icon_x86.lvlibp`, `lv_icon_x64.lvlibp`) as required inputs for packaging.
    - Generates a display-information JSON blob that now includes:
      - semantic-version components (`major`, `minor`, `patch`, `build`),
@@ -213,7 +213,7 @@ components remain unchanged and only the build number increases.
 1. **Actions Versions**
    - This workflow references certain actions, like `actions/checkout@v4` or `actions/github-script@v7`. Keep an eye on updates or deprecations. Update to a newer checkout version when the action itself is revised. Some internal actions—such as `compute-version`—may still pin different releases for compatibility, so mixing versions is expected.
 2. **Build Actions**
-   - If your LabVIEW project evolves or you add steps, keep the `build-lvlibp` and `build-vi-package` actions up to date.
+   - If your LabVIEW project evolves or you add steps, keep the `build-project-spec` and `build-vi-package` actions up to date.
 3. **Windows Runner Updates**  
    - Ensure your self-hosted runner OS is patched and has any new LabVIEW versions if your project updates.
 
@@ -276,11 +276,18 @@ components remain unchanged and only the build number increases.
 3. Verify that the `.vip` artifact is available and that prerelease publication behavior matches policy (manual `workflow_dispatch` with explicit publish intent and SHA binding).
 
 ### 8.3 LabVIEW-Specific QA
-- If you have LabVIEW unit tests, integrate them by adding a step in the YAML:
+- If you have LabVIEW unit tests, run them directly through `g-cli lunit` and then parse the report:
   ```yaml
-  - uses: ./.github/actions/run-unit-tests
-    with:
-      supported_bitness:            ${{ matrix.bitness }}
+  - name: Run LUnit
+    shell: pwsh
+    run: |
+      $report = Join-Path $env:REPO_ROOT '.github/actions/run-unit-tests/UnitTestReport.xml'
+      & g-cli --lv-ver $env:LABVIEW_VERSION_YEAR --arch ${{ matrix.bitness }} lunit -- -r $report "$env:PROJECT_PATH"
+      $gcliExit = $LASTEXITCODE
+      & pwsh -NoProfile -File .github/actions/run-unit-tests/RunUnitTests.ps1 -LabVIEWVersion $env:LABVIEW_VERSION_YEAR -SupportedBitness ${{ matrix.bitness }} -ReportPath $report
+      $parserExit = $LASTEXITCODE
+      if ($gcliExit -ne 0) { exit $gcliExit }
+      exit $parserExit
   ```
 - Ensure they pass before building the `.vip`. If they fail, the script can exit with a non-zero code, stopping the workflow run.
 
@@ -327,6 +334,7 @@ components remain unchanged and only the build number increases.
 ## 11. **Conclusion**
 
 By properly setting up environment variables, referencing your LabVIEW environment on a self-hosted runner, and using label-based version increments plus a commit-based build number, this GitHub Action automates `.vip` build and artifact handoff. Use `docs/ci-workflows.md` as the canonical release/publication policy source (manual-intent prerelease publication and explicit dispatch controls).
+
 
 
 

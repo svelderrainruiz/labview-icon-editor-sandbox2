@@ -739,7 +739,7 @@ jobs:
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
-          & ".github/actions/build-lvlibp/Build_lvlibp.ps1" `
+          & ".github/actions/build-lvlibp/BuildProjectSpec.ps1" `
             -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
             -SupportedBitness 32 `
             -RepoRoot "$env:REPO_ROOT" `
@@ -793,7 +793,7 @@ jobs:
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
-          & ".github/actions/build-lvlibp/Build_lvlibp.ps1" `
+          & ".github/actions/build-lvlibp/BuildProjectSpec.ps1" `
             -LabVIEWVersion $env:LABVIEW_VERSION_YEAR `
             -SupportedBitness 64 `
             -RepoRoot "$env:REPO_ROOT" `
@@ -1319,4 +1319,5 @@ jobs:
           } else {
             Write-Host 'Pipeline contract satisfied.'
           }
+
 

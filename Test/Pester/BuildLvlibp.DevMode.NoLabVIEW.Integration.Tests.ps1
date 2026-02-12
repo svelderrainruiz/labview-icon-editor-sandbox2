@@ -66,7 +66,7 @@ Describe 'Build lvlibp (dev mode, no LabVIEW) integration' {
 
         $script:repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..')).Path
         $script:stageModule = Join-Path $script:repoRoot 'Tooling\support\LabVIEWStage.ps1'
-        $script:buildScript = Join-Path $script:repoRoot '.github\actions\build-lvlibp\Build_lvlibp.ps1'
+        $script:buildScript = Join-Path $script:repoRoot '.github\actions\build-lvlibp\BuildProjectSpec.ps1'
 
         if (-not (Test-Path -Path $script:stageModule)) {
             $script:skipAll = $true
@@ -90,13 +90,13 @@ Describe 'Build lvlibp (dev mode, no LabVIEW) integration' {
 
         if (-not (Test-Path -Path $script:buildScript)) {
             $script:skipAll = $true
-            $script:skipReason = "Build_lvlibp.ps1 not found at $script:buildScript"
+            $script:skipReason = "BuildProjectSpec.ps1 not found at $script:buildScript"
             return
         }
 
-        if (-not (Get-Command g-cli -ErrorAction SilentlyContinue)) {
+        if (-not (Get-Command LabVIEWCLI -ErrorAction SilentlyContinue)) {
             $script:skipAll = $true
-            $script:skipReason = 'g-cli not found in PATH.'
+            $script:skipReason = 'LabVIEWCLI not found in PATH.'
             return
         }
 
@@ -124,7 +124,7 @@ Describe 'Build lvlibp (dev mode, no LabVIEW) integration' {
         }
 
         $results = Invoke-LabVIEWStage `
-            -StageName 'build-lvlibp' `
+            -StageName 'build-project-spec' `
             -RepoRoot $script:repoRoot `
             -LabVIEWVersion $script:labviewVersion `
             -Bitnesses $script:bitnessesToTest `

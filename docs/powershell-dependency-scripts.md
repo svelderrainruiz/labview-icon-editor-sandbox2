@@ -13,6 +13,7 @@ Per-run artifacts are written under `$WORKTREE_ROOT\artifacts\<runid>` when guar
 - [AddTokenToLabVIEW.ps1](#addtokentolabviewps1)
 - [ApplyVIPC.ps1](#applyvipcps1)
 - [Build.ps1](#buildps1)
+- [BuildProjectSpec.ps1](#buildprojectspecps1)
 - [Build_lvlibp.ps1](#build_lvlibpps1)
 - [build_vip.ps1](#build_vipps1)
 - [Close_LabVIEW.ps1](#close_labviewps1)
@@ -41,8 +42,13 @@ Applies a `.vipc` **VI Package Configuration** to a specific LabVIEW version and
 ## Build.ps1
 Top-level script that orchestrates the full build. Cleans previous outputs, builds packed libraries for 32-bit and 64-bit, updates metadata, and produces the final `.vip` package. Depends on many of the other scripts listed here.
 
+## BuildProjectSpec.ps1
+Canonical project-spec builder. Runs LabVIEWCLI `MassCompile` + source sync + `ExecuteBuildSpec`, with typed contracts for:
+- `PackedLibrary` (default build spec/output path)
+- `SourceDistribution` (explicit build spec/output path required)
+
 ## Build_lvlibp.ps1
-Invokes the "Editor Packed Library" build specification and embeds version information and commit identifiers into the resulting `.lvlibp`.
+Compatibility wrapper that forwards to `BuildProjectSpec.ps1` with packed-library defaults (`Editor Packed Library` -> `resource/plugins/lv_icon.lvlibp`). Deprecated and retained temporarily for compatibility.
 
 ## build_vip.ps1
 Modifies a `.vipb` file and builds the final VI Package with g-cli, using version data and display information provided by `Build.ps1`.
@@ -72,10 +78,10 @@ Policy-disabled for automation. The script now fails fast to enforce repository 
 Policy-disabled for automation. The script now fails fast to enforce repository policy that dev mode must not be invoked.
 
 ## RunUnitTests.ps1
-Runs unit tests through LabVIEWCLI (`-OperationName LUnit`) and outputs a table of results. Requires an explicit `.lvproj` path via `-ProjectPath`. Optional g-cli fallback can be enabled with `-EnableGcliFallback`. Escape hatch: set `LVIE_LUNIT_BACKEND=gcli` (or `LVIE_FORCE_GCLI_LUNIT=1`) to bypass LabVIEWCLI and run `g-cli lunit` directly. The script resolves LabVIEWCLI `-PortNumber` from `LVIE_LUNIT_PORT_<BITNESS>`, then `LVIE_LUNIT_PORT`, then `LabVIEW.ini` (`server.tcp.port`), then default `3363`. It resolves the `LUnit` operation root from `LVIE_LUNIT_OPERATION_DIR_<BITNESS>`, then `LVIE_LUNIT_OPERATION_DIR`, then the default LabVIEW CLI operations directory, then VIPM `astemes_lib_lunit_cli/files-installed` hints; when the root is non-default it passes `-AdditionalOperationDirectory`. Ensure `astemes_lib_lunit` and `astemes_lib_lunit_cli` are installed for LabVIEWCLI mode; install `sas_workshops_lib_lunit_for_g_cli` when forced g-cli mode or fallback mode is used (apply `runner_dependencies.vipc` for both 32-bit and 64-bit). Used in CI workflows.
+Parser-only utility that reads an existing `UnitTestReport.xml` and outputs a table/summary with deterministic pass/fail exit semantics. Callers must execute `g-cli lunit` first, then invoke the parser as a child process (for example, `pwsh -NoProfile -File .github/actions/run-unit-tests/RunUnitTests.ps1 -ReportPath <path>`). Legacy backend knobs (`LVIE_LUNIT_BACKEND`, `LVIE_FORCE_GCLI_LUNIT`) are hard-removed and now fail fast if set.
 
 ## Run-CICompositeLocal.ps1
-Runs a local CI parity sequence based on `ci-composite.yml`. This script validates Verify IE Paths, applies VIPC dependencies, runs missing-in-project checks and unit tests for the LabVIEW version declared in `.lvversion` (defaulting to 2021/21.0), 32- and 64-bit, builds packed libraries, and produces the VI package using the 64-bit install of that version. The script always runs both 64-bit and 32-bit steps for the selected LabVIEW version, and most steps can be skipped via switches. Use `-ForceGcliLunit` to force g-cli as the primary unit-test backend during parity runs. Outputs are stored under `TestResults/ci-local`. Use `-ConnectTimeoutMs`, `-ProcessTimeoutMs`, and `-StatusFileTimeoutMs` to tune g-cli and status-file timing for your machine. Dev-mode request flags (`-EnsureCleanState`, `-SkipDevModeNoLabVIEWSmoke`, `-DevModeNoLabVIEWSmokeDepth`, `-UseLabVIEWDevMode`) are policy-disabled and throw when passed.
+Runs a local CI parity sequence based on `ci-composite.yml`. This script validates Verify IE Paths, applies VIPC dependencies, runs missing-in-project checks and unit tests for the LabVIEW version declared in `.lvversion` (defaulting to 2021/21.0), 32- and 64-bit, builds packed libraries, and produces the VI package using the 64-bit install of that version. Unit tests execute directly through `g-cli lunit`; report parsing/summary uses `RunUnitTests.ps1`. The script always runs both 64-bit and 32-bit steps for the selected LabVIEW version, and most steps can be skipped via switches. Outputs are stored under `TestResults/ci-local`. Use `-ConnectTimeoutMs`, `-ProcessTimeoutMs`, and `-StatusFileTimeoutMs` to tune g-cli and status-file timing for your machine. Dev-mode request flags (`-EnsureCleanState`, `-SkipDevModeNoLabVIEWSmoke`, `-DevModeNoLabVIEWSmokeDepth`, `-UseLabVIEWDevMode`) are policy-disabled and throw when passed.
 
 ## Invoke-DevModeNoLabVIEWSmoke.ps1
 Policy-disabled for automation. The script now fails fast to enforce repository policy that dev mode must not be invoked.

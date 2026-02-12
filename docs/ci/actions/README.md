@@ -1,11 +1,12 @@
 # Composite GitHub Actions
 
-This repository defines several reusable [composite actions](https://docs.github.com/actions/creating-actions/creating-a-composite-action) in [`.github/actions`](../../../.github/actions). These actions wrap common LabVIEW build and test tasks and can be called from workflows in this or other repositories. Workflows such as [`.github/workflows/ci-composite.yml`](../../../.github/workflows/ci-composite.yml) rely on the [`build-lvlibp`](../../../.github/actions/build-lvlibp) and [`build-vi-package`](../../../.github/actions/build-vi-package) actions for their build steps.
+This repository defines several reusable [composite actions](https://docs.github.com/actions/creating-actions/creating-a-composite-action) in [`.github/actions`](../../../.github/actions). These actions wrap common LabVIEW build and test tasks and can be called from workflows in this or other repositories. Workflows such as [`.github/workflows/ci-composite.yml`](../../../.github/workflows/ci-composite.yml) rely on the [`build-project-spec`](../../../.github/actions/build-project-spec) and [`build-vi-package`](../../../.github/actions/build-vi-package) actions for their build steps.
 
 | Action | Description |
 |---|---|
 | [apply-vipc](../../../.github/actions/apply-vipc) | Installs runner dependencies for a given LabVIEW version and bitness (defaults to `.lvversion` when omitted). |
-| [build-lvlibp](../../../.github/actions/build-lvlibp) | Creates the editor packed library. |
+| [build-project-spec](../../../.github/actions/build-project-spec) | Builds a LabVIEW project specification (packed library or source distribution) via LabVIEWCLI. |
+| [build-lvlibp](../../../.github/actions/build-lvlibp) | Compatibility wrapper for packed-library builds. |
 | [build-vi-package](../../../.github/actions/build-vi-package) | Updates a VIPB file and builds the VI package. |
 | [close-labview](../../../.github/actions/close-labview) | Gracefully shuts down a LabVIEW instance after build steps to free runner resources. |
 | [compute-version](../../../.github/actions/compute-version) | Determines the semantic version from commit history and labels. |
@@ -17,7 +18,7 @@ This repository defines several reusable [composite actions](https://docs.github
 | [rename-file](../../../.github/actions/rename-file) | Renames a file on disk. |
 | [restore-setup-lv-source](../../../.github/actions/restore-setup-lv-source) | Reverts prepared sources back to their packaged state. |
 | [revert-development-mode](../../../.github/actions/revert-development-mode) | Restores the repository after development mode. |
-| [run-unit-tests](../../../.github/actions/run-unit-tests) | Executes LabVIEW unit tests via LabVIEWCLI LUnit operation with optional g-cli fallback and dynamic port resolution. |
+| [run-unit-tests](../../../.github/actions/run-unit-tests) | Parses an existing `UnitTestReport.xml` produced by direct `g-cli lunit` execution. |
 | [set-development-mode](../../../.github/actions/set-development-mode) | Configures the repository for development mode. |
 
 Each action directory includes a `README.md` and `action.yml` with full usage details.
