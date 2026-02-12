@@ -184,11 +184,15 @@ Notes:
 
 ## CI worktree naming (ci-composite.yml)
 CI jobs create short-path worktrees under `LVIE_WORKTREE_ROOT` with a deterministic name:
-- `ci-<jobhash>-<bitness>-<runid>-<attempt>`
+- `ci-<workflowhash>-<jobhash>-<bitness>-<runid>-<attempt>`
 - Some workflows insert an extra variant token (e.g. LabVIEW version) between `<jobhash>` and `<bitness>`.
+- `workflowhash` is the first 8 chars of the SHA1 of workflow identity (`GITHUB_WORKFLOW_REF`, fallback `GITHUB_WORKFLOW`).
 - `jobhash` is the first 8 chars of the SHA1 of `GITHUB_JOB` (prevents collisions across jobs).
 - `bitness` is `32` or `64`.
-Example: `C:\dev\ci-D170BDEE-64-21534416929-1`
+Example: `C:\dev\ci-2A4C7D91-D170BDEE-64-21534416929-1`
+
+Troubleshooting:
+- CI worktree setup automatically runs `git worktree prune` and clears stale registrations for the target path before creation to avoid `missing but already registered worktree` failures.
 
 The workflow exports:
 - `REPO_ROOT` → worktree path (authoritative for all scripts)
