@@ -15,6 +15,7 @@ $allTargetFiles = @(
     '.github/workflows/ci.yml',
     '.github/workflows/ci-composite.yml',
     '.github/workflows/labview-container-parity.yml',
+    '.github/workflows/development-mode-toggle.yml',
     'Tooling/container-parity/runlabview-windows.ps1',
     'Tooling/container-parity/runlabview-linux.sh'
 )
@@ -24,6 +25,7 @@ $targetFiles = switch ($Scope) {
         @(
             '.github/workflows/ci.yml',
             '.github/workflows/labview-container-parity.yml',
+            '.github/workflows/development-mode-toggle.yml',
             'Tooling/container-parity/runlabview-windows.ps1',
             'Tooling/container-parity/runlabview-linux.sh'
         )
@@ -35,13 +37,14 @@ $targetFiles = switch ($Scope) {
 
 $ruleList = @(
     [pscustomobject]@{
-        Type    = 'workflow-devmode-toggle'
-        Pattern = 'Set_Development_Mode\.ps1'
-        Message = 'CI workflows must not invoke Set_Development_Mode.ps1. Use development-mode-toggle workflow instead.'
+        Type    = 'workflow-devmode-script'
+        Pattern = 'Set_Development_Mode\.ps1|RevertDevelopmentMode\.ps1'
+        Message = 'Automation workflows must not invoke dev-mode toggle scripts.'
         Files   = @(
             '.github/workflows/ci.yml',
             '.github/workflows/ci-composite.yml',
-            '.github/workflows/labview-container-parity.yml'
+            '.github/workflows/labview-container-parity.yml',
+            '.github/workflows/development-mode-toggle.yml'
         )
     },
     [pscustomobject]@{

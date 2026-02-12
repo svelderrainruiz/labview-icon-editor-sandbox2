@@ -34,7 +34,9 @@ Describe 'Test-CiPipelineSelectorDevModeContract.ps1' {
             ) -join [Environment]::NewLine
             '.github/workflows/development-mode-toggle.yml' = @(
                 'name: Development Mode Toggle'
-                '- Set_Development_Mode.ps1'
+                'on:'
+                '  workflow_dispatch:'
+                'jobs: {}'
             ) -join [Environment]::NewLine
             'Tooling/container-parity/runlabview-windows.ps1' = @(
                 '$ErrorActionPreference = ''Stop'''
@@ -67,7 +69,14 @@ Describe 'Test-CiPipelineSelectorDevModeContract.ps1' {
         $ciPath = Join-Path $Script:TempDir '.github\workflows\ci.yml'
         Add-Content -LiteralPath $ciPath -Value 'run: .github/actions/set-development-mode/Set_Development_Mode.ps1'
 
-        { & $Script:GuardScript -RepoRoot $Script:TempDir } | Should -Throw '*workflow-devmode-toggle*'
+        { & $Script:GuardScript -RepoRoot $Script:TempDir } | Should -Throw '*workflow-devmode-script*'
+    }
+
+    It 'fails when development-mode-toggle invokes RevertDevelopmentMode.ps1' {
+        $togglePath = Join-Path $Script:TempDir '.github\workflows\development-mode-toggle.yml'
+        Add-Content -LiteralPath $togglePath -Value 'run: .github/actions/revert-development-mode/RevertDevelopmentMode.ps1'
+
+        { & $Script:GuardScript -RepoRoot $Script:TempDir } | Should -Throw '*workflow-devmode-script*'
     }
 
     It 'fails when ci-composite includes devmode-no-labview-smoke references' {
@@ -105,7 +114,10 @@ Describe 'Test-CiPipelineSelectorDevModeContract.ps1' {
         { & $Script:GuardScript -RepoRoot $Script:TempDir } | Should -Throw '*container-devmode-plumbing*'
     }
 
-    It 'keeps scope narrow and allows manual development-mode workflow tokens' {
-        { & $Script:GuardScript -RepoRoot $Script:TempDir } | Should -Not -Throw
+    It 'fails in ci-only scope when development-mode-toggle invokes Set_Development_Mode.ps1' {
+        $togglePath = Join-Path $Script:TempDir '.github\workflows\development-mode-toggle.yml'
+        Add-Content -LiteralPath $togglePath -Value 'run: .github/actions/set-development-mode/Set_Development_Mode.ps1'
+
+        { & $Script:GuardScript -RepoRoot $Script:TempDir -Scope ci-only } | Should -Throw '*workflow-devmode-script*'
     }
 }

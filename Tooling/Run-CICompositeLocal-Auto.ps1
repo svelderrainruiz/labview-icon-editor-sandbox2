@@ -41,13 +41,13 @@
     Upper bound for process timeout.
 
 .PARAMETER EnsureCleanState
-    Revert dev mode before enabling it for Verify IE Paths.
+    Policy-disabled. Passing this switch throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER SkipDevModeNoLabVIEWSmoke
-    Skip DevMode.NoLabVIEW smoke tests in parity runs.
+    Policy-disabled. Passing this switch throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER DevModeNoLabVIEWSmokeDepth
-    Smoke depth: minimal, balanced, or full.
+    Policy-disabled. Passing this parameter throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER ForceGcliLunit
     Force g-cli as the primary LUnit backend for parity unit tests.
@@ -193,6 +193,16 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw "git was not found on PATH."
 }
 
+$devModePolicyHelper = Join-Path $PSScriptRoot 'support\DevModePolicy.ps1'
+if (-not (Test-Path -Path $devModePolicyHelper -PathType Leaf)) {
+    throw "Dev mode policy helper not found at $devModePolicyHelper"
+}
+. $devModePolicyHelper
+Assert-DevModePolicyParameterNotBound `
+    -BoundParameters $PSBoundParameters `
+    -BlockedParameters @('EnsureCleanState', 'SkipDevModeNoLabVIEWSmoke', 'DevModeNoLabVIEWSmokeDepth') `
+    -EntryPoint $PSCommandPath
+
 function Resolve-RepoRoot {
     param([string]$PathOverride)
 
@@ -328,8 +338,6 @@ if ($DryRun) {
         -LabVIEWBitness $LabVIEWBitness `
         -AllowVersionMismatch:$AllowVersionMismatch `
         -DryRun `
-        -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke `
-        -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
         -ForceGcliLunit:$ForceGcliLunit `
         -SkipViValidate:$SkipViValidate `
         -ViValidateConfigPath $ViValidateConfigPath `
@@ -368,9 +376,6 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
             -LabVIEWVersion $LabVIEWVersion `
             -LabVIEWBitness $LabVIEWBitness `
             -AllowVersionMismatch:$AllowVersionMismatch `
-            -EnsureCleanState:$EnsureCleanState `
-            -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke `
-            -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
             -ForceGcliLunit:$ForceGcliLunit `
             -SkipViValidate:$SkipViValidate `
             -ViValidateConfigPath $ViValidateConfigPath `
