@@ -52,4 +52,5 @@ Project path resolution follows:
   - It controls where worktrees are created, not the active repo root.
 - `Tooling/support/PathContract.ps1` is imported by `Tooling/container-parity/runlabview-windows.ps1` during Windows container parity runs via `powershell`.
   - Keep `Tooling/support/PathContract.ps1` compatible with Windows PowerShell 5.1 (do not add `#Requires -Version` at file scope).
+  - If this contract is violated, Windows parity commonly fails with `ScriptRequiresUnmatchedPSVersion` before `MassCompile`/`ExecuteBuildSpec` begin.
 - New scripts should resolve from canonical variables first and keep aliases for one full release cycle.

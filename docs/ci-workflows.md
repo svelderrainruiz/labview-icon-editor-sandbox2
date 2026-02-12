@@ -39,6 +39,7 @@ Automating your Icon Editor builds and tests:
 
 - Reconciled branch purpose: forward-port the `456-2020-migration` work onto the current CI/tooling baseline while removing CI selector/dev-mode coupling.
 - CI behavior change: `ci.yml`, `ci-composite.yml`, and container parity CI scripts no longer perform automatic selector mode set/unset or development-mode toggles.
+- Windows container parity guardrail: `Tooling/Test-PathContract.ps1` now runs before Windows container parity execution to enforce `Tooling/support/PathContract.ps1` compatibility with Windows PowerShell 5.1 and prevent `ScriptRequiresUnmatchedPSVersion`.
 - Manual development mode support remains available through [`development-mode-toggle.yml`](../.github/workflows/development-mode-toggle.yml).
 
 ### Solo Maintainer Mode (2026-02-11)
