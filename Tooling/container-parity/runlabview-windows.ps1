@@ -19,6 +19,17 @@ $pathContractScript = Join-Path -Path $PSScriptRoot -ChildPath '..\support\PathC
 if (-not (Test-Path -LiteralPath $pathContractScript -PathType Leaf)) {
     throw "Path contract helper was not found: $pathContractScript"
 }
+
+$pathContractLines = Get-Content -LiteralPath $pathContractScript -ErrorAction Stop
+for ($lineIndex = 0; $lineIndex -lt $pathContractLines.Count; $lineIndex++) {
+    $lineText = [string]$pathContractLines[$lineIndex]
+    if ($lineText -match '^\s*#\s*requires\s+-version\b') {
+        $lineNumber = $lineIndex + 1
+        $psVersion = if ($PSVersionTable -and $PSVersionTable.PSVersion) { [string]$PSVersionTable.PSVersion } else { '<unknown>' }
+        throw ("Path contract shell compatibility failure: PathContract.ps1 contains a file-scope #Requires -Version directive on line {0}: '{1}'. Current shell version: {2}. This script runs in Windows PowerShell 5.1 inside NI Windows containers. Remove file-scope #Requires -Version from Tooling/support/PathContract.ps1 to avoid ScriptRequiresUnmatchedPSVersion." -f $lineNumber, $lineText.Trim(), $psVersion)
+    }
+}
+
 . $pathContractScript
 
 function Test-EnabledValue {

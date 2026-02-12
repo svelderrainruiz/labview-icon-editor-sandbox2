@@ -149,6 +149,12 @@ jobs:
           "IMAGE=$image" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LV_RELEASE=$lvRelease" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Validate path contract for Windows container shell
+        shell: pwsh
+        run: |
+          Write-Host 'Windows container parity script runs under powershell.exe (Windows PowerShell 5.1) inside the NI container.'
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Test-PathContract.ps1" -WriteSummary
+
       - name: Run LabVIEWCLI parity script (Windows)
         shell: pwsh
         run: |

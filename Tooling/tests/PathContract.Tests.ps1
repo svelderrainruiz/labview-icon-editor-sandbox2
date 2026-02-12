@@ -4,7 +4,39 @@
 BeforeAll {
     $Script:ToolingRoot = Split-Path -Parent $PSScriptRoot
     $Script:PathContractScript = Join-Path $Script:ToolingRoot 'support\PathContract.ps1'
+    $Script:PathContractGuardScript = Join-Path $Script:ToolingRoot 'Test-PathContract.ps1'
     . $Script:PathContractScript
+}
+
+Describe 'PathContract shell compatibility' {
+    It 'does not declare file-scope #Requires -Version' {
+        $content = Get-Content -LiteralPath $Script:PathContractScript -Raw
+        $content | Should -Not -Match '^\s*#\s*requires\s+-version\b'
+    }
+
+    It 'can be dot-sourced in Windows PowerShell 5.1 when powershell.exe is available' -Skip:(-not (Get-Command powershell.exe -ErrorAction SilentlyContinue)) {
+        $ps51Path = (Get-Command powershell.exe -ErrorAction Stop).Source
+        $escapedPath = $Script:PathContractScript -replace "'", "''"
+        $probeCommand = "& { . '$escapedPath'; 'PATH_CONTRACT_IMPORT_OK' }"
+        $output = & $ps51Path -NoProfile -ExecutionPolicy Bypass -Command $probeCommand 2>&1
+
+        $LASTEXITCODE | Should -Be 0
+        (($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine) | Should -Match 'PATH_CONTRACT_IMPORT_OK'
+    }
+
+    It 'fails the guard when PathContract contains #Requires -Version (synthetic regression)' {
+        $tempRepo = Join-Path $TestDrive 'repo'
+        $tempPathContractDir = Join-Path $tempRepo 'Tooling\support'
+        New-Item -Path $tempPathContractDir -ItemType Directory -Force | Out-Null
+
+        @(
+            '#Requires -Version 7.0'
+            '$ErrorActionPreference = ''Stop'''
+            'function ConvertTo-LvieFullPath { param([string]$Path) return $Path }'
+        ) | Set-Content -Path (Join-Path $tempPathContractDir 'PathContract.ps1') -Encoding utf8
+
+        { & $Script:PathContractGuardScript -RepoRoot $tempRepo } | Should -Throw '*ScriptRequiresUnmatchedPSVersion*'
+    }
 }
 
 Describe 'Resolve-LvieRepoRoot' {
