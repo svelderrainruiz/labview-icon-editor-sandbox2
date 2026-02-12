@@ -154,6 +154,21 @@ Below are the **key GitHub Actions** provided in this repository:
    - It builds/tests the .NET CLI, publishes multi-RID artifacts on pushes, runs cross-platform smoke tests, and validates pylavi inside the Linux Docker image.
    - `ci-composite.yml` still uses `runner-cli-reusable.yml` as an internal helper to publish a Linux artifact for version-gate usage; `runner-audit.yml` downloads the latest artifact when available.
 
+4. **Headless Self-Hosted PPL Parity**
+   - [`headless-self-hosted-parity.yml`](../.github/workflows/headless-self-hosted-parity.yml) validates the local/self-hosted headless PPL path with container-aligned pre-steps:
+     - staged `MassCompile`,
+     - source synchronization into LabVIEW install paths,
+     - `ExecuteBuildSpec`.
+   - Fail-fast preflight gate:
+     - runs `Tooling/Assert-LabVIEWVersion.ps1 -EnforceProjectLvVersion` before parity execution,
+     - requires `lv_icon_editor.lvproj` root `LVVersion` to match `.lvversion`,
+     - requires `Split-Path -Parent $PROJECT_PATH` to equal `REPO_ROOT`.
+   - Trigger policy:
+     - manual `workflow_dispatch` for explicit validation,
+     - `push` to `develop` for observability.
+   - Rollout status: non-blocking diagnostic lane (not wired into publish required-job gates yet).
+   - Artifacts: LabVIEWCLI logs, agent logs, build status, and `lv_icon_x64.lvlibp` when produced.
+
 #### Jobs in CI workflow
 
 The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks the build into several jobs:
@@ -175,6 +190,8 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **pipeline-contract** – validates required-job outcomes using profile-specific expectations so intentionally skipped jobs in `release-priority` do not fail the run.
 
 Companion workflow note: [`ci.yml`](../.github/workflows/ci.yml) provides PR-only validation signal and is intentionally non-publishing.
+
+Dedicated headless parity note: [`headless-self-hosted-parity.yml`](../.github/workflows/headless-self-hosted-parity.yml) is intentionally separate from publish-capable workflows during initial rollout, so regressions are visible without blocking release lanes.
 
 Manual VIPC diagnostics example (non-blocking apply after audit):
 `gh workflow run ci-composite.yml --ref <branch> -f vipc_apply_info=true`
