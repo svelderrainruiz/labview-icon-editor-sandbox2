@@ -24,7 +24,7 @@ In a multi-fork or multi-organization environment, **injecting the repository na
 We achieve this by:
 1. **Generating** a JSON object with fields like `"Company Name"` and `"Author Name (Person or Company)"` directly in the workflow using GitHub-provided variables (e.g., `${{ github.repository_owner }}` and `${{ github.event.repository.name }}`).
 2. **Using** the `modify-vipb-display-info` action to merge this JSON into the `.vipb` (VI Package Builder) file.
-3. **Building** the package with the `build-lvlibp` and `build-vi-package` actions from the composite CI workflow.
+3. **Building** the package with the `build-project-spec` and `build-vi-package` actions from the composite CI workflow.
 
 ---
 
@@ -44,7 +44,7 @@ We achieve this by:
 
 ## GitHub Actions and PowerShell
 
-An abbreviated **GitHub Actions** example below mirrors the [`ci-composite.yml`](../../../.github/workflows/ci-composite.yml) workflow. A **`version`** job first computes the semantic version and outputs `MAJOR`, `MINOR`, `PATCH`, and `BUILD` for downstream steps. The **`build-ppl`** job uses a matrix to compile both 32- and 64-bit packed libraries, and the **`build-vi-package`** job injects the display metadata and creates the final `.vip` file. Referring to the jobs by name—rather than line numbers—helps avoid future drift. The snippet highlights key steps such as `compute-version`, `build-lvlibp`, `modify-vipb-display-info`, and `build-vi-package`:
+An abbreviated **GitHub Actions** example below mirrors the [`ci-composite.yml`](../../../.github/workflows/ci-composite.yml) workflow. A **`version`** job first computes the semantic version and outputs `MAJOR`, `MINOR`, `PATCH`, and `BUILD` for downstream steps. The **`build-ppl`** job uses a matrix to compile both 32- and 64-bit packed libraries, and the **`build-vi-package`** job injects the display metadata and creates the final `.vip` file. Referring to the jobs by name—rather than line numbers—helps avoid future drift. The snippet highlights key steps such as `compute-version`, `build-project-spec`, `modify-vipb-display-info`, and `build-vi-package`:
 
 ```yaml
 jobs:
@@ -69,8 +69,11 @@ jobs:
         bitness: [32, 64]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/build-lvlibp
+      - uses: ./.github/actions/build-project-spec
         with:
+          project_spec_type: PackedLibrary
+          build_spec_name: Editor Packed Library
+          output_relative_path: resource/plugins/lv_icon.lvlibp
           supported_bitness: ${{ matrix.bitness }}
           repo_root: ${{ github.workspace }}
           major: ${{ needs.version.outputs.MAJOR }}
@@ -137,7 +140,7 @@ jobs:
 2. **GitHub Actions** triggers the workflow.  
 3. **Actions** check out the repo and run the build actions:
    1. `compute-version` determines the semantic version.
-   2. `build-lvlibp` compiles the **32- and 64-bit** packed libraries.
+   2. `build-project-spec` compiles the **32- and 64-bit** packed libraries.
    3. A PowerShell step generates JSON with `CompanyName` and `AuthorName` fields derived from GitHub variables.
    4. `modify-vipb-display-info` merges that JSON into the `.vipb` file.
    5. `build-vi-package` produces the final **64-bit LabVIEW 2021 (21.0)** Icon Editor `.vip` package.
