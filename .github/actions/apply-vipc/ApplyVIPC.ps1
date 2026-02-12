@@ -16,6 +16,7 @@ Param (
     [string]$SupportedBitness,
     [string]$RepoRoot,
     [string]$VIPCPath,
+    [switch]$AllowVipcTargetMismatch,
     [string]$WorktreeRoot,
     [switch]$SkipWorktreeRootCheck
 )
@@ -26,6 +27,7 @@ Write-Verbose " - LabVIEWVersion:            $LabVIEWVersion"
 Write-Verbose " - SupportedBitness:          $SupportedBitness"
 Write-Verbose " - RepoRoot:              $RepoRoot"
 Write-Verbose " - VIPCPath:                  $VIPCPath"
+Write-Verbose " - AllowVipcTargetMismatch:   $AllowVipcTargetMismatch"
 
 # -------------------------
 # 1) Resolve Paths & Validate
@@ -131,6 +133,35 @@ if (-not (Test-Path -Path $versionHelper)) {
 $lvInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $ResolvedRepoRoot
 $vipmVersion = Get-VipmVersionString -NumericVersion $lvInfo.NumericVersion -Bitness $SupportedBitness
 $targetLvVer = $lvInfo.Year
+
+# -------------------------
+# 3) VIPC target version guard
+# -------------------------
+try {
+    $vipcConfigHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\VipcConfig.ps1'
+    if (-not (Test-Path -Path $vipcConfigHelper)) {
+        throw "VIPC config helper not found at $vipcConfigHelper"
+    }
+    . $vipcConfigHelper
+
+    $vipcConfig = Get-VipcConfigInfo -VipcPath $ResolvedVIPCPath
+    Write-Verbose ("VIPC target name: {0}" -f $vipcConfig.TargetName)
+    Write-Verbose ("VIPC target version (raw): {0}" -f $vipcConfig.TargetVersionRaw)
+    Write-Verbose ("VIPC target version (numeric): {0}" -f $vipcConfig.TargetVersionNumeric)
+    Write-Verbose ("VIPC package count: {0}" -f $vipcConfig.PackageCount)
+
+    if (-not $AllowVipcTargetMismatch -and $vipcConfig.TargetVersionNumeric -ne $lvInfo.NumericVersion) {
+        throw ("VIPC target version mismatch. Requested LabVIEW numeric version: {0}. VIPC target version: {1} (raw: {2}). Command not executed. To bypass this guard for diagnostics only, pass -AllowVipcTargetMismatch." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
+    }
+
+    if ($AllowVipcTargetMismatch -and $vipcConfig.TargetVersionNumeric -ne $lvInfo.NumericVersion) {
+        Write-Warning ("Proceeding despite VIPC target/version mismatch due to -AllowVipcTargetMismatch. Requested={0}; VIPC target={1} (raw: {2})." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
+    }
+}
+catch {
+    Write-Error "An error occurred while validating VIPC target metadata. Details: $($_.Exception.Message)"
+    exit 1
+}
 
 Write-Output "Applying dependencies for LabVIEW $vipmVersion..."
 Write-Verbose "VIPM version string: $vipmVersion"

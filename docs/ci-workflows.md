@@ -160,8 +160,8 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 
 - **pylavi-validate** – report-only LabVIEW file validation using `vi_validate` (strict + legacy profiles) with `.lvversion`-synced version gating and optional baseline/delta reporting.
 - **prerelease-context** – computes prerelease publish eligibility, reason, merged-PR bump override context, and the execution profile (`ci_profile`: `release-priority`, `pr-fast`, `full`).
-- **changes** – checks out the repository and detects `.vipc` file changes to determine if dependencies need to be applied.
-- **apply-deps** – installs VIPC dependencies for multiple LabVIEW versions and bitnesses **only when** the `changes` job reports `.vipc` modifications (`if: needs.changes.outputs.vipc == 'true'`).
+- **changes** – checks out the repository and detects `.vipc` file changes for diagnostics/reporting in downstream jobs.
+- **apply-deps** – runs VIPC audit (`Assert-VipcApplied`) for both bitnesses on every run (hard-stop on mismatch), then optionally runs informational VIPC apply diagnostics when manually dispatched with `vipc_apply_info=true`.
 - **version** – computes the semantic version and build number using commit count and PR labels.
 - **missing-in-project** – verifies every source file is referenced in the `.lvproj` (runs after dependency application). Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
 - **unit-tests** – runs LabVIEW unit tests on Windows in LabVIEW 2021 after missing-in-project. Runs 64+32 in `full`, 64 only in `pr-fast`, and is skipped in `release-priority`.
@@ -175,6 +175,9 @@ The [`ci-composite.yml`](../.github/workflows/ci-composite.yml) pipeline breaks 
 - **pipeline-contract** – validates required-job outcomes using profile-specific expectations so intentionally skipped jobs in `release-priority` do not fail the run.
 
 Companion workflow note: [`ci.yml`](../.github/workflows/ci.yml) provides PR-only validation signal and is intentionally non-publishing.
+
+Manual VIPC diagnostics example (non-blocking apply after audit):
+`gh workflow run ci-composite.yml --ref <branch> -f vipc_apply_info=true`
 
 Windows self-hosted build jobs (`build-ppl-*` and `build-vip`) run a `close-labview` step after their build actions finish but before any steps that rename files or upload artifacts, so it is not the final step.
 
