@@ -303,6 +303,9 @@ try {
         Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'publish_status:\s*\$\{\{\s*steps\.publish\.outputs\.publish_status\s*\}\}' -Message "publish-prerelease output 'publish_status' is missing."
         Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'builds/status/prerelease-publish\.json' -Message "Prerelease publish status path is missing."
         Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'name:\s*prerelease-publish-status' -Message "Prerelease publish status artifact contract is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern 'codex-skill-layer-asset:' -Message "Codex skill-layer asset job is missing."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern "requiredAssets = @\('vip', 'release_notes', 'labviewcli-logs', 'vip-build-status', 'linux-packed-library', 'windows-packed-library', 'codex-skill-layer'\)" -Message "Full/pr-fast required prerelease assets are missing codex skill-layer."
+        Test-PatternPresence -FilePath $workflowFile -Content $workflowContent -Pattern "requiredAssets = @\('linux-packed-library', 'windows-packed-library', 'codex-skill-layer'\)" -Message "Release-priority required prerelease assets are missing codex skill-layer."
 
         Test-PatternPresence -FilePath $computeVersionActionFile -Content $computeActionContent -Pattern 'bump_type_override:' -Message "compute-version input 'bump_type_override' is missing."
         Test-PatternPresence -FilePath $computeVersionActionFile -Content $computeActionContent -Pattern 'allowedWithNone' -Message "compute-version allowed override set is missing."

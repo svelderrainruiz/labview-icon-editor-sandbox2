@@ -14,13 +14,23 @@ Common entrypoints:
   Profiles: `-ViValidateProfile strict|legacy|both`, optional `-ViValidateReportOnly`, `-ViValidateSkipVersionGate`.
   Optional absolute-path focus: set `LVIE_PYLAVI_ABSOLUTE_PATH_ROOTS` (semicolon-delimited) to flag specific roots without committing sensitive paths. CI redacts configured roots in logs and the uploaded pylavi log artifact, uploads a redacted top-offenders report (`pylavi-validate-offenders-<label>`), and prints a top-offenders table in the step summary.
 - `Run-CICompositeLocal.ps1`
-  Local CI parity run (Verify IE Paths, VIPC, missing-in-project, unit tests, PPLs, VIP build).
+  Local CI parity run (Verify IE Paths, VIPC, unit tests, PPLs, VIP build).
   Example: `pwsh -NoProfile -File .\\Tooling\\Run-CICompositeLocal.ps1`
   Dev-mode request flags are policy-disabled and now fail fast.
   Note: Direct execution is deprecated; use `Invoke-WorktreeOrchestrator.ps1` for worktree-aware runs.
 - `Run-CICompositeLocal-Auto.ps1`
-  Retry loop for local CI parity with adaptive timeouts.
+  Retry loop for local CI parity with adaptive timeouts and selectable success contracts (`vip|ppl|script`).
   Example: `pwsh -NoProfile -File .\\Tooling\\Run-CICompositeLocal-Auto.ps1 -MaxAttempts 5`
+- `Invoke-BeltAndSuspendersCI.ps1` (recommended proactive loop)
+  Canonical "belt and suspenders" flow for exact-SHA confidence:
+  1) local parity auto-loop until PPL success target is met,
+  2) dispatch `ci-composite.yml` for the same SHA,
+  3) wait for completion and run CI debt analysis on failure.
+  Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-BeltAndSuspendersCI.ps1 -Sha HEAD`
+  Useful switches: `-SkipLocalParity`, `-FullLocalParity`, `-DispatchCleanupRemote`, `-CiDebtFailOnUnknown`.
+- `Run-CICompositeForCommit.ps1`
+  Dispatches `CI Pipeline (Composite)` for an explicit SHA via a temporary branch.
+  Example: `pwsh -NoProfile -File .\\Tooling\\Run-CICompositeForCommit.ps1 -Sha <commit>`
 - `Invoke-WorktreeOrchestrator.ps1`
   Resolves worktree policy/root, builds runner-cli in the selected worktree, and can invoke local CI parity.
   Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -LabVIEWVersion 2021`
@@ -55,13 +65,16 @@ Common entrypoints:
   Example: `runner-cli pylavi summarize --repo-root .`
   Example: `runner-cli pylavi fetch --repo <owner/name> --branch develop`
   Example (baseline delta): `runner-cli pylavi summarize --path TestResults/agent-logs/pylavi-offenders.latest.json --baseline Tooling/pylavi/pylavi-offenders.baseline.json --fail-on-delta`
-- `agents/ci-debt/Invoke-CiDebtAnalysis.ps1`
-  Analyzes failed GitHub Actions runs and maps incidents to deterministic signatures for Issue #74 remediation.
-  Example: `pwsh -NoProfile -File .\\Tooling\\agents\\ci-debt\\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
-  Fixture-only example: `pwsh -NoProfile -File .\\Tooling\\agents\\ci-debt\\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FixturePath .\\Tooling\\agents\\ci-debt\\fixtures\\run-21840801109.json`
-  Signatures and playbook:
-  - `Tooling/agents/ci-debt/signatures.json`
-  - `Tooling/agents/ci-debt/playbook.md`
+- `Assert-CodexSkillLayer.ps1`
+  Verifies the pinned Codex skill layer is installed and valid (`0BSD`, hash, required files). Hard-fails when missing.
+  Example: `pwsh -NoProfile -File .\\Tooling\\Assert-CodexSkillLayer.ps1`
+- `Install-CodexSkillLayer.ps1`
+  Downloads and installs the pinned Codex skill layer from release assets.
+  Example: `pwsh -NoProfile -File .\\Tooling\\Install-CodexSkillLayer.ps1`
+- `Invoke-CiDebtAnalysis.ps1`
+  Wrapper entrypoint that runs CI debt analysis from the installed Codex skill layer.
+  Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
+  Fixture-only example: `pwsh -NoProfile -File .\\Tooling\\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109 -FixturePath .\\Tooling\\tests\\fixtures\\ci-debt\\run-21840801109.json`
 
 Related config:
 - `pylavi/vi-validate.yml`

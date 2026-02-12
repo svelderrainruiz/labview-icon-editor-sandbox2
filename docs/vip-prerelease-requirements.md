@@ -85,12 +85,12 @@ VR-PUB-009: The prepublish gate in VR-PUB-008 shall fail publish-intent runs whe
 
 ## 5. Asset Contract (Core)
 
-VR-AST-001: Required prerelease assets for `full` and `pr-fast` profiles shall include the built `.vip`, versioned release-notes markdown file, `gcli-logs` evidence, `vip-build-status` evidence, Linux container packed library (`.lvlibp`) asset, and Windows container packed library (`.lvlibp`) asset.
+VR-AST-001: Required prerelease assets for `full` and `pr-fast` profiles shall include the built `.vip`, versioned release-notes markdown file, `labviewcli-logs` evidence, `vip-build-status` evidence, Linux container packed library (`.lvlibp`) asset, Windows container packed library (`.lvlibp`) asset, and `codex-skill-layer` evidence.
 VR-AST-002: Missing required assets shall fail eligible publish runs.
 VR-AST-003: Reruns shall replace same-named assets on the existing prerelease.
 VR-AST-004: Build-vip job outputs shall expose at least VIP artifact name and release-notes artifact name for publish job consumption.
-VR-AST-005: Required prerelease assets for `release-priority` profile shall include Linux and Windows container packed library (`.lvlibp`) assets.
-VR-AST-006: `release-priority` profile shall not require `.vip`, release-notes markdown, `gcli-logs`, or `vip-build-status` assets.
+VR-AST-005: Required prerelease assets for `release-priority` profile shall include Linux and Windows container packed library (`.lvlibp`) assets plus `codex-skill-layer` evidence.
+VR-AST-006: `release-priority` profile shall not require `.vip`, release-notes markdown, `labviewcli-logs`, or `vip-build-status` assets.
 
 ## 6. Operations and Manual Backfill (Extended)
 
@@ -132,6 +132,7 @@ VR-GOV-004: All changed or new VR IDs shall map to at least one acceptance scena
 - `prerelease-context` outputs include `ci_profile` values `release-priority`, `pr-fast`, and `full`.
 - `.github/actions/compute-version/action.yml` input `bump_type_override` (optional).
 - `build-vip` job outputs for VIP and release-notes artifact identifiers.
+- `codex-skill-layer-asset` job outputs `artifact_name` and `asset_file_name` for prerelease attachment.
 - `publish-gate` output `gate_reason` records prepublish gate disposition.
 - `publish-prerelease` job outputs: `release_tag`, `release_url`, `release_id`, `publish_status`.
 - Status artifact: `prerelease-publish-status` containing `builds/status/prerelease-publish.json` with `ci_profile`, `required_assets`, and `publish_gate_reason`.

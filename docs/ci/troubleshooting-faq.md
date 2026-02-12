@@ -309,18 +309,18 @@ gh workflow run ci-composite.yml --repo $repo `
 
 **Symptoms**:
 - One or more jobs show `skipped`, but the workflow still proceeds to publish checks.
-- Common examples: `dev-mode-gate`, `missing-in-project`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`.
+- Common examples: `dev-mode-gate`, `unit-tests`, `build-ppl-x64`, `build-ppl-x86`, `build-vip`.
 
 **Possible Causes**:
 - The run used a different `ci_profile`:
   - `release-priority` (`workflow_dispatch` + `force_gcli_lunit=true`) intentionally skips heavy self-hosted validation/build jobs.
-  - `pr-fast` (`pull_request`) keeps the jobs but uses 64-bit-only matrices for smoke/missing/unit tests.
+  - `pr-fast` (`pull_request`) keeps the jobs but uses 64-bit-only matrices for smoke/unit tests.
   - `full` runs the full matrix and full self-hosted flow.
 - You are looking at `CI Pipeline (No Smoke)` (`ci.yml`), which is a PR-only non-publishing companion workflow.
 
 **Solution**:
 1. Check `prerelease-context` outputs for `ci_profile`.
-2. For `release-priority`, confirm skipped jobs are from the intentional skip list and that required jobs (`run-metadata`, `prerelease-context`, `version`, container packed-library jobs, `publish-gate`, `publish-prerelease`, `pipeline-contract`) succeeded.
+2. For `release-priority`, confirm skipped jobs are from the intentional skip list and that required jobs (`run-metadata`, `prerelease-context`, `version`, container packed-library jobs, `codex-skill-layer-asset`, `publish-gate`, `publish-prerelease`, `pipeline-contract`) succeeded.
 3. If full validation is required, rerun without `force_gcli_lunit=true` (or use a `pull_request`/`push` run path).
 
 ---
