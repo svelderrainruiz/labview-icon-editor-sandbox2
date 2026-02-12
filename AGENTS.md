@@ -361,4 +361,5 @@ Notes:
   - `.github\actions\close-labview\Close_LabVIEW.ps1`
 - Release note generation can log `git describe` errors in shallow or tagless repos; VIP builds may still complete, but fetch tags if you need accurate version strings.
 - If `vi_validate` is missing, confirm `py -m pip show pylavi` and ensure the Python Scripts directory is on PATH.
+- If Windows container parity fails with `ScriptRequiresUnmatchedPSVersion`, run `pwsh -NoProfile -File .\Tooling\Test-PathContract.ps1 -WriteSummary` and remove any file-scope `#Requires -Version` from `Tooling\support\PathContract.ps1`.
 
