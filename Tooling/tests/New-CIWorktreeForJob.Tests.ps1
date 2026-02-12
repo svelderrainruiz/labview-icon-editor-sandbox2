@@ -110,7 +110,7 @@ Describe 'New-CIWorktreeForJob.ps1' {
 
         $worktreePath = $null
         try {
-            $args = @{
+            $worktreeArgs = @{
                 Bitness = '64'
                 WorktreeRoot = $tempRoot
                 RepoRoot = $Script:RepoRoot
@@ -120,7 +120,7 @@ Describe 'New-CIWorktreeForJob.ps1' {
                 RunAttempt = '1'
             }
 
-            $worktreePath = Invoke-NewCiWorktreeForJob @args
+            $worktreePath = Invoke-NewCiWorktreeForJob @worktreeArgs
             Test-Path -Path $worktreePath | Should -BeTrue
 
             Remove-Item -Path $worktreePath -Recurse -Force -ErrorAction Stop
@@ -130,7 +130,7 @@ Describe 'New-CIWorktreeForJob.ps1' {
             $expectedPathInGitOutput = $worktreePath -replace '\\', '/'
             $worktreeListBefore | Should -Match ([regex]::Escape($expectedPathInGitOutput))
 
-            $worktreePath = Invoke-NewCiWorktreeForJob @args
+            $worktreePath = Invoke-NewCiWorktreeForJob @worktreeArgs
             Test-Path -Path $worktreePath | Should -BeTrue
         }
         finally {
