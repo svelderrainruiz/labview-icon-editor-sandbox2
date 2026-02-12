@@ -6,7 +6,8 @@
 .DESCRIPTION
     Executes the key LabVIEW steps from ci-composite.yml locally:
     - Verify IE Paths gate (version 32/64)
-    - Apply VIPC dependencies (version 32/64)
+    - Audit VIPC dependencies (version 32/64)
+    - Optional VIPC apply diagnostics (version 32/64)
     - Missing-in-project checks (version 32/64)
     - Unit tests (version 32/64)
     - Build PPLs (version 32/64) + rename
@@ -33,7 +34,13 @@
     Policy-disabled. Passing this switch throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER SkipVipc
-    Skip applying VIPC dependencies.
+    Skip VIPC audit and optional apply stages.
+
+.PARAMETER VipcMode
+    VIPC stage mode:
+      - audit: run Assert-VipcApplied only (default)
+      - apply-info: run Assert-VipcApplied, then run ApplyVIPC as informational-only diagnostics
+      - apply-enforce: run Assert-VipcApplied, then run ApplyVIPC as a required stage
 
 .PARAMETER SkipDevModeNoLabVIEWSmoke
     Policy-disabled. Passing this switch throws an error because dev-mode invocation is forbidden.
@@ -162,6 +169,11 @@ param(
     [switch]$SkipVerifyIEPaths,
     [switch]$EnsureCleanState,
     [switch]$SkipVipc,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('audit', 'apply-info', 'apply-enforce')]
+    [string]$VipcMode = 'audit',
+
     [switch]$SkipDevModeNoLabVIEWSmoke,
 
     [Parameter(Mandatory = $false)]
@@ -1514,7 +1526,7 @@ Initialize-CsvHeader -Path $script:RunHistoryPath -Header 'timestamp,status,dura
 Initialize-CsvHeader -Path $script:StepHistoryPath -Header 'timestamp,step,status,duration_seconds'
 $env:LABVIEW_CLOSE_METRICS_PATH = $script:CloseHistoryPath
 $runLog = Join-Path $logRoot "ci-local-$runTimestamp.log"
-$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -ForceGcliLunit:$ForceGcliLunit -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -SkipViValidate:$SkipViValidate -ViValidateConfigPath $ViValidateConfigPath -ViValidateProfile $ViValidateProfile -ViValidateReportOnly:$ViValidateReportOnly -ViValidateSkipVersionGate:$ViValidateSkipVersionGate -ViValidateOnly:$ViValidateOnly -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled"
+$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -VipcMode $VipcMode -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -ForceGcliLunit:$ForceGcliLunit -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -SkipViValidate:$SkipViValidate -ViValidateConfigPath $ViValidateConfigPath -ViValidateProfile $ViValidateProfile -ViValidateReportOnly:$ViValidateReportOnly -ViValidateSkipVersionGate:$ViValidateSkipVersionGate -ViValidateOnly:$ViValidateOnly -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled"
 $script:TranscriptStarted = $false
 try {
     Start-Transcript -Path $runLog -Append | Out-Null
@@ -1614,6 +1626,59 @@ try {
 
     if (-not $SkipVipc) {
         foreach ($bitness in $bitnessList) {
+            $vipcAuditPath = Join-Path $repoRoot ("builds\status\vipc-audit-{0}.json" -f $bitness)
+            Invoke-Checked -Label "Audit VIPC (LV$LabVIEWVersion $bitness-bit)" -Action {
+                & (Join-Path $repoRoot 'Tooling/Assert-VipcApplied.ps1') `
+                    -RepoRoot $repoRoot `
+                    -VIPCPath $VipcPath `
+                    -SupportedBitness $bitness `
+                    -LabVIEWVersion $LabVIEWVersion `
+                    -OutputPath $vipcAuditPath
+            }
+
+            if ($VipcMode -eq 'audit') {
+                Write-Host ("VIPC mode 'audit': skipping ApplyVIPC for {0}-bit." -f $bitness)
+                continue
+            }
+
+            if ($VipcMode -eq 'apply-info') {
+                $vipcApplyLogPath = Join-Path $repoRoot ("builds\status\vipc-apply-{0}.log" -f $bitness)
+                $vipcApplyLogDirectory = Split-Path -Path $vipcApplyLogPath -Parent
+                if (-not [string]::IsNullOrWhiteSpace($vipcApplyLogDirectory) -and -not (Test-Path -Path $vipcApplyLogDirectory)) {
+                    New-Item -Path $vipcApplyLogDirectory -ItemType Directory -Force | Out-Null
+                }
+
+                $applyResult = Invoke-CheckedWithOutput -Label "Apply VIPC info-only (LV$LabVIEWVersion $bitness-bit)" -Action {
+                    & (Join-Path $repoRoot '.github/actions/apply-vipc/ApplyVIPC.ps1') `
+                        -LabVIEWVersion $LabVIEWVersion `
+                        -SupportedBitness $bitness `
+                        -RepoRoot $repoRoot `
+                        -VIPCPath $VipcPath
+                }
+
+                if ($applyResult.Output -and $applyResult.Output.Count -gt 0) {
+                    $applyResult.Output | Set-Content -Path $vipcApplyLogPath -Encoding utf8
+                }
+                else {
+                    '' | Set-Content -Path $vipcApplyLogPath -Encoding utf8
+                }
+
+                if ($applyResult.Error) {
+                    Write-Warning ("Informational VIPC apply failed for {0}-bit: {1}" -f $bitness, $applyResult.Error.Exception.Message)
+                    Write-Warning ("Informational apply log: {0}" -f $vipcApplyLogPath)
+                    continue
+                }
+
+                if ($null -ne $applyResult.ExitCode -and $applyResult.ExitCode -ne 0) {
+                    Write-Warning ("Informational VIPC apply exited non-zero for {0}-bit: {1}" -f $bitness, $applyResult.ExitCode)
+                    Write-Warning ("Informational apply log: {0}" -f $vipcApplyLogPath)
+                    continue
+                }
+
+                Write-Host ("Informational VIPC apply completed successfully for {0}-bit. Log: {1}" -f $bitness, $vipcApplyLogPath)
+                continue
+            }
+
             Invoke-Checked -Label "Apply VIPC (LV$LabVIEWVersion $bitness-bit)" -Action {
                 & (Join-Path $repoRoot '.github/actions/apply-vipc/ApplyVIPC.ps1') `
                     -LabVIEWVersion $LabVIEWVersion `
@@ -1622,7 +1687,6 @@ try {
                     -VIPCPath $VipcPath
             }
         }
-
     }
 
     if (-not $SkipMissingInProject) {

@@ -52,6 +52,12 @@
 .PARAMETER ForceGcliLunit
     Force g-cli as the primary LUnit backend for parity unit tests.
 
+.PARAMETER VipcMode
+    VIPC stage mode forwarded to Run-CICompositeLocal.ps1:
+      - audit (default)
+      - apply-info
+      - apply-enforce
+
 .PARAMETER SkipViValidate
     Skip pylavi vi_validate checks.
 
@@ -148,6 +154,10 @@ param(
     [string]$DevModeNoLabVIEWSmokeDepth = 'balanced',
 
     [switch]$ForceGcliLunit,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateSet('audit', 'apply-info', 'apply-enforce')]
+    [string]$VipcMode = 'audit',
 
     [switch]$SkipViValidate,
 
@@ -339,6 +349,7 @@ if ($DryRun) {
         -AllowVersionMismatch:$AllowVersionMismatch `
         -DryRun `
         -ForceGcliLunit:$ForceGcliLunit `
+        -VipcMode $VipcMode `
         -SkipViValidate:$SkipViValidate `
         -ViValidateConfigPath $ViValidateConfigPath `
         -ViValidateProfile $ViValidateProfile `
@@ -377,6 +388,7 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
             -LabVIEWBitness $LabVIEWBitness `
             -AllowVersionMismatch:$AllowVersionMismatch `
             -ForceGcliLunit:$ForceGcliLunit `
+            -VipcMode $VipcMode `
             -SkipViValidate:$SkipViValidate `
             -ViValidateConfigPath $ViValidateConfigPath `
             -ViValidateProfile $ViValidateProfile `

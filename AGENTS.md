@@ -215,14 +215,15 @@ Run the local parity script that mirrors `ci-composite.yml` (preferred entrypoin
 ```
 pwsh -NoProfile -File .\Tooling\Invoke-WorktreeOrchestrator.ps1 `
   -Run `
-  -RunArgs -EnsureCleanState
+  -RunArgs
 ```
 
 Notes:
 - Outputs go to `$WORKTREE_ROOT\artifacts\<runid>\ci-local` when guardrails are active (default for local runs).
 - GitHub Actions disables artifact roots by default unless `LVIE_ENABLE_ARTIFACT_ROOT=1` or an explicit `-RunId`/`-ArtifactRoot` is passed.
 - The script always runs both 64-bit and 32-bit steps for LabVIEW 2021 (21.0).
-- The script handles Verify IE Paths, VIPC, missing-in-project, unit tests, PPL builds, and VIP build.
+- The script handles Verify IE Paths, VIPC audit, missing-in-project, unit tests, PPL builds, and VIP build.
+- VIPC default behavior is audit-first (`-VipcMode audit`); optional diagnostics are available via `-VipcMode apply-info` or strict apply via `-VipcMode apply-enforce`.
 - The script runs `vi_validate` (pylavi) and uses `.lvversion` as the canonical LabVIEW version. Skip with `-SkipViValidate`.
 - If you pass `-LabVIEWVersion`, it must match `.lvversion` or the run will fail fast.
 - If LabVIEW or g-cli is already running, the script waits for them to exit before starting.
@@ -252,7 +253,7 @@ New-Item -Path $logRoot -ItemType Directory -Force | Out-Null
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $logFile = Join-Path $logRoot "run-$timestamp.log"
 $csv = Join-Path $logRoot 'run-history.csv'
-$command = 'pwsh -NoProfile -File .\Tooling\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs -EnsureCleanState'
+$command = 'pwsh -NoProfile -File .\Tooling\Invoke-WorktreeOrchestrator.ps1 -Run -RunArgs'
 
 $start = Get-Date
 Start-Transcript -Path $logFile -Append | Out-Null
@@ -275,7 +276,6 @@ Success criteria:
 Automated loop (PowerShell):
 ```
 pwsh -NoProfile -File .\Tooling\Run-CICompositeLocal-Auto.ps1 `
-  -EnsureCleanState `
   -MaxAttempts 5
 ```
 

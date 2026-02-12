@@ -73,6 +73,11 @@ on:
         required: false
         default: false
         type: boolean
+      vipc_apply_info:
+        description: "Run informational VIPC apply diagnostics after audit (non-blocking)"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   # Stage 1: Run identity and publish-eligibility context.
@@ -791,17 +796,7 @@ jobs:
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Apply VIPC (LV x64)
-        if: needs.changes.outputs.vipc == 'true'
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github\\actions\\apply-vipc\\ApplyVIPC.ps1" `
-            -SupportedBitness 64 `
-            -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc"
       - name: Audit VIPC apply (LV x64)
-        if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -810,14 +805,56 @@ jobs:
             -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
             -SupportedBitness 64 `
             -OutputPath "$env:REPO_ROOT\\builds\\status\\vipc-audit-64.json"
-      - run: echo "No .vipc changes detected; skipping dependency application."
-        if: needs.changes.outputs.vipc != 'true'
+      - name: Report VIPC change status (LV x64)
+        shell: pwsh
+        run: |
+          if ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
+            Write-Host ".vipc changes detected for this run."
+          } else {
+            Write-Host "No .vipc changes detected; audit-first policy still enforced."
+          }
+      - name: Apply VIPC (LV x64, informational)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        continue-on-error: true
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-apply-64.log'
+          $logDir = Split-Path -Path $logPath -Parent
+          if (-not (Test-Path -Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+          }
+
+          '' | Set-Content -Path $logPath -Encoding utf8
+          $output = & ".github\\actions\\apply-vipc\\ApplyVIPC.ps1" `
+            -SupportedBitness 64 `
+            -RepoRoot "$env:REPO_ROOT" `
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" *>&1
+          $exitCode = $LASTEXITCODE
+
+          if ($output) {
+            $output |
+              ForEach-Object { $_.ToString() } |
+              Tee-Object -FilePath $logPath -Append |
+              ForEach-Object { Write-Host $_ }
+          }
+
+          if ($exitCode -ne 0) {
+            exit $exitCode
+          }
       - name: Upload VIPC audit artifact (LV x64)
-        if: ${{ always() && needs.changes.outputs.vipc == 'true' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: vipc-audit-64
           path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-64.json
+          if-no-files-found: warn
+      - name: Upload VIPC apply log artifact (LV x64)
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipc-apply-log-64
+          path: ${{ env.REPO_ROOT }}/builds/status/vipc-apply-64.log
           if-no-files-found: warn
       - name: Job teardown
         if: always()
@@ -844,17 +881,7 @@ jobs:
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Apply VIPC (LV x86)
-        if: needs.changes.outputs.vipc == 'true'
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & ".github\\actions\\apply-vipc\\ApplyVIPC.ps1" `
-            -SupportedBitness 32 `
-            -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc"
       - name: Audit VIPC apply (LV x86)
-        if: needs.changes.outputs.vipc == 'true'
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -863,14 +890,56 @@ jobs:
             -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
             -SupportedBitness 32 `
             -OutputPath "$env:REPO_ROOT\\builds\\status\\vipc-audit-32.json"
-      - run: echo "No .vipc changes detected; skipping dependency application."
-        if: needs.changes.outputs.vipc != 'true'
+      - name: Report VIPC change status (LV x86)
+        shell: pwsh
+        run: |
+          if ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
+            Write-Host ".vipc changes detected for this run."
+          } else {
+            Write-Host "No .vipc changes detected; audit-first policy still enforced."
+          }
+      - name: Apply VIPC (LV x86, informational)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        continue-on-error: true
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $logPath = Join-Path $env:REPO_ROOT 'builds\status\vipc-apply-32.log'
+          $logDir = Split-Path -Path $logPath -Parent
+          if (-not (Test-Path -Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+          }
+
+          '' | Set-Content -Path $logPath -Encoding utf8
+          $output = & ".github\\actions\\apply-vipc\\ApplyVIPC.ps1" `
+            -SupportedBitness 32 `
+            -RepoRoot "$env:REPO_ROOT" `
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" *>&1
+          $exitCode = $LASTEXITCODE
+
+          if ($output) {
+            $output |
+              ForEach-Object { $_.ToString() } |
+              Tee-Object -FilePath $logPath -Append |
+              ForEach-Object { Write-Host $_ }
+          }
+
+          if ($exitCode -ne 0) {
+            exit $exitCode
+          }
       - name: Upload VIPC audit artifact (LV x86)
-        if: ${{ always() && needs.changes.outputs.vipc == 'true' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: vipc-audit-32
           path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-32.json
+          if-no-files-found: warn
+      - name: Upload VIPC apply log artifact (LV x86)
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vipc-apply-log-32
+          path: ${{ env.REPO_ROOT }}/builds/status/vipc-apply-32.log
           if-no-files-found: warn
       - name: Job teardown
         if: always()
