@@ -7,7 +7,6 @@
     Executes the key LabVIEW steps from ci-composite.yml locally:
     - Verify IE Paths gate (version 32/64)
     - Apply VIPC dependencies (version 32/64)
-    - DevMode.NoLabVIEW smoke (version 32/64)
     - Missing-in-project checks (version 32/64)
     - Unit tests (version 32/64)
     - Build PPLs (version 32/64) + rename
@@ -31,16 +30,16 @@
     Skip the Verify IE Paths gate.
 
 .PARAMETER EnsureCleanState
-    Revert dev mode before enabling it for Verify IE Paths.
+    Policy-disabled. Passing this switch throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER SkipVipc
     Skip applying VIPC dependencies.
 
 .PARAMETER SkipDevModeNoLabVIEWSmoke
-    Skip DevMode.NoLabVIEW smoke tests.
+    Policy-disabled. Passing this switch throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER DevModeNoLabVIEWSmokeDepth
-    Smoke depth: minimal, balanced, or full.
+    Policy-disabled. Passing this parameter throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER SkipMissingInProject
     Skip missing-in-project checks.
@@ -76,7 +75,7 @@
     Run only the pylavi vi_validate gate and exit.
 
 .PARAMETER UseLabVIEWDevMode
-    Use LabVIEW + g-cli for dev-mode toggles (default: false).
+    Policy-disabled. Passing this switch throws an error because dev-mode invocation is forbidden.
 
 .PARAMETER BumpType
     Version bump type when computing local version info (major/minor/patch/none).
@@ -272,6 +271,16 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 
 $ErrorActionPreference = 'Stop'
 
+$devModePolicyHelper = Join-Path $PSScriptRoot 'support\DevModePolicy.ps1'
+if (-not (Test-Path -Path $devModePolicyHelper -PathType Leaf)) {
+    throw "Dev mode policy helper not found at $devModePolicyHelper"
+}
+. $devModePolicyHelper
+Assert-DevModePolicyParameterNotBound `
+    -BoundParameters $PSBoundParameters `
+    -BlockedParameters @('UseLabVIEWDevMode', 'EnsureCleanState', 'SkipDevModeNoLabVIEWSmoke', 'DevModeNoLabVIEWSmokeDepth') `
+    -EntryPoint $PSCommandPath
+
 if (-not $Orchestrated) {
     $orchestrator = Join-Path $PSScriptRoot 'Invoke-WorktreeOrchestrator.ps1'
     if (Test-Path -Path $orchestrator) {
@@ -323,21 +332,6 @@ if ($ViValidateOnly -and $SkipViValidate) {
 
 $customViConfigSpecified = $PSBoundParameters.ContainsKey('ViValidateConfigPath')
 $skipViVersionSpecified = $PSBoundParameters.ContainsKey('ViValidateSkipVersionGate')
-
-function Test-ForceNoLabVIEWDevMode {
-    $value = $env:LVIE_FORCE_NO_LABVIEW_DEVMODE
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        return $false
-    }
-    $normalized = $value.Trim().ToLowerInvariant()
-    return ($normalized -notin @('0', 'false', 'no'))
-}
-
-$forceNoLabVIEW = Test-ForceNoLabVIEWDevMode
-if ($forceNoLabVIEW -and $UseLabVIEWDevMode) {
-    Write-Host 'LVIE_FORCE_NO_LABVIEW_DEVMODE=1; ignoring -UseLabVIEWDevMode.'
-}
-$script:PreferNoLabVIEWDevMode = $forceNoLabVIEW -or (-not $UseLabVIEWDevMode)
 
 function Initialize-CsvHeader {
     param(
@@ -403,24 +397,6 @@ function Resolve-RepoRoot {
         }
     }
     return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
-}
-
-function Assert-CleanProjectFileForSmoke {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RepoRoot,
-
-        [Parameter(Mandatory = $false)]
-        [string]$ProjectRelativePath = 'lv_icon_editor.lvproj'
-    )
-
-    $smokeHelperPath = Join-Path $RepoRoot 'Tooling\support\DevModeNoLabVIEWSmoke.ps1'
-    if (-not (Test-Path -Path $smokeHelperPath -PathType Leaf)) {
-        throw "Smoke helper not found at $smokeHelperPath"
-    }
-
-    . $smokeHelperPath
-    Assert-DevModeNoLabVIEWProjectFileClean -RepoRoot $RepoRoot -ProjectRelativePath $ProjectRelativePath
 }
 
 function Get-RepoHeadSha {
@@ -1104,103 +1080,11 @@ function Invoke-VerifyIEPath {
             ProcessTimeoutMs           = $processTimeoutMsValue
             StatusFileTimeoutMs        = $statusTimeoutMsValue
             StatusFileArchiveDirectory = $verifyArchiveValue
-            AutoRevertIfEnabled        = $true
             IgnoreGcliExitCode         = $true
-        }
-        if ($script:PreferNoLabVIEWDevMode) {
-            $verifyParams.EnableDevModeNoLabVIEW = $true
-        } else {
-            $verifyParams.EnableDevMode = $true
-            $verifyParams.AllowFallbackToNoLabVIEW = $true
         }
 
         & (Join-Path $repoRoot 'Tooling/Invoke-MissingIEFilesFromLVInstall.ps1') @verifyParams
     }
-}
-
-function Invoke-EnableDevModeWithRecovery {
-    param(
-        [string]$Bitness,
-        [int]$ConnectTimeoutMs,
-        [int]$ProcessTimeoutMs,
-        [string]$Context
-    )
-
-    $connectTimeoutMsValue = $ConnectTimeoutMs
-    $processTimeoutMsValue = $ProcessTimeoutMs
-
-    Wait-ForIdle -RunHistoryPath $script:RunHistoryPath
-
-    $label = if ([string]::IsNullOrWhiteSpace($Context)) {
-        "Enable dev mode ($Bitness-bit)"
-    } else {
-        "Enable dev mode ($Context, $Bitness-bit)"
-    }
-    $result = Invoke-CheckedWithResult -Label $label -Action {
-        $setParams = @{
-            LabVIEWVersion   = $LabVIEWVersion
-            SupportedBitness = $Bitness
-            RepoRoot         = $repoRoot
-            ConnectTimeoutMs = $connectTimeoutMsValue
-            ProcessTimeoutMs = $processTimeoutMsValue
-        }
-        if (-not $script:PreferNoLabVIEWDevMode) {
-            $setParams.UseLabVIEW = $true
-            $setParams.AllowFallbackToNoLabVIEW = $true
-        }
-        & (Join-Path $repoRoot '.github/actions/set-development-mode/Set_Development_Mode.ps1') @setParams
-    }
-
-    if (-not $result.Error) {
-        return
-    }
-
-    Write-Warning ("{0} failed; attempting revert and retry in case dev mode points at a different worktree." -f $label)
-    $contextLabel = if ([string]::IsNullOrWhiteSpace($Context)) { "$Bitness-bit" } else { "$Context, $Bitness-bit" }
-    Write-Host ("--- Dev mode recovery: revert + retry ({0}) ---" -f $contextLabel)
-    Write-Warning ("Enable dev mode error: {0}" -f $result.Error.Exception.Message)
-    $revertResult = Invoke-CheckedWithResult -Label "Revert dev mode before retry ($Bitness-bit)" -Action {
-        $revertParams = @{
-            LabVIEWVersion   = $LabVIEWVersion
-            SupportedBitness = $Bitness
-            RepoRoot         = $repoRoot
-            ConnectTimeoutMs = $connectTimeoutMsValue
-            ProcessTimeoutMs = $processTimeoutMsValue
-        }
-        if (-not $script:PreferNoLabVIEWDevMode) {
-            $revertParams.UseLabVIEW = $true
-            $revertParams.AllowFallbackToNoLabVIEW = $true
-        }
-        & (Join-Path $repoRoot '.github/actions/revert-development-mode/RevertDevelopmentMode.ps1') @revertParams
-    }
-    if ($revertResult.Error) {
-        Write-Warning ("Dev mode recovery failed during revert: {0}" -f $revertResult.Error.Exception.Message)
-        Write-Host ("--- Dev mode recovery failed ({0}) ---" -f $contextLabel)
-        throw $revertResult.Error
-    }
-
-    $retry = Invoke-CheckedWithResult -Label "Enable dev mode retry ($Bitness-bit)" -Action {
-        $setParams = @{
-            LabVIEWVersion   = $LabVIEWVersion
-            SupportedBitness = $Bitness
-            RepoRoot         = $repoRoot
-            ConnectTimeoutMs = $connectTimeoutMsValue
-            ProcessTimeoutMs = $processTimeoutMsValue
-        }
-        if (-not $script:PreferNoLabVIEWDevMode) {
-            $setParams.UseLabVIEW = $true
-            $setParams.AllowFallbackToNoLabVIEW = $true
-        }
-        & (Join-Path $repoRoot '.github/actions/set-development-mode/Set_Development_Mode.ps1') @setParams
-    }
-    if ($retry.Error) {
-        Write-Warning ("Dev mode recovery failed on retry: {0}" -f $retry.Error.Exception.Message)
-        Write-Host ("--- Dev mode recovery failed ({0}) ---" -f $contextLabel)
-        throw $retry.Error
-    }
-
-    Write-Host ("Dev mode recovery succeeded after revert + retry ({0})." -f $contextLabel)
-    Write-Host ("--- Dev mode recovery completed ({0}) ---" -f $contextLabel)
 }
 
 function Get-LocalVersionInfo {
@@ -1630,7 +1514,7 @@ Initialize-CsvHeader -Path $script:RunHistoryPath -Header 'timestamp,status,dura
 Initialize-CsvHeader -Path $script:StepHistoryPath -Header 'timestamp,step,status,duration_seconds'
 $env:LABVIEW_CLOSE_METRICS_PATH = $script:CloseHistoryPath
 $runLog = Join-Path $logRoot "ci-local-$runTimestamp.log"
-$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -EnsureCleanState:$EnsureCleanState -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -ForceGcliLunit:$ForceGcliLunit -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -SkipViValidate:$SkipViValidate -ViValidateConfigPath $ViValidateConfigPath -ViValidateProfile $ViValidateProfile -ViValidateReportOnly:$ViValidateReportOnly -ViValidateSkipVersionGate:$ViValidateSkipVersionGate -ViValidateOnly:$ViValidateOnly -UseLabVIEWDevMode:$UseLabVIEWDevMode -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled"
+$commandLine = "Run-CICompositeLocal.ps1 -LabVIEWVersion $LabVIEWVersion -LabVIEWBitness $LabVIEWBitness -AllowVersionMismatch:$AllowVersionMismatch -DryRun:$DryRun -SkipVerifyIEPaths:$SkipVerifyIEPaths -SkipVipc:$SkipVipc -SkipMissingInProject:$SkipMissingInProject -SkipUnitTests:$SkipUnitTests -ForceGcliLunit:$ForceGcliLunit -SkipBuildPpl:$SkipBuildPpl -SkipBuildVip:$SkipBuildVip -SkipViValidate:$SkipViValidate -ViValidateConfigPath $ViValidateConfigPath -ViValidateProfile $ViValidateProfile -ViValidateReportOnly:$ViValidateReportOnly -ViValidateSkipVersionGate:$ViValidateSkipVersionGate -ViValidateOnly:$ViValidateOnly -BumpType $BumpType -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -StatusFileTimeoutMs $StatusFileTimeoutMs -VipmTimeoutSeconds $VipmTimeoutSeconds -CloseLabVIEWMode $CloseLabVIEWMode -WorktreeRoot $WorktreeRoot -SkipWorktreeRootCheck:$SkipWorktreeRootCheck -AutoWorktree:$AutoWorktree -RunId $RunId -ArtifactRoot $ArtifactRoot -CleanRoom:$CleanRoom -RunnerCliPath $RunnerCliPath -RequireRunnerCli:$requireRunnerCliEnabled"
 $script:TranscriptStarted = $false
 try {
     Start-Transcript -Path $runLog -Append | Out-Null
@@ -1721,19 +1605,6 @@ try {
 
             Wait-ForIdle -RunHistoryPath $script:RunHistoryPath
 
-            if ($EnsureCleanState) {
-                $revertResult = Invoke-CheckedWithResult -Label "Revert dev mode before enabling VerifyIEPaths ($bitness-bit)" -Action {
-                    & (Join-Path $repoRoot 'Tooling/Revert-DevelopmentMode-NoLabVIEW.ps1') `
-                        -LabVIEWVersion $LabVIEWVersion `
-                        -SupportedBitness $bitness `
-                        -RepoRoot $repoRoot
-                }
-
-                if ($revertResult.Error) {
-                    throw $revertResult.Error
-                }
-            }
-
             $verifyResult = Invoke-VerifyIEPath -Bitness $bitness -ConnectTimeoutMs $verifyConnectTimeoutMs -StatusTimeoutMs $StatusFileTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -VerifyArchive $verifyArchive
             if ($verifyResult.Error) {
                 throw $verifyResult.Error
@@ -1754,49 +1625,6 @@ try {
 
     }
 
-    if (-not $SkipDevModeNoLabVIEWSmoke) {
-        Assert-CleanProjectFileForSmoke -RepoRoot $repoRoot -ProjectRelativePath 'lv_icon_editor.lvproj'
-
-        $smokeDir = Join-Path $artifactsRoot 'devmode-no-labview-smoke'
-        New-Item -Path $smokeDir -ItemType Directory -Force | Out-Null
-        $smokeScript = Join-Path $repoRoot 'Tooling/Invoke-DevModeNoLabVIEWSmoke.ps1'
-        if (-not (Test-Path -Path $smokeScript -PathType Leaf)) {
-            throw "DevMode.NoLabVIEW smoke script not found: $smokeScript"
-        }
-
-        foreach ($bitness in $bitnessList) {
-            Invoke-Checked -Label ("DevMode.NoLabVIEW smoke ({0}-bit, depth={1})" -f $bitness, $DevModeNoLabVIEWSmokeDepth) -Action {
-                $previousLunitBackend = $env:LVIE_LUNIT_BACKEND
-                try {
-                    if ($ForceGcliLunit) {
-                        $env:LVIE_LUNIT_BACKEND = 'gcli'
-                        Write-Host "LUnit backend override for DevMode.NoLabVIEW smoke: gcli"
-                    }
-                    & $smokeScript `
-                        -LabVIEWVersion $LabVIEWVersion `
-                        -LabVIEWBitness $bitness `
-                        -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
-                        -ConnectTimeoutMs $ConnectTimeoutMs `
-                        -ProcessTimeoutMs $ProcessTimeoutMs `
-                        -RepoRoot $repoRoot `
-                        -SkipWorktreeRootCheck:$SkipWorktreeRootCheck
-                }
-                finally {
-                    if ($null -eq $previousLunitBackend) {
-                        Remove-Item Env:LVIE_LUNIT_BACKEND -ErrorAction SilentlyContinue
-                    } else {
-                        $env:LVIE_LUNIT_BACKEND = $previousLunitBackend
-                    }
-                }
-            }
-
-            $smokeOutput = Join-Path $repoRoot 'TestResults\devmode-no-labview-smoke'
-            if (Test-Path -Path $smokeOutput) {
-                Copy-Item -Path (Join-Path $smokeOutput '*') -Destination $smokeDir -Force -Recurse -ErrorAction SilentlyContinue
-            }
-        }
-    }
-
     if (-not $SkipMissingInProject) {
         $missingDir = Join-Path $artifactsRoot 'missing-in-project'
         New-Item -Path $missingDir -ItemType Directory -Force | Out-Null
@@ -1808,8 +1636,6 @@ try {
 
         foreach ($bitness in $bitnessList) {
             try {
-                Invoke-EnableDevModeWithRecovery -Bitness $bitness -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -Context 'missing-in-project'
-
                 Invoke-Checked -Label "Missing-in-project ($bitness-bit)" -Action {
                     & (Join-Path $repoRoot '.github/actions/missing-in-project/Invoke-MissingInProjectCLI.ps1') `
                         -LVVersion $LabVIEWVersion `
@@ -1824,18 +1650,6 @@ try {
                     Write-Warning ("Failed to close LabVIEW after missing-in-project: {0}" -f $_.Exception.Message)
                 }
                 Wait-ForIdle -RunHistoryPath $script:RunHistoryPath
-                $revertParams = @{
-                    LabVIEWVersion   = $LabVIEWVersion
-                    SupportedBitness = $bitness
-                    RepoRoot         = $repoRoot
-                    ConnectTimeoutMs = $ConnectTimeoutMs
-                    ProcessTimeoutMs = $ProcessTimeoutMs
-                }
-                if (-not $script:PreferNoLabVIEWDevMode) {
-                    $revertParams.UseLabVIEW = $true
-                    $revertParams.AllowFallbackToNoLabVIEW = $true
-                }
-                & (Join-Path $repoRoot '.github/actions/revert-development-mode/RevertDevelopmentMode.ps1') @revertParams | Out-Null
             }
 
             $missingPath = Join-Path $repoRoot '.github/actions/missing-in-project/missing_files.txt'
@@ -1848,8 +1662,6 @@ try {
     if (-not $SkipUnitTests) {
         foreach ($bitness in $bitnessList) {
             try {
-                Invoke-EnableDevModeWithRecovery -Bitness $bitness -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -Context 'unit tests'
-
                 Invoke-Checked -Label "Run unit tests ($bitness-bit)" -Action {
                     $previousLunitBackend = $env:LVIE_LUNIT_BACKEND
                     try {
@@ -1878,18 +1690,6 @@ try {
                     Write-Warning ("Failed to close LabVIEW after unit tests: {0}" -f $_.Exception.Message)
                 }
                 Wait-ForIdle -RunHistoryPath $script:RunHistoryPath
-                $revertParams = @{
-                    LabVIEWVersion   = $LabVIEWVersion
-                    SupportedBitness = $bitness
-                    RepoRoot         = $repoRoot
-                    ConnectTimeoutMs = $ConnectTimeoutMs
-                    ProcessTimeoutMs = $ProcessTimeoutMs
-                }
-                if (-not $script:PreferNoLabVIEWDevMode) {
-                    $revertParams.UseLabVIEW = $true
-                    $revertParams.AllowFallbackToNoLabVIEW = $true
-                }
-                & (Join-Path $repoRoot '.github/actions/revert-development-mode/RevertDevelopmentMode.ps1') @revertParams | Out-Null
             }
         }
     }
@@ -1897,8 +1697,6 @@ try {
     if (-not $SkipBuildPpl) {
         foreach ($bitness in $bitnessList) {
             try {
-                Invoke-EnableDevModeWithRecovery -Bitness $bitness -ConnectTimeoutMs $ConnectTimeoutMs -ProcessTimeoutMs $ProcessTimeoutMs -Context 'build PPL'
-
                 Invoke-Checked -Label "Build PPL ($bitness-bit)" -Action {
                     & (Join-Path $repoRoot '.github/actions/build-lvlibp/Build_lvlibp.ps1') `
                         -LabVIEWVersion $LabVIEWVersion `
@@ -1918,18 +1716,6 @@ try {
                     Write-Warning ("Failed to close LabVIEW after PPL build: {0}" -f $_.Exception.Message)
                 }
                 Wait-ForIdle -RunHistoryPath $script:RunHistoryPath
-                $revertParams = @{
-                    LabVIEWVersion   = $LabVIEWVersion
-                    SupportedBitness = $bitness
-                    RepoRoot         = $repoRoot
-                    ConnectTimeoutMs = $ConnectTimeoutMs
-                    ProcessTimeoutMs = $ProcessTimeoutMs
-                }
-                if (-not $script:PreferNoLabVIEWDevMode) {
-                    $revertParams.UseLabVIEW = $true
-                    $revertParams.AllowFallbackToNoLabVIEW = $true
-                }
-                & (Join-Path $repoRoot '.github/actions/revert-development-mode/RevertDevelopmentMode.ps1') @revertParams | Out-Null
             }
 
             $currentFile = Join-Path $repoRoot 'resource/plugins/lv_icon.lvlibp'
