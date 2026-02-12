@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$windowsContainerShellContract = 'powershell.exe 5.1'
 
 $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 $allowedLiteralPathSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -125,7 +126,7 @@ if (Test-Path -LiteralPath $pathContractFullPath -PathType Leaf) {
                     File    = ($pathContractRelativePath -replace '\\', '/')
                     Line    = $lineNumber
                     Pattern = '#Requires -Version'
-                    Message = 'PathContract helper is imported by Windows container parity under powershell 5.1; do not add #Requires -Version.'
+                    Message = 'PathContract helper is imported by Windows container parity under powershell.exe 5.1; do not add #Requires -Version (prevents ScriptRequiresUnmatchedPSVersion).'
                 }) | Out-Null
         }
     }
@@ -133,17 +134,23 @@ if (Test-Path -LiteralPath $pathContractFullPath -PathType Leaf) {
 
 if ($WriteSummary -and -not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
     if ($violationList.Count -eq 0) {
-        @(
+        $summaryLines = @(
             '### Path Contract Guard'
             '- Status: pass'
             '- Result: no path-contract violations detected.'
-        ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            ("- Windows container shell contract: {0}" -f $windowsContainerShellContract)
+            '- PathContract.ps1 compatibility: pass (no file-scope #Requires -Version).'
+        )
+        $summaryLines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
     } else {
-        @(
+        $summaryLines = @(
             '### Path Contract Guard'
             '- Status: fail'
             ("- Violations: {0}" -f $violationList.Count)
-        ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            ("- Windows container shell contract: {0}" -f $windowsContainerShellContract)
+            '- PathContract.ps1 compatibility: fail (would trigger ScriptRequiresUnmatchedPSVersion).'
+        )
+        $summaryLines | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
     }
 }
 
@@ -154,4 +161,5 @@ if ($violationList.Count -gt 0) {
     throw ("Path contract violations detected:{0}{1}" -f [Environment]::NewLine, ($formatted -join [Environment]::NewLine))
 }
 
+Write-Host ("PathContract.ps1 compatibility with Windows container shell ({0}): pass" -f $windowsContainerShellContract)
 Write-Host "Path contract guard passed with no violations."

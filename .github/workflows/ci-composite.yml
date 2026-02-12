@@ -1609,6 +1609,13 @@ jobs:
           docker pull $image
           "LABVIEW_WINDOWS_IMAGE=$image" | Out-File -FilePath $Env:GITHUB_ENV -Append
 
+      - name: Validate path contract for Windows container shell
+        if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
+        shell: pwsh
+        run: |
+          Write-Host 'Windows container parity script runs under powershell.exe (Windows PowerShell 5.1) inside the NI container.'
+          pwsh -NoProfile -File "$env:GITHUB_WORKSPACE\Tooling\Test-PathContract.ps1" -WriteSummary
+
       - name: Build Windows packed library via LabVIEWCLI container parity script
         if: ${{ needs.prerelease-context.outputs.should_publish == 'true' }}
         shell: pwsh
