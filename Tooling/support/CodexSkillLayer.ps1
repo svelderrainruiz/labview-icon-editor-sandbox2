@@ -71,10 +71,15 @@ function Get-CodexSkillLayerLock {
     }
 
     $lock = $raw | ConvertFrom-Json -ErrorAction Stop
-    foreach ($required in @('repo', 'tag', 'asset_name', 'sha256', 'required_files', 'license_spdx')) {
+    foreach ($required in @('repo', 'tag', 'asset_name', 'asset_sha256', 'required_files', 'license_spdx', 'install_args', 'install_root_template')) {
         if (-not ($lock.PSObject.Properties.Name -contains $required)) {
             throw ("Codex skill lock file is missing required property '{0}': {1}" -f $required, $resolvedLockPath)
         }
+    }
+
+    $assetName = [string]$lock.asset_name
+    if ([System.IO.Path]::GetExtension($assetName).ToLowerInvariant() -ne '.exe') {
+        throw ("Codex skill lock file asset_name must be an installer (.exe): {0}" -f $resolvedLockPath)
     }
 
     return [pscustomobject]@{
@@ -98,7 +103,7 @@ function Resolve-CodexSkillLayerRoot {
         $candidate = $env:LVIE_CODEX_SKILL_LAYER_ROOT
     }
     if ([string]::IsNullOrWhiteSpace($candidate)) {
-        $candidate = 'TestResults/codex-skill-layer'
+        $candidate = 'C:\Users\Public\lvie\codex-skill-layer'
     }
 
     if ([System.IO.Path]::IsPathRooted($candidate)) {
@@ -111,6 +116,9 @@ function Resolve-CodexSkillLayerRoot {
 function Resolve-CodexSkillLayerVersionRoot {
     param(
         [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [Parameter(Mandatory = $true)]
         [string]$LayerRoot,
 
         [Parameter(Mandatory = $true)]
@@ -121,7 +129,22 @@ function Resolve-CodexSkillLayerVersionRoot {
     if ([string]::IsNullOrWhiteSpace($safeTag)) {
         $safeTag = 'unknown'
     }
-    return Join-Path $LayerRoot $safeTag
+
+    $template = [string]$Lock.install_root_template
+    if ([string]::IsNullOrWhiteSpace($template)) {
+        $template = '{layer_root}\{tag}'
+    }
+
+    $resolved = $template.
+        Replace('{repo_root}', $RepoRoot).
+        Replace('{layer_root}', $LayerRoot).
+        Replace('{tag}', $safeTag)
+
+    if ([System.IO.Path]::IsPathRooted($resolved)) {
+        return [System.IO.Path]::GetFullPath($resolved)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $resolved))
 }
 
 function Get-CodexSkillLayerState {
@@ -138,7 +161,7 @@ function Get-CodexSkillLayerState {
 
     $lockInfo = Get-CodexSkillLayerLock -RepoRoot $RepoRoot -LockPath $LockPath
     $resolvedLayerRoot = Resolve-CodexSkillLayerRoot -RepoRoot $lockInfo.RepoRoot -LayerRoot $LayerRoot
-    $versionRoot = Resolve-CodexSkillLayerVersionRoot -LayerRoot $resolvedLayerRoot -Lock $lockInfo.Lock
+    $versionRoot = Resolve-CodexSkillLayerVersionRoot -RepoRoot $lockInfo.RepoRoot -LayerRoot $resolvedLayerRoot -Lock $lockInfo.Lock
 
     return [pscustomobject]@{
         RepoRoot = $lockInfo.RepoRoot
@@ -213,7 +236,7 @@ function Install-CodexSkillLayerInternal {
             Installed = $false
             VersionRoot = $State.VersionRoot
             AssetPath = $null
-            Sha256 = [string]$State.Lock.sha256
+            Sha256 = [string]$State.Lock.asset_sha256
         }
     }
 
@@ -241,28 +264,58 @@ function Install-CodexSkillLayerInternal {
         }
 
         $actualHash = (Get-FileHash -Path $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        $expectedHash = ([string]$State.Lock.sha256).ToLowerInvariant()
+        $expectedHash = ([string]$State.Lock.asset_sha256).ToLowerInvariant()
         if ($actualHash -ne $expectedHash) {
             throw ("Codex skill layer SHA256 mismatch. Expected {0}, got {1}." -f $expectedHash, $actualHash)
         }
 
-        $extractRoot = Join-Path $tempRoot 'extract'
-        Expand-Archive -Path $assetPath -DestinationPath $extractRoot -Force
-
-        $extractState = [pscustomobject]@{
-            RepoRoot = $State.RepoRoot
-            LockPath = $State.LockPath
-            Lock = $State.Lock
-            LayerRoot = $State.LayerRoot
-            VersionRoot = $extractRoot
-        }
-        Test-CodexSkillLayerVersionRoot -State $extractState | Out-Null
-
         if (Test-Path -Path $State.VersionRoot) {
             Remove-Item -Path $State.VersionRoot -Recurse -Force
         }
-        New-Item -Path $State.VersionRoot -ItemType Directory -Force | Out-Null
-        Copy-Item -Path (Join-Path $extractRoot '*') -Destination $State.VersionRoot -Recurse -Force
+        $parentDir = Split-Path -Parent $State.VersionRoot
+        if (-not [string]::IsNullOrWhiteSpace($parentDir)) {
+            New-Item -Path $parentDir -ItemType Directory -Force | Out-Null
+        }
+
+        $assetExtension = [System.IO.Path]::GetExtension($assetPath).ToLowerInvariant()
+        if ($assetExtension -eq '.zip') {
+            $extractRoot = Join-Path $tempRoot 'extract'
+            Expand-Archive -Path $assetPath -DestinationPath $extractRoot -Force
+
+            $extractState = [pscustomobject]@{
+                RepoRoot = $State.RepoRoot
+                LockPath = $State.LockPath
+                Lock = $State.Lock
+                LayerRoot = $State.LayerRoot
+                VersionRoot = $extractRoot
+            }
+            Test-CodexSkillLayerVersionRoot -State $extractState | Out-Null
+
+            New-Item -Path $State.VersionRoot -ItemType Directory -Force | Out-Null
+            Copy-Item -Path (Join-Path $extractRoot '*') -Destination $State.VersionRoot -Recurse -Force
+        } elseif ($assetExtension -eq '.exe') {
+            $installArgs = @()
+            foreach ($raw in @($State.Lock.install_args)) {
+                $arg = [string]$raw
+                if ([string]::IsNullOrWhiteSpace($arg)) { continue }
+                $arg = $arg.
+                    Replace('{version_root}', $State.VersionRoot).
+                    Replace('{repo_root}', $State.RepoRoot).
+                    Replace('{layer_root}', $State.LayerRoot).
+                    Replace('{tag}', [string]$State.Lock.tag)
+                $installArgs += $arg
+            }
+            if (-not ($installArgs | Where-Object { $_ -match '^/D=' })) {
+                $installArgs += ("/D={0}" -f $State.VersionRoot)
+            }
+
+            $process = Start-Process -FilePath $assetPath -ArgumentList $installArgs -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+                throw ("Codex skill layer installer failed with exit code {0}." -f $process.ExitCode)
+            }
+        } else {
+            throw ("Unsupported codex skill layer asset extension '{0}' for '{1}'." -f $assetExtension, $State.Lock.asset_name)
+        }
 
         Test-CodexSkillLayerVersionRoot -State $State | Out-Null
 

@@ -70,7 +70,11 @@ Common entrypoints:
   Example: `pwsh -NoProfile -File .\\Tooling\\Assert-CodexSkillLayer.ps1`
 - `Install-CodexSkillLayer.ps1`
   Downloads and installs the pinned Codex skill layer from release assets.
+  Canonical contract asset: `lvie-codex-skill-layer-installer.exe` (NSIS, `/S`).
   Example: `pwsh -NoProfile -File .\\Tooling\\Install-CodexSkillLayer.ps1`
+- Codex skill-layer modules (externalized contracts/playbooks)
+  Includes `ci-debt`, `lunit-contract`, `proactive-loop`, `headless-parity`, and `belt-suspenders` assets.
+  Run `Assert-CodexSkillLayer.ps1` before any flow that consumes these assets.
 - `Invoke-CiDebtAnalysis.ps1`
   Wrapper entrypoint that runs CI debt analysis from the installed Codex skill layer.
   Example: `pwsh -NoProfile -File .\\Tooling\\Invoke-CiDebtAnalysis.ps1 -Repo $repo -RunId 21840801109`
