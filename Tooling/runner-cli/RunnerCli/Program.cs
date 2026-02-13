@@ -831,6 +831,147 @@ missingCmd.SetHandler((InvocationContext context) =>
     }
 });
 
+// ── parity context/run ────────────────────────────────────────────
+var parityCmd = new Command("parity", "Resolve and execute LabVIEW parity lanes.");
+var parityContextCmd = new Command("context", "Resolve parity context from .lvversion and parity contract.");
+var lvReleaseOption = new Option<string?>(
+    name: "--lv-release",
+    description: "LabVIEW release tag (for example 2020q1). When omitted, derived from .lvversion.");
+var parityContractPathOption = new Option<string?>(
+    name: "--contract-path",
+    description: "Optional parity contract JSON path.");
+var parityContextOutputOption = new Option<string?>(
+    name: "--output",
+    description: "Optional output path to write parity context JSON.");
+
+parityContextCmd.AddOption(repoRootOption);
+parityContextCmd.AddOption(lvReleaseOption);
+parityContextCmd.AddOption(parityContractPathOption);
+parityContextCmd.AddOption(parityContextOutputOption);
+parityContextCmd.AddOption(jsonOption);
+parityContextCmd.SetHandler((InvocationContext context) =>
+{
+    try
+    {
+        var repoRoot = context.ParseResult.GetValueForOption(repoRootOption);
+        var lvRelease = context.ParseResult.GetValueForOption(lvReleaseOption);
+        var contractPath = context.ParseResult.GetValueForOption(parityContractPathOption);
+        var outputPath = context.ParseResult.GetValueForOption(parityContextOutputOption);
+        var emitJson = context.ParseResult.GetValueForOption(jsonOption);
+
+        var parityContext = ParityService.BuildContext(repoRoot, lvRelease, contractPath);
+        if (!string.IsNullOrWhiteSpace(outputPath))
+        {
+            ParityService.WriteContext(parityContext, outputPath);
+        }
+
+        if (emitJson)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(parityContext, RunnerCliJsonContext.Default.ParityContext));
+            return;
+        }
+
+        Console.WriteLine($"repo_root={parityContext.RepoRoot}");
+        Console.WriteLine($"contract_path={parityContext.ContractPath}");
+        Console.WriteLine($"project_path={parityContext.ProjectPath}");
+        Console.WriteLine($"project_relative_path={parityContext.ProjectRelativePath}");
+        Console.WriteLine($"target_dir_rel={parityContext.TargetDirRel}");
+        Console.WriteLine($"build_output_relative_path={parityContext.BuildOutputRelativePath}");
+        Console.WriteLine($"lvversion_raw={parityContext.LvVersionRaw}");
+        Console.WriteLine($"labview_year={parityContext.LabVIEWYear}");
+        Console.WriteLine($"lv_release_resolved={parityContext.LvReleaseResolved}");
+        Console.WriteLine($"build_spec_name={parityContext.BuildSpecName}");
+        Console.WriteLine($"target_name={parityContext.TargetName}");
+        Console.WriteLine($"exclude_files={string.Join(';', parityContext.ExcludeFiles)}");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"ERROR: {ex.Message}");
+        Environment.ExitCode = 1;
+        context.ExitCode = 1;
+    }
+});
+
+var parityRunCmd = new Command("run", "Run parity lane by mode using a parity context JSON.");
+var parityModeOption = new Option<string>(
+    name: "--mode",
+    description: "Parity mode: linux-container|windows-container|self-hosted-windows.")
+{ IsRequired = true };
+var parityRunContextOption = new Option<string>(
+    name: "--context",
+    description: "Path to parity context JSON produced by runner-cli parity context.")
+{ IsRequired = true };
+var parityBuildSpecOption = new Option<bool>(
+    name: "--build-spec",
+    getDefaultValue: () => true,
+    description: "Enable ExecuteBuildSpec parity execution.");
+var parityLabVIEWPathOption = new Option<string?>(
+    name: "--labview-path",
+    description: "Optional LabVIEW executable override (self-hosted-windows mode).");
+var parityLabVIEWBitnessOption = new Option<string>(
+    name: "--labview-bitness",
+    getDefaultValue: () => "64",
+    description: "LabVIEW bitness for self-hosted-windows mode (32 or 64).");
+
+parityRunCmd.AddOption(parityModeOption);
+parityRunCmd.AddOption(parityRunContextOption);
+parityRunCmd.AddOption(parityBuildSpecOption);
+parityRunCmd.AddOption(parityLabVIEWPathOption);
+parityRunCmd.AddOption(parityLabVIEWBitnessOption);
+parityRunCmd.AddOption(jsonOption);
+parityRunCmd.SetHandler((InvocationContext context) =>
+{
+    try
+    {
+        var mode = context.ParseResult.GetValueForOption(parityModeOption);
+        var contextPath = context.ParseResult.GetValueForOption(parityRunContextOption);
+        var buildSpec = context.ParseResult.GetValueForOption(parityBuildSpecOption);
+        var labviewPath = context.ParseResult.GetValueForOption(parityLabVIEWPathOption);
+        var labviewBitness = context.ParseResult.GetValueForOption(parityLabVIEWBitnessOption);
+        var emitJson = context.ParseResult.GetValueForOption(jsonOption);
+
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            throw new InvalidOperationException("--mode is required.");
+        }
+        if (string.IsNullOrWhiteSpace(contextPath))
+        {
+            throw new InvalidOperationException("--context is required.");
+        }
+        if (string.IsNullOrWhiteSpace(labviewBitness))
+        {
+            labviewBitness = "64";
+        }
+
+        var parityContext = ParityService.LoadContext(contextPath);
+        var result = ParityService.Run(parityContext, mode, buildSpec, labviewPath, labviewBitness);
+
+        if (emitJson)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(result, RunnerCliJsonContext.Default.ParityRunResult));
+            return;
+        }
+
+        Console.WriteLine($"mode={result.Mode}");
+        Console.WriteLine($"repo_root={result.RepoRoot}");
+        Console.WriteLine($"project_path={result.ProjectPath}");
+        Console.WriteLine($"build_output_path={result.BuildOutputPath}");
+        Console.WriteLine($"labview_year={result.LabVIEWYear}");
+        Console.WriteLine($"lv_release_resolved={result.LvReleaseResolved}");
+        Console.WriteLine($"build_spec_enabled={result.BuildSpecEnabled}");
+        Console.WriteLine($"exit_code={result.ExitCode}");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"ERROR: {ex.Message}");
+        Environment.ExitCode = 1;
+        context.ExitCode = 1;
+    }
+});
+
+parityCmd.AddCommand(parityContextCmd);
+parityCmd.AddCommand(parityRunCmd);
+
 // ── manifest ──────────────────────────────────────────────────────
 var manifestCmd = new Command("manifest", "Emit runner-cli capability and spec metadata.");
 manifestCmd.AddOption(repoRootOption);
@@ -974,6 +1115,7 @@ rootCmd.AddCommand(emitCmd);
 rootCmd.AddCommand(versionCmd);
 rootCmd.AddCommand(pylaviCmd);
 rootCmd.AddCommand(missingCmd);
+rootCmd.AddCommand(parityCmd);
 rootCmd.AddCommand(manifestCmd);
 rootCmd.AddCommand(conformanceCmd);
 

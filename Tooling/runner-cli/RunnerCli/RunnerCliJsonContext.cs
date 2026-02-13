@@ -16,6 +16,9 @@ namespace RunnerCli;
 [JsonSerializable(typeof(ConformanceCheckEntry))]
 [JsonSerializable(typeof(CoverageSummary))]
 [JsonSerializable(typeof(ConformanceCoverageReport))]
+[JsonSerializable(typeof(ParityContractDefinition))]
+[JsonSerializable(typeof(ParityContext))]
+[JsonSerializable(typeof(ParityRunResult))]
 internal partial class RunnerCliJsonContext : JsonSerializerContext
 {
 }
