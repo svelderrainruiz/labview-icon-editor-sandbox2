@@ -1,61 +1,77 @@
 <#
 .SYNOPSIS
-    Applies a .vipc file to a given LabVIEW version/bitness.
-    This version includes additional debug/verbose output.
+    Applies a .vipc file to a given LabVIEW version/bitness via VIPM CLI.
 
 .EXAMPLE
-    .\applyvipc.ps1 -LabVIEWVersion "2021" -SupportedBitness "64" -RepoRoot "C:\release\labview-icon-editor-fork" -VIPCPath "Tooling\deployment\runner_dependencies.vipc" -Verbose
+    .\ApplyVIPC.ps1 -LabVIEWVersion "2026" -SupportedBitness "64" -RepoRoot "C:\repo" -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" -Verbose
 #>
 
-[CmdletBinding()]  # Enables -Verbose and other common parameters
+[CmdletBinding()]
 Param (
     [AllowNull()]
     [AllowEmptyString()]
     [string]$LabVIEWVersion = '',
+
     [ValidateSet('32', '64')]
     [string]$SupportedBitness,
+
     [string]$RepoRoot,
+
     [string]$VIPCPath,
+
     [switch]$AllowVipcTargetMismatch,
+
     [string]$WorktreeRoot,
-    [switch]$SkipWorktreeRootCheck
+
+    [switch]$SkipWorktreeRootCheck,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 7200)]
+    [int]$VipmTimeoutSeconds = 600,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 10)]
+    [int]$VipmMaxAttempts = 3,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(0, 600)]
+    [int]$VipmRetryDelaySeconds = 5
 )
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
 Write-Verbose "Script Name: $($MyInvocation.MyCommand.Definition)"
 Write-Verbose "Parameters provided:"
 Write-Verbose " - LabVIEWVersion:            $LabVIEWVersion"
 Write-Verbose " - SupportedBitness:          $SupportedBitness"
-Write-Verbose " - RepoRoot:              $RepoRoot"
+Write-Verbose " - RepoRoot:                  $RepoRoot"
 Write-Verbose " - VIPCPath:                  $VIPCPath"
 Write-Verbose " - AllowVipcTargetMismatch:   $AllowVipcTargetMismatch"
+Write-Verbose " - VipmTimeoutSeconds:        $VipmTimeoutSeconds"
+Write-Verbose " - VipmMaxAttempts:           $VipmMaxAttempts"
+Write-Verbose " - VipmRetryDelaySeconds:     $VipmRetryDelaySeconds"
 
-# -------------------------
-# 1) Resolve Paths & Validate
-# -------------------------
 try {
-    Write-Verbose "Attempting to resolve the 'RepoRoot'..."
+    Write-Verbose "Attempting to resolve RepoRoot..."
     $ResolvedRepoRoot = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
     Write-Verbose "ResolvedRepoRoot: $ResolvedRepoRoot"
 
-    if ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
-        $versionHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
-        if (-not (Test-Path -Path $versionHelper)) {
-            throw "LabVIEW version helper not found at $versionHelper"
-        }
-        . $versionHelper
+    $versionHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
+    if (-not (Test-Path -Path $versionHelper)) {
+        throw "LabVIEW version helper not found at $versionHelper"
+    }
+    . $versionHelper
 
+    if ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
         $lvInfoFallback = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $ResolvedRepoRoot
         $LabVIEWVersion = $lvInfoFallback.Raw
         if ($PSBoundParameters -ne $null) {
             $PSBoundParameters['LabVIEWVersion'] = $LabVIEWVersion
         }
         Write-Warning "LabVIEWVersion was not provided; defaulting to .lvversion ($LabVIEWVersion)."
-    } else {
-        $versionHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
-        if (-not (Test-Path -Path $versionHelper)) {
-            throw "LabVIEW version helper not found at $versionHelper"
-        }
-        . $versionHelper
+    }
+    else {
         $repoInfo = Get-LabVIEWVersionInfo -RepoRoot $ResolvedRepoRoot
         $inputInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $ResolvedRepoRoot
         if ($repoInfo.Year -ne $inputInfo.Year -or $repoInfo.MinorRevision -ne $inputInfo.MinorRevision) {
@@ -65,84 +81,60 @@ try {
 
     $preflightScript = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\Invoke-Preflight.ps1'
     if (Test-Path -Path $preflightScript) {
-        . $preflightScript
-        $scriptArgs = Convert-BoundParametersToArgumentList -BoundParameters $PSBoundParameters
-        $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $ResolvedRepoRoot -Path $PSCommandPath } else { $null }
-        $preflight = Invoke-Preflight `
-            -RepoRoot $ResolvedRepoRoot `
-            -WorktreeRoot $WorktreeRoot `
-            -LabVIEWVersion $LabVIEWVersion `
-            -LabVIEWBitness $SupportedBitness `
-            -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
-            -AutoWorktree:$false `
-            -ScriptPath $relativeScript `
-            -ScriptArguments $scriptArgs
-        if ($preflight.Reinvoked) {
-            return
+        try {
+            . $preflightScript
+            $scriptArgs = Convert-BoundParametersToArgumentList -BoundParameters $PSBoundParameters
+            $relativeScript = if ($PSCommandPath) { Get-RepoRelativePath -RepoRoot $ResolvedRepoRoot -Path $PSCommandPath } else { $null }
+            $preflight = Invoke-Preflight `
+                -RepoRoot $ResolvedRepoRoot `
+                -WorktreeRoot $WorktreeRoot `
+                -LabVIEWVersion $LabVIEWVersion `
+                -LabVIEWBitness $SupportedBitness `
+                -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
+                -AutoWorktree:$false `
+                -ScriptPath $relativeScript `
+                -ScriptArguments $scriptArgs
+            if ($preflight.Reinvoked) {
+                return
+            }
+            $ResolvedRepoRoot = $preflight.RepoRoot
         }
-        $ResolvedRepoRoot = $preflight.RepoRoot
+        catch {
+            if ($env:GITHUB_ACTIONS -eq 'true') {
+                throw
+            }
+
+            Write-Warning ("Preflight failed outside GitHub Actions; continuing. Details: {0}" -f $_.Exception.Message)
+        }
     }
 
-    Write-Verbose "Building full path for the .vipc file..."
     $ResolvedVIPCPath = Join-Path -Path $ResolvedRepoRoot -ChildPath $VIPCPath -ErrorAction Stop
-    Write-Verbose "ResolvedVIPCPath:     $ResolvedVIPCPath"
+    Write-Verbose "ResolvedVIPCPath: $ResolvedVIPCPath"
 
-    # Verify that the .vipc file actually exists
-    Write-Verbose "Checking if the .vipc file exists at the resolved path..."
-    if (-not (Test-Path $ResolvedVIPCPath)) {
-        Write-Error "The .vipc file does not exist at '$ResolvedVIPCPath'."
-        exit 1
+    if (-not (Test-Path -Path $ResolvedVIPCPath -PathType Leaf)) {
+        throw "The .vipc file does not exist at '$ResolvedVIPCPath'."
     }
-    Write-Verbose "The .vipc file was found successfully."
 
-    # Ensure parent directory exists (idempotent if already present)
-    $vipcDir = Split-Path -Parent $ResolvedVIPCPath
-    if (-not (Test-Path $vipcDir)) {
-        Write-Verbose "Creating VIPC parent directory: $vipcDir"
-        New-Item -ItemType Directory -Path $vipcDir -Force | Out-Null
-    }
-}
-catch {
-    Write-Error "Error resolving paths. Ensure RepoRoot and VIPCPath are valid. Details: $($_.Exception.Message)"
-    exit 1
-}
-
-# -------------------------
-# 2) Build LabVIEW Version Strings
-# -------------------------
-Write-Verbose "Determining LabVIEW version strings..."
-
-function Get-VipmVersionString {
-    param(
-        [string]$NumericVersion,
-        [string]$Bitness
-    )
-
-    if ($Bitness -eq '64') {
-        return "$NumericVersion (64-bit)"
-    }
-    return $NumericVersion
-}
-
-$versionHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
-if (-not (Test-Path -Path $versionHelper)) {
-    throw "LabVIEW version helper not found at $versionHelper"
-}
-. $versionHelper
-
-$lvInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $ResolvedRepoRoot
-$vipmVersion = Get-VipmVersionString -NumericVersion $lvInfo.NumericVersion -Bitness $SupportedBitness
-$targetLvVer = $lvInfo.Year
-
-# -------------------------
-# 3) VIPC target version guard
-# -------------------------
-try {
     $vipcConfigHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\VipcConfig.ps1'
     if (-not (Test-Path -Path $vipcConfigHelper)) {
         throw "VIPC config helper not found at $vipcConfigHelper"
     }
     . $vipcConfigHelper
+
+    $vipmHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\VipmCli.ps1'
+    if (-not (Test-Path -Path $vipmHelper)) {
+        throw "VIPM helper not found at $vipmHelper"
+    }
+    . $vipmHelper
+
+    $lvInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $ResolvedRepoRoot
+    $targetLvYear = ConvertTo-VipmLabVIEWYear -VersionInput $lvInfo
+    $vipmVersionLabel = if ($SupportedBitness -eq '64') {
+        "$($lvInfo.NumericVersion) (64-bit)"
+    }
+    else {
+        $lvInfo.NumericVersion
+    }
 
     $vipcConfig = Get-VipcConfigInfo -VipcPath $ResolvedVIPCPath
     Write-Verbose ("VIPC target name: {0}" -f $vipcConfig.TargetName)
@@ -157,49 +149,47 @@ try {
     if ($AllowVipcTargetMismatch -and $vipcConfig.TargetVersionNumeric -ne $lvInfo.NumericVersion) {
         Write-Warning ("Proceeding despite VIPC target/version mismatch due to -AllowVipcTargetMismatch. Requested={0}; VIPC target={1} (raw: {2})." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
     }
-}
-catch {
-    Write-Error "An error occurred while validating VIPC target metadata. Details: $($_.Exception.Message)"
-    exit 1
-}
 
-Write-Output "Applying dependencies for LabVIEW $vipmVersion..."
-Write-Verbose "VIPM version string: $vipmVersion"
-
-# -------------------------
-# 4) Execute the Commands & Handle Errors
-# -------------------------
-try {
-    $vipcArgs = @(
-        '--lv-ver', $targetLvVer,
-        '--arch', $SupportedBitness,
-        'vipc', '--',
-        '-t', '3000',
-        '-v', $vipmVersion,
-        $ResolvedVIPCPath
+    $vipmArgs = @(
+        '--labview-version', $targetLvYear,
+        '--labview-bitness', $SupportedBitness,
+        'install', $ResolvedVIPCPath
     )
 
-    Write-Output ("Executing: g-cli {0}" -f ($vipcArgs -join ' '))
-    $output = & g-cli @vipcArgs 2>&1
-    $exitCode = $LASTEXITCODE
-    if ($output) {
-        $output | ForEach-Object { Write-Host $_ }
+    Write-Output "Applying dependencies via VIPM CLI for LabVIEW $vipmVersionLabel..."
+
+    $result = Invoke-VipmCliCommand `
+        -Arguments $vipmArgs `
+        -TimeoutSeconds $VipmTimeoutSeconds `
+        -MaxAttempts $VipmMaxAttempts `
+        -RetryDelaySeconds $VipmRetryDelaySeconds
+
+    Write-Output ("Executing: {0}" -f $result.Command)
+
+    if (-not [string]::IsNullOrWhiteSpace($result.StdOut)) {
+        $result.StdOut -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { Write-Host $_ }
     }
 
-    if ($exitCode -ne 0) {
-        throw "g-cli vipc failed with exit code $exitCode."
+    if (-not [string]::IsNullOrWhiteSpace($result.StdErr)) {
+        $result.StdErr -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { Write-Warning $_ }
     }
 
-    try {
-        Write-Output ("Closing LabVIEW {0} ({1}-bit) after VIPC apply..." -f $targetLvVer, $SupportedBitness)
-        & g-cli --lv-ver $targetLvVer --arch $SupportedBitness QuitLabVIEW | Out-Null
+    if ($result.ExitCode -ne 0) {
+        throw "vipm install failed with exit code $($result.ExitCode) after $($result.Attempts) attempt(s)."
     }
-    catch {
-        Write-Warning ("Failed to close LabVIEW {0} ({1}-bit): {2}" -f $targetLvVer, $SupportedBitness, $_.Exception.Message)
+
+    if (Get-Command g-cli -ErrorAction SilentlyContinue) {
+        try {
+            Write-Output ("Closing LabVIEW {0} ({1}-bit) after VIPC apply..." -f $targetLvYear, $SupportedBitness)
+            & g-cli --lv-ver $targetLvYear --arch $SupportedBitness QuitLabVIEW | Out-Null
+        }
+        catch {
+            Write-Warning ("Failed to close LabVIEW {0} ({1}-bit): {2}" -f $targetLvYear, $SupportedBitness, $_.Exception.Message)
+        }
     }
 
     $global:LASTEXITCODE = 0
-    Write-Host "Successfully applied dependencies to LabVIEW: $vipmVersion"
+    Write-Host "Successfully applied dependencies to LabVIEW: $vipmVersionLabel"
 }
 catch {
     Write-Error "An error occurred while applying the .vipc dependencies. Details: $($_.Exception.Message)"

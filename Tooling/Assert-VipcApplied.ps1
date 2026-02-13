@@ -4,9 +4,10 @@
     Verifies that VIPC package versions are installed for a LabVIEW bitness.
 
 .DESCRIPTION
-    Extracts package expectations from a .vipc file and compares them against
-    installed package files recorded in the VIPM database for the target
-    LabVIEW version/bitness.
+    Uses VIPM CLI as the source of truth for both expected package versions
+    from a .vipc file and installed package versions for a target LabVIEW
+    version/bitness. Produces a JSON audit report and optionally fails on
+    blocking mismatches.
 #>
 
 [CmdletBinding()]
@@ -30,58 +31,46 @@ param(
     [string]$OutputPath,
 
     [Parameter(Mandatory = $false)]
-    [bool]$FailOnMismatch = $true
+    [bool]$FailOnMismatch = $true,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 7200)]
+    [int]$VipmTimeoutSeconds = 180,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 10)]
+    [int]$VipmMaxAttempts = 3,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(0, 600)]
+    [int]$VipmRetryDelaySeconds = 5
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Get-PackageEntry {
+function Get-FirstVipmErrorLine {
+    [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$PackageName
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [string]$StdOut,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [string]$StdErr
     )
 
-    $match = [regex]::Match($PackageName, '^(?<root>.+)-(?<version>\d.+)$')
-    if (-not $match.Success) {
-        return [pscustomobject]@{
-            root        = $PackageName
-            version     = $null
-            package_name = $PackageName
-            parse_error = $true
-        }
+    $combined = @($StdErr, $StdOut) -join [Environment]::NewLine
+    if ([string]::IsNullOrWhiteSpace($combined)) {
+        return $null
     }
 
-    return [pscustomobject]@{
-        root         = $match.Groups['root'].Value
-        version      = $match.Groups['version'].Value
-        package_name = $PackageName
-        parse_error  = $false
-    }
+    return (($combined -split "`r?`n") | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
 }
 
-function Get-InstalledPackageBasename {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$PackageDirectory
-    )
-
-    if (-not (Test-Path -Path $PackageDirectory -PathType Container)) {
-        return @()
-    }
-
-    $extensions = @('.vip', '.ogp', '.ogpa')
-    return @(
-        Get-ChildItem -Path $PackageDirectory -File -ErrorAction SilentlyContinue |
-            Where-Object { $extensions -contains $_.Extension.ToLowerInvariant() } |
-            ForEach-Object { $_.BaseName } |
-            Sort-Object -Unique
-    )
-}
-
-$tempExtractRoot = $null
 try {
-    $resolvedRepoRoot = (Resolve-Path -Path $RepoRoot).Path
+    $resolvedRepoRoot = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
     $resolvedVipcPath = Join-Path -Path $resolvedRepoRoot -ChildPath $VIPCPath
     if (-not (Test-Path -Path $resolvedVipcPath -PathType Leaf)) {
         throw "VIPC file not found at '$resolvedVipcPath'."
@@ -92,106 +81,95 @@ try {
         throw "LabVIEW version helper not found at '$versionHelper'."
     }
 
+    $vipmHelper = Join-Path -Path $resolvedRepoRoot -ChildPath 'Tooling\support\VipmCli.ps1'
+    if (-not (Test-Path -Path $vipmHelper -PathType Leaf)) {
+        throw "VIPM helper not found at '$vipmHelper'."
+    }
+
     . $versionHelper
+    . $vipmHelper
+
     $lvInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $resolvedRepoRoot
+    $vipmYear = ConvertTo-VipmLabVIEWYear -VersionInput $lvInfo
 
-    $vipmDbRoot = Join-Path -Path $env:ProgramData -ChildPath 'JKI\VIPM\databases'
-    $dbFolderName = if ($SupportedBitness -eq '64') {
-        "LV $($lvInfo.NumericVersion) (64-bit)"
-    } else {
-        "LV $($lvInfo.NumericVersion)"
-    }
-    $vipmDbPath = Join-Path -Path $vipmDbRoot -ChildPath $dbFolderName
-
-    if (-not (Test-Path -Path $vipmDbPath -PathType Container)) {
-        throw "VIPM database path not found for LabVIEW $($lvInfo.NumericVersion) ($SupportedBitness-bit): '$vipmDbPath'."
-    }
-
-    $tempExtractRoot = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("vipc-audit-{0}" -f [guid]::NewGuid().ToString())
-    New-Item -Path $tempExtractRoot -ItemType Directory -Force | Out-Null
-    Expand-Archive -Path $resolvedVipcPath -DestinationPath $tempExtractRoot -Force
-
-    $expectedPackages = @(
-        Get-ChildItem -Path $tempExtractRoot -File -Filter '*.spec' -ErrorAction SilentlyContinue |
-            ForEach-Object { $_.BaseName } |
-            Sort-Object -Unique
+    $expectedArgs = @(
+        '--labview-version', $vipmYear,
+        '--labview-bitness', $SupportedBitness,
+        'list', $resolvedVipcPath
     )
 
-    if ($expectedPackages.Count -eq 0) {
-        $configPath = Join-Path -Path $tempExtractRoot -ChildPath 'config.xml'
-        if (Test-Path -Path $configPath -PathType Leaf) {
-            [xml]$configXml = Get-Content -Path $configPath
-            $expectedPackages = @(
-                $configXml.VI_Package_Configuration.Target.Package |
-                    ForEach-Object { [string]$_.Name } |
-                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                    Sort-Object -Unique
-            )
+    $installedArgs = @(
+        '--labview-version', $vipmYear,
+        '--labview-bitness', $SupportedBitness,
+        'list', '--installed'
+    )
+
+    $expectedResult = Invoke-VipmCliCommand `
+        -Arguments $expectedArgs `
+        -TimeoutSeconds $VipmTimeoutSeconds `
+        -MaxAttempts $VipmMaxAttempts `
+        -RetryDelaySeconds $VipmRetryDelaySeconds
+
+    if ($expectedResult.ExitCode -ne 0) {
+        $errorLine = Get-FirstVipmErrorLine -StdOut $expectedResult.StdOut -StdErr $expectedResult.StdErr
+        $message = "VIPM expected package query failed with exit code $($expectedResult.ExitCode)."
+        if ($errorLine) {
+            $message = "$message $errorLine"
         }
+        throw $message
     }
 
-    if ($expectedPackages.Count -eq 0) {
-        throw "No expected package entries were discovered in '$resolvedVipcPath'."
-    }
+    $installedResult = Invoke-VipmCliCommand `
+        -Arguments $installedArgs `
+        -TimeoutSeconds $VipmTimeoutSeconds `
+        -MaxAttempts $VipmMaxAttempts `
+        -RetryDelaySeconds $VipmRetryDelaySeconds
 
-    $expectedEntries = @($expectedPackages | ForEach-Object { Get-PackageEntry -PackageName $_ })
-
-    $expectedByRoot = @{}
-    foreach ($entry in $expectedEntries) {
-        if (-not $expectedByRoot.ContainsKey($entry.root)) {
-            $expectedByRoot[$entry.root] = New-Object System.Collections.Generic.List[string]
+    if ($installedResult.ExitCode -ne 0) {
+        $errorLine = Get-FirstVipmErrorLine -StdOut $installedResult.StdOut -StdErr $installedResult.StdErr
+        $message = "VIPM installed package query failed with exit code $($installedResult.ExitCode)."
+        if ($errorLine) {
+            $message = "$message $errorLine"
         }
-        $expectedByRoot[$entry.root].Add($entry.package_name)
+        throw $message
     }
 
-    $rootAudit = New-Object System.Collections.Generic.List[object]
-    foreach ($root in ($expectedByRoot.Keys | Sort-Object)) {
-        $expectedForRoot = @($expectedByRoot[$root] | Sort-Object -Unique)
-        $packageDirectory = Join-Path -Path $vipmDbPath -ChildPath $root
-        $installedForRoot = @(Get-InstalledPackageBasename -PackageDirectory $packageDirectory)
-
-        $missingExpected = @($expectedForRoot | Where-Object { $installedForRoot -notcontains $_ })
-        $unexpectedInstalled = @($installedForRoot | Where-Object { $expectedForRoot -notcontains $_ })
-
-        $rootAudit.Add([pscustomobject]@{
-            root                 = $root
-            package_dir          = $packageDirectory
-            package_dir_exists   = (Test-Path -Path $packageDirectory -PathType Container)
-            expected             = $expectedForRoot
-            installed            = $installedForRoot
-            missing_expected     = $missingExpected
-            unexpected_installed = $unexpectedInstalled
-            matched              = ($missingExpected.Count -eq 0 -and $unexpectedInstalled.Count -eq 0)
-        })
+    $expectedPackages = @(ConvertFrom-VipmListPackage -OutputText (@($expectedResult.StdOut, $expectedResult.StdErr) -join [Environment]::NewLine))
+    if ($expectedPackages.Count -eq 0) {
+        throw "No expected package entries were discovered in '$resolvedVipcPath' via VIPM CLI."
     }
 
-    $mismatchRoots = @($rootAudit | Where-Object { -not $_.matched })
-    $missingExpectedPackages = @($rootAudit | ForEach-Object { @($_.missing_expected) })
-    $unexpectedInstalledPackages = @($rootAudit | ForEach-Object { @($_.unexpected_installed) })
+    $installedPackages = @(ConvertFrom-VipmListPackage -OutputText (@($installedResult.StdOut, $installedResult.StdErr) -join [Environment]::NewLine))
+    $comparison = Compare-VipmPackageState -ExpectedPackages $expectedPackages -InstalledPackages $installedPackages
 
     $summary = [ordered]@{
-        roots_checked                = $rootAudit.Count
-        mismatched_roots             = $mismatchRoots.Count
-        missing_expected_count       = $missingExpectedPackages.Count
-        unexpected_installed_count   = $unexpectedInstalledPackages.Count
-        status                       = if ($mismatchRoots.Count -eq 0) { 'pass' } else { 'fail' }
+        expected_count           = $expectedPackages.Count
+        installed_count          = $installedPackages.Count
+        missing_expected_count   = @($comparison.missing_expected).Count
+        version_mismatch_count   = @($comparison.version_mismatches).Count
+        unexpected_count         = @($comparison.unexpected_installed).Count
+        status                   = if ($comparison.has_blocking_mismatch) { 'fail' } else { 'pass' }
     }
 
     $report = [ordered]@{
-        generated_utc       = (Get-Date).ToUniversalTime().ToString('o')
-        repo_root           = $resolvedRepoRoot
-        vipc_path           = $resolvedVipcPath
-        vipc_sha256         = (Get-FileHash -Path $resolvedVipcPath -Algorithm SHA256).Hash
-        labview_version_raw = $lvInfo.Raw
-        labview_year        = $lvInfo.Year
-        labview_numeric     = $lvInfo.NumericVersion
-        supported_bitness   = $SupportedBitness
-        vipm_database_path  = $vipmDbPath
-        expected_package_count = $expectedPackages.Count
-        expected_packages   = $expectedPackages
-        parse_errors        = @($expectedEntries | Where-Object { $_.parse_error } | ForEach-Object { $_.package_name })
-        root_audit          = $rootAudit
-        summary             = $summary
+        generated_utc               = (Get-Date).ToUniversalTime().ToString('o')
+        repo_root                   = $resolvedRepoRoot
+        vipc_path                   = $resolvedVipcPath
+        vipc_sha256                 = (Get-FileHash -Path $resolvedVipcPath -Algorithm SHA256).Hash
+        labview_version_raw         = $lvInfo.Raw
+        labview_year                = $lvInfo.Year
+        labview_numeric             = $lvInfo.NumericVersion
+        supported_bitness           = $SupportedBitness
+        vipm_expected_command       = $expectedResult.Command
+        vipm_installed_command      = $installedResult.Command
+        vipm_expected_attempts      = $expectedResult.Attempts
+        vipm_installed_attempts     = $installedResult.Attempts
+        expected_packages_normalized = $expectedPackages
+        installed_packages_normalized = $installedPackages
+        missing_expected            = @($comparison.missing_expected)
+        version_mismatches          = @($comparison.version_mismatches)
+        unexpected_installed        = @($comparison.unexpected_installed)
+        summary                     = $summary
     }
 
     $outputDirectory = Split-Path -Parent $OutputPath
@@ -203,23 +181,29 @@ try {
 
     Write-Host ("VIPC audit complete for LabVIEW {0} ({1}-bit)." -f $lvInfo.NumericVersion, $SupportedBitness)
     Write-Host ("Expected packages: {0}" -f $expectedPackages.Count)
-    Write-Host ("Mismatched roots: {0}" -f $mismatchRoots.Count)
+    Write-Host ("Installed packages: {0}" -f $installedPackages.Count)
+    Write-Host ("Missing expected: {0}" -f @($comparison.missing_expected).Count)
+    Write-Host ("Version mismatches: {0}" -f @($comparison.version_mismatches).Count)
     Write-Host ("Report: {0}" -f (Resolve-Path -Path $OutputPath).Path)
 
-    if ($mismatchRoots.Count -gt 0) {
-        Write-Warning "VIPC audit detected mismatches:"
-        foreach ($rootResult in $mismatchRoots) {
-            Write-Warning ("  Root: {0}" -f $rootResult.root)
-            if ($rootResult.missing_expected.Count -gt 0) {
-                Write-Warning ("    Missing expected: {0}" -f ($rootResult.missing_expected -join ', '))
-            }
-            if ($rootResult.unexpected_installed.Count -gt 0) {
-                Write-Warning ("    Unexpected installed: {0}" -f ($rootResult.unexpected_installed -join ', '))
-            }
+    if ($comparison.has_blocking_mismatch) {
+        Write-Warning "VIPC audit detected blocking mismatches:"
+        foreach ($entry in @($comparison.missing_expected)) {
+            Write-Warning ("  Missing expected: {0}@{1}" -f $entry.package_id, $entry.expected_version)
+        }
+        foreach ($entry in @($comparison.version_mismatches)) {
+            Write-Warning ("  Version mismatch: {0} expected={1} installed={2}" -f $entry.package_id, $entry.expected_version, $entry.installed_version)
         }
 
         if ($FailOnMismatch) {
-            throw "VIPC audit failed: installed package state does not match expected VIPC contents."
+            throw "VIPC audit failed: missing expected packages or version mismatches."
+        }
+    }
+
+    if (@($comparison.unexpected_installed).Count -gt 0) {
+        Write-Warning "Unexpected installed packages found (informational only):"
+        foreach ($entry in @($comparison.unexpected_installed)) {
+            Write-Warning ("  Unexpected installed: {0}@{1}" -f $entry.package_id, $entry.installed_version)
         }
     }
 
@@ -228,9 +212,4 @@ try {
 catch {
     Write-Error $_.Exception.Message
     exit 1
-}
-finally {
-    if (-not [string]::IsNullOrWhiteSpace($tempExtractRoot) -and (Test-Path -Path $tempExtractRoot)) {
-        Remove-Item -Path $tempExtractRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
 }

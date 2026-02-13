@@ -796,26 +796,15 @@ jobs:
           bitness: 64
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Audit VIPC apply (LV x64)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & "$env:REPO_ROOT\\Tooling\\Assert-VipcApplied.ps1" `
-            -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
-            -SupportedBitness 64 `
-            -OutputPath "$env:REPO_ROOT\\builds\\status\\vipc-audit-64.json"
       - name: Report VIPC change status (LV x64)
         shell: pwsh
         run: |
           if ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
             Write-Host ".vipc changes detected for this run."
           } else {
-            Write-Host "No .vipc changes detected; audit-first policy still enforced."
+            Write-Host "No .vipc changes detected; apply+audit policy still enforced."
           }
-      - name: Apply VIPC (LV x64, informational)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
-        continue-on-error: true
+      - name: Apply VIPC (LV x64)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -827,9 +816,11 @@ jobs:
 
           '' | Set-Content -Path $logPath -Encoding utf8
           $output = & ".github\\actions\\apply-vipc\\ApplyVIPC.ps1" `
+            -LabVIEWVersion '${{ needs.version-gate.outputs.raw }}' `
             -SupportedBitness 64 `
             -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" *>&1
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
+            -AllowVipcTargetMismatch *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -842,6 +833,16 @@ jobs:
           if ($exitCode -ne 0) {
             exit $exitCode
           }
+      - name: Audit VIPC apply (LV x64)
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & "$env:REPO_ROOT\\Tooling\\Assert-VipcApplied.ps1" `
+            -RepoRoot "$env:REPO_ROOT" `
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
+            -SupportedBitness 64 `
+            -LabVIEWVersion '${{ needs.version-gate.outputs.raw }}' `
+            -OutputPath "$env:REPO_ROOT\\builds\\status\\vipc-audit-64.json"
       - name: Upload VIPC audit artifact (LV x64)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -850,7 +851,7 @@ jobs:
           path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-64.json
           if-no-files-found: warn
       - name: Upload VIPC apply log artifact (LV x64)
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: vipc-apply-log-64
@@ -881,26 +882,15 @@ jobs:
           bitness: 32
           create_worktree: 'true'
           worktree_root_mode: runner_temp
-      - name: Audit VIPC apply (LV x86)
-        shell: pwsh
-        working-directory: ${{ env.REPO_ROOT }}
-        run: |
-          & "$env:REPO_ROOT\\Tooling\\Assert-VipcApplied.ps1" `
-            -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
-            -SupportedBitness 32 `
-            -OutputPath "$env:REPO_ROOT\\builds\\status\\vipc-audit-32.json"
       - name: Report VIPC change status (LV x86)
         shell: pwsh
         run: |
           if ('${{ needs.changes.outputs.vipc }}' -eq 'true') {
             Write-Host ".vipc changes detected for this run."
           } else {
-            Write-Host "No .vipc changes detected; audit-first policy still enforced."
+            Write-Host "No .vipc changes detected; apply+audit policy still enforced."
           }
-      - name: Apply VIPC (LV x86, informational)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
-        continue-on-error: true
+      - name: Apply VIPC (LV x86)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -912,9 +902,11 @@ jobs:
 
           '' | Set-Content -Path $logPath -Encoding utf8
           $output = & ".github\\actions\\apply-vipc\\ApplyVIPC.ps1" `
+            -LabVIEWVersion '${{ needs.version-gate.outputs.raw }}' `
             -SupportedBitness 32 `
             -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" *>&1
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
+            -AllowVipcTargetMismatch *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -927,6 +919,16 @@ jobs:
           if ($exitCode -ne 0) {
             exit $exitCode
           }
+      - name: Audit VIPC apply (LV x86)
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          & "$env:REPO_ROOT\\Tooling\\Assert-VipcApplied.ps1" `
+            -RepoRoot "$env:REPO_ROOT" `
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
+            -SupportedBitness 32 `
+            -LabVIEWVersion '${{ needs.version-gate.outputs.raw }}' `
+            -OutputPath "$env:REPO_ROOT\\builds\\status\\vipc-audit-32.json"
       - name: Upload VIPC audit artifact (LV x86)
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -935,7 +937,7 @@ jobs:
           path: ${{ env.REPO_ROOT }}/builds/status/vipc-audit-32.json
           if-no-files-found: warn
       - name: Upload VIPC apply log artifact (LV x86)
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.vipc_apply_info == 'true' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: vipc-apply-log-32
