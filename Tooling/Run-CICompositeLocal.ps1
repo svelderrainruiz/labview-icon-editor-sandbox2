@@ -1827,8 +1827,7 @@ try {
                         -LabVIEWVersion $LabVIEWVersion `
                         -SupportedBitness $bitness `
                         -RepoRoot $repoRoot `
-                        -VIPCPath $VipcPath `
-                        -AllowVipcTargetMismatch
+                        -VIPCPath $VipcPath
                 }
 
                 if ($applyResult.Output -and $applyResult.Output.Count -gt 0) {
@@ -1854,8 +1853,7 @@ try {
                         -LabVIEWVersion $LabVIEWVersion `
                         -SupportedBitness $bitness `
                         -RepoRoot $repoRoot `
-                        -VIPCPath $VipcPath `
-                        -AllowVipcTargetMismatch
+                        -VIPCPath $VipcPath
                 }
             }
             else {

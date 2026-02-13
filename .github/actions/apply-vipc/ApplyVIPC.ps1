@@ -19,8 +19,6 @@ Param (
 
     [string]$VIPCPath,
 
-    [switch]$AllowVipcTargetMismatch,
-
     [string]$WorktreeRoot,
 
     [switch]$SkipWorktreeRootCheck,
@@ -47,7 +45,6 @@ Write-Verbose " - LabVIEWVersion:            $LabVIEWVersion"
 Write-Verbose " - SupportedBitness:          $SupportedBitness"
 Write-Verbose " - RepoRoot:                  $RepoRoot"
 Write-Verbose " - VIPCPath:                  $VIPCPath"
-Write-Verbose " - AllowVipcTargetMismatch:   $AllowVipcTargetMismatch"
 Write-Verbose " - VipmTimeoutSeconds:        $VipmTimeoutSeconds"
 Write-Verbose " - VipmMaxAttempts:           $VipmMaxAttempts"
 Write-Verbose " - VipmRetryDelaySeconds:     $VipmRetryDelaySeconds"
@@ -142,12 +139,8 @@ try {
     Write-Verbose ("VIPC target version (numeric): {0}" -f $vipcConfig.TargetVersionNumeric)
     Write-Verbose ("VIPC package count: {0}" -f $vipcConfig.PackageCount)
 
-    if (-not $AllowVipcTargetMismatch -and $vipcConfig.TargetVersionNumeric -ne $lvInfo.NumericVersion) {
-        throw ("VIPC target version mismatch. Requested LabVIEW numeric version: {0}. VIPC target version: {1} (raw: {2}). Command not executed. To bypass this guard for diagnostics only, pass -AllowVipcTargetMismatch." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
-    }
-
-    if ($AllowVipcTargetMismatch -and $vipcConfig.TargetVersionNumeric -ne $lvInfo.NumericVersion) {
-        Write-Warning ("Proceeding despite VIPC target/version mismatch due to -AllowVipcTargetMismatch. Requested={0}; VIPC target={1} (raw: {2})." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
+    if ($vipcConfig.TargetVersionNumeric -ne $lvInfo.NumericVersion) {
+        Write-Warning ("VIPC target version mismatch detected. Requested LabVIEW numeric version: {0}. VIPC target version: {1} (raw: {2}). Continuing with VIPM CLI apply; enforce installed dependency versions with Assert-VipcApplied." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
     }
 
     $vipmArgs = @(

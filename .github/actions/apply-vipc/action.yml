@@ -24,9 +24,6 @@ runs:
           '-VipmMaxAttempts', '${{ inputs.vipm_max_attempts }}',
           '-VipmRetryDelaySeconds', '${{ inputs.vipm_retry_delay_seconds }}'
         )
-        if ('${{ inputs.allow_vipc_target_mismatch }}' -eq 'true') {
-          $args += '-AllowVipcTargetMismatch'
-        }
         & "${{ github.action_path }}/ApplyVIPC.ps1" @args
 inputs:
   labview_version:
@@ -41,10 +38,6 @@ inputs:
   vipc_path:
     description: 'Path under repo for the .vipc file (relative to workspace)'
     required: true
-  allow_vipc_target_mismatch:
-    description: 'Allow VIPC target version mismatches (temporary migration override).'
-    required: false
-    default: 'false'
   vipm_timeout_seconds:
     description: 'VIPM command timeout in seconds.'
     required: false

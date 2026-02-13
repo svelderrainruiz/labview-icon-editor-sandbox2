@@ -18,7 +18,7 @@ Ensure a runner has all required LabVIEW packages installed before building or t
 | Requirement | Notes |
 |-------------|-------|
 | **Windows runner** | LabVIEW and VIPM CLI are Windows only. |
-| **LabVIEW 2021 (21.0)** | Matches `labview_version`, or `.lvversion` when omitted. |
+| **LabVIEW matching `.lvversion`** | `ApplyVIPC.ps1` resolves version from `.lvversion` by default and warns on VIPC target mismatches. |
 | **vipm** in `PATH` | Used to apply the `.vipc` configuration. |
 | **PowerShell 7** | Composite steps use PowerShell Core (`pwsh`). |
 
@@ -31,7 +31,6 @@ Ensure a runner has all required LabVIEW packages installed before building or t
 | `supported_bitness` | **Yes** | `32` or `64` | LabVIEW bitness to target. |
 | `repo_root` | **Yes** | `${{ github.workspace }}` | Root path of the repository on disk. |
 | `vipc_path` | **Yes** | `Tooling/deployment/runner_dependencies.vipc` | Path (relative to `repo_root`) of the VI Package Configuration to apply. |
-| `allow_vipc_target_mismatch` | No | `true` | Temporarily bypass VIPC target-version mismatch guard. |
 | `vipm_timeout_seconds` | No | `600` | Timeout per VIPM CLI command attempt. |
 | `vipm_max_attempts` | No | `3` | Max retries for lock-contention retry flow. |
 | `vipm_retry_delay_seconds` | No | `5` | Delay between VIPM lock-contention retries. |
@@ -49,7 +48,6 @@ steps:
       supported_bitness: 64
       repo_root: ${{ github.workspace }}
       vipc_path: Tooling/deployment/runner_dependencies.vipc
-      allow_vipc_target_mismatch: true
 ```
 
 ---
@@ -68,7 +66,7 @@ steps:
 |---------|------|
 | *vipm executable not found* | Ensure VIPM CLI is installed and on `PATH`. |
 | *`.vipc` file not found* | Check `repo_root` and `vipc_path` values. |
-| *LabVIEW version mismatch* | Make sure the installed LabVIEW version matches `labview_version` (or `.lvversion` when omitted). |
+| *LabVIEW version mismatch warning* | Regenerate the VIPC file target metadata to match `.lvversion`; apply continues and audit enforces package versions. |
 
 ---
 

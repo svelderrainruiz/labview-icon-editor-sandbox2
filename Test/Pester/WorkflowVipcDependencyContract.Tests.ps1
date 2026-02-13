@@ -18,7 +18,7 @@ Describe 'Workflow VIPC dependency contract' {
         $script:workflowContent | Should -Match 'name:\s*Apply VIPC \(LV x64\)'
         $script:workflowContent | Should -Match 'name:\s*Apply VIPC \(LV x86\)'
         $script:workflowContent | Should -Match '\.github\\\\actions\\\\apply-vipc\\\\ApplyVIPC\.ps1'
-        $script:workflowContent | Should -Match '-AllowVipcTargetMismatch'
+        $script:workflowContent | Should -Not -Match '-AllowVipcTargetMismatch'
     }
 
     It 'runs VIPC audit after apply for x64 and x86' {

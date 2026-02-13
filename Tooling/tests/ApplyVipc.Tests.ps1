@@ -27,9 +27,11 @@ Describe 'ApplyVIPC command contract' {
         $script:applyScriptContent | Should -Match "'install'"
     }
 
-    It 'supports temporary VIPC target mismatch override' {
-        $script:applyScriptContent | Should -Match '\[switch\]\$AllowVipcTargetMismatch'
-        $script:applyScriptContent | Should -Match '-AllowVipcTargetMismatch'
+    It 'uses warning-only mismatch handling without override switch' {
+        $script:applyScriptContent | Should -Not -Match '\[switch\]\$AllowVipcTargetMismatch'
+        $script:applyScriptContent | Should -Not -Match '-AllowVipcTargetMismatch'
+        $script:applyScriptContent | Should -Match 'VIPC target version mismatch detected'
+        $script:applyScriptContent | Should -Match 'Continuing with VIPM CLI apply'
     }
 }
 

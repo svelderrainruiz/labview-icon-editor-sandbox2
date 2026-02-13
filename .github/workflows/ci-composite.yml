@@ -819,8 +819,7 @@ jobs:
             -LabVIEWVersion '${{ needs.version-gate.outputs.raw }}' `
             -SupportedBitness 64 `
             -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
-            -AllowVipcTargetMismatch *>&1
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
@@ -905,8 +904,7 @@ jobs:
             -LabVIEWVersion '${{ needs.version-gate.outputs.raw }}' `
             -SupportedBitness 32 `
             -RepoRoot "$env:REPO_ROOT" `
-            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" `
-            -AllowVipcTargetMismatch *>&1
+            -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc" *>&1
           $exitCode = $LASTEXITCODE
 
           if ($output) {
