@@ -33,6 +33,11 @@ Describe 'Workflow container parity PowerShell contract' {
         $preflightIndex | Should -BeLessThan $runIndex
     }
 
+    It 'gates Windows container parity on self-hosted parity success' {
+        $script:canonicalContent | Should -Match 'parity-windows:\s*\r?\n\s+name:\s*Parity \(Windows Container\)\s*\r?\n\s+needs:\s*\[resolve-parity-context,\s*parity-self-hosted\]'
+        $script:canonicalContent | Should -Match "needs\.parity-self-hosted\.result == 'success'"
+    }
+
     It 'adds path-contract preflight before Windows container packed-library build in ci-composite.yml' {
         $script:ciCompositeContent | Should -Match 'Validate path contract for Windows container shell'
         $script:ciCompositeContent | Should -Match 'pwsh -NoProfile -File "\$env:GITHUB_WORKSPACE\\Tooling\\Test-PathContract\.ps1" -WriteSummary'
