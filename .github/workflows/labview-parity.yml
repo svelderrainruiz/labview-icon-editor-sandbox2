@@ -308,22 +308,60 @@ jobs:
             -Context 'headless-project-contract' `
             -WriteSummary
 
-      - name: Run headless local parity sequence (64-bit)
+      - name: Resolve LabVIEW executable path (64-bit)
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
-          pwsh -NoProfile -File .\Tooling\Run-CICompositeLocal-Auto.ps1 `
-            -LabVIEWBitness 64 `
-            -EnableSingleBitnessRecoverySequence `
-            -SuccessTarget ppl-single `
-            -MaxAttempts 3 `
-            -SkipVerifyIEPaths `
-            -SkipMissingInProject `
-            -SkipBuildVip `
-            -SkipViValidate `
-            -UseWorktree:$false `
-            -RepoRoot "$env:REPO_ROOT" `
-            -WorktreeRoot "$env:LVIE_WORKTREE_ROOT"
+          . .\Tooling\support\LabVIEWVersion.ps1
+          . .\Tooling\support\LabVIEWExecutablePath.ps1
+
+          $versionInfo = Get-LabVIEWVersionInfo -RepoRoot $env:REPO_ROOT
+          $lvYear = [string]$versionInfo.Year
+          $labviewPath = Resolve-LabVIEWExecutablePath -VersionYear $lvYear -Bitness '64'
+
+          "LABVIEW_VERSION_YEAR=$lvYear" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "LABVIEW_EXE_PATH=$labviewPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host ("Resolved LabVIEW executable: {0}" -f $labviewPath)
+
+      - name: Run host-native parity script (64-bit)
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $env:LVIE_REPO_ROOT = $env:REPO_ROOT
+          $env:WORKSPACE_ROOT = $env:REPO_ROOT
+          $env:REPO_ROOT = $env:REPO_ROOT
+          $env:LVIE_PROJECT_PATH = $env:PROJECT_PATH
+          $env:PROJECT_PATH = $env:PROJECT_PATH
+          $env:LVIE_PROJECT_RELATIVE_PATH = 'lv_icon_editor.lvproj'
+          $env:PROJECT_PATH_REL = 'lv_icon_editor.lvproj'
+          $env:TARGET_DIR_REL = 'Test\Templates'
+          $env:CONTAINER_PARITY_EXCLUDE_FILES = 'Polymorphic Template.vi'
+          $env:CONTAINER_PARITY_BUILD_SPEC = '${{ needs.resolve-parity-context.outputs.run_build_spec }}'
+          $env:CONTAINER_PARITY_BUILD_SPEC_NAME = 'Editor Packed Library'
+          $env:CONTAINER_PARITY_TARGET_NAME = 'My Computer'
+          $env:CONTAINER_PARITY_BUILD_OUTPUT_RELATIVE_PATH = 'resource\plugins\lv_icon.lvlibp'
+          $env:CONTAINER_PARITY_LABVIEW_VERSION = $env:LABVIEW_VERSION_YEAR
+
+          pwsh -NoProfile -File .\Tooling\container-parity\runlabview-windows.ps1 `
+            -WorkspaceRoot "$env:REPO_ROOT" `
+            -LabVIEWPath "$env:LABVIEW_EXE_PATH" `
+            -ProjectPath "$env:PROJECT_PATH" `
+            -BuildSpecName 'Editor Packed Library' `
+            -TargetName 'My Computer' `
+            -LabVIEWVersion "$env:LABVIEW_VERSION_YEAR" `
+            -BuildProjectSpec:($env:CONTAINER_PARITY_BUILD_SPEC -eq 'true')
+
+      - name: Verify built specification output (Self-hosted)
+        if: ${{ needs.resolve-parity-context.outputs.run_build_spec == 'true' }}
+        shell: pwsh
+        working-directory: ${{ env.REPO_ROOT }}
+        run: |
+          $outputPath = Join-Path $env:REPO_ROOT 'resource\plugins\lv_icon.lvlibp'
+          if (-not (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
+            throw "Expected build output was not found: $outputPath"
+          }
+          $item = Get-Item -LiteralPath $outputPath
+          Write-Host ("Built specification artifact: {0} ({1} bytes)" -f $item.FullName, $item.Length)
 
       - name: Resolve artifact root
         if: always()
@@ -337,34 +375,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: labview-parity-self-hosted-labviewcli-logs
-          path: ${{ env.HEADLESS_REPO_ROOT }}/builds/logs/labviewcli-*.log
+          path: ${{ env.HEADLESS_REPO_ROOT }}/TestResults/container-parity/windows/logs
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload agent logs
-        if: always()
+      - name: Upload built specification artifact (Self-hosted)
+        if: ${{ always() && needs.resolve-parity-context.outputs.run_build_spec == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: labview-parity-self-hosted-agent-logs
-          path: ${{ env.HEADLESS_REPO_ROOT }}/TestResults/agent-logs/**
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload build status artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: labview-parity-self-hosted-build-status
-          path: ${{ env.HEADLESS_REPO_ROOT }}/builds/status/**
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload 64-bit PPL artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: labview-parity-self-hosted-lv_icon_x64
-          path: ${{ env.HEADLESS_REPO_ROOT }}/resource/plugins/lv_icon_x64.lvlibp
+          name: labview-parity-self-hosted-editor-packed-library
+          path: ${{ env.HEADLESS_REPO_ROOT }}/resource/plugins/lv_icon.lvlibp
           if-no-files-found: warn
           retention-days: 14
 
