@@ -16,7 +16,7 @@ inputs:
     description: LabVIEW bitness for close.
     required: false
   labview_version:
-    description: LabVIEW version (year). Defaults to LABVIEW_VERSION_YEAR env var.
+    description: LabVIEW version (numeric or year). Defaults to LVIE_REQUIRED_LABVIEW_VERSION/LABVIEW_VERSION_RAW, then LABVIEW_VERSION_YEAR.
     required: false
   repo_root:
     description: Repo root override. Defaults to REPO_ROOT env var.
@@ -54,6 +54,12 @@ runs:
         $repoRoot = (Resolve-Path -Path $repoRoot -ErrorAction Stop).Path
 
         if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
+          $labviewVersion = $env:LVIE_REQUIRED_LABVIEW_VERSION
+        }
+        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
+          $labviewVersion = $env:LABVIEW_VERSION_RAW
+        }
+        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
           $labviewVersion = $env:LABVIEW_VERSION_YEAR
         }
         $assertScript = Join-Path $repoRoot 'Tooling\Assert-LabVIEWVersion.ps1'
@@ -90,6 +96,12 @@ runs:
         }
         $repoRoot = (Resolve-Path -Path $repoRoot -ErrorAction Stop).Path
 
+        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
+          $labviewVersion = $env:LVIE_REQUIRED_LABVIEW_VERSION
+        }
+        if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
+          $labviewVersion = $env:LABVIEW_VERSION_RAW
+        }
         if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
           $labviewVersion = $env:LABVIEW_VERSION_YEAR
         }
