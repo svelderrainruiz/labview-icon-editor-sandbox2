@@ -18,7 +18,7 @@ Ensure a runner has all required LabVIEW packages installed before building or t
 | Requirement | Notes |
 |-------------|-------|
 | **Windows runner** | LabVIEW and VIPM CLI are Windows only. |
-| **LabVIEW matching `.lvversion`** | `ApplyVIPC.ps1` resolves version from `.lvversion` by default and warns on VIPC target mismatches. |
+| **LabVIEW matching `.lvversion`** | `ApplyVIPC.ps1` resolves version from `.lvversion` by default and hard-fails on VIPC target mismatches. |
 | **vipm** in `PATH` | Used to apply the `.vipc` configuration. |
 | **PowerShell 7** | Composite steps use PowerShell Core (`pwsh`). |
 
@@ -27,10 +27,10 @@ Ensure a runner has all required LabVIEW packages installed before building or t
 ## Inputs
 | Name | Required | Example | Description |
 |------|----------|---------|-------------|
-| `labview_version` | No | `2021` | LabVIEW *major* version that the repo supports. Defaults to `.lvversion` when omitted. |
+| `labview_version` | No | `2026` | LabVIEW *major* version that the repo supports. Defaults to `.lvversion` when omitted. |
 | `supported_bitness` | **Yes** | `32` or `64` | LabVIEW bitness to target. |
 | `repo_root` | **Yes** | `${{ github.workspace }}` | Root path of the repository on disk. |
-| `vipc_path` | **Yes** | `Tooling/deployment/runner_dependencies.vipc` | Path (relative to `repo_root`) of the VI Package Configuration to apply. |
+| `vipc_path` | **Yes** | `.github/actions/apply-vipc/runner_dependencies.vipc` | Path (relative to `repo_root`) of the VI Package Configuration to apply. |
 | `vipm_timeout_seconds` | No | `600` | Timeout per VIPM CLI command attempt. |
 | `vipm_max_attempts` | No | `3` | Max retries for lock-contention retry flow. |
 | `vipm_retry_delay_seconds` | No | `5` | Delay between VIPM lock-contention retries. |
@@ -47,7 +47,7 @@ steps:
     with:
       supported_bitness: 64
       repo_root: ${{ github.workspace }}
-      vipc_path: Tooling/deployment/runner_dependencies.vipc
+      vipc_path: .github/actions/apply-vipc/runner_dependencies.vipc
 ```
 
 ---
@@ -57,7 +57,8 @@ steps:
 2. **PowerShell wrapper** – executes `ApplyVIPC.ps1` with the provided inputs.
 3. **VIPM CLI invocation** – `ApplyVIPC.ps1` launches `vipm install` with `.lvversion`-resolved LabVIEW year/bitness.
 4. **Retry on lock contention** – command retries on VIPM global lock-acquisition contention.
-5. **Failure propagation** – any error in path resolution, VIPM CLI, or script guards causes the step (and job) to fail.
+5. **Strict target guard** – the `.vipc` target numeric version must exactly match `.lvversion`; mismatches fail before install.
+6. **Failure propagation** – any error in path resolution, VIPM CLI, or script guards causes the step (and job) to fail.
 
 ---
 
@@ -66,7 +67,7 @@ steps:
 |---------|------|
 | *vipm executable not found* | Ensure VIPM CLI is installed and on `PATH`. |
 | *`.vipc` file not found* | Check `repo_root` and `vipc_path` values. |
-| *LabVIEW version mismatch warning* | Regenerate the VIPC file target metadata to match `.lvversion`; apply continues and audit enforces package versions. |
+| *LabVIEW version mismatch* | Regenerate the VIPC file target metadata to match `.lvversion`; strict target-version contract blocks execution on mismatch. |
 
 ---
 

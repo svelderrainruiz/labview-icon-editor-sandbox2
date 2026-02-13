@@ -27,11 +27,13 @@ Describe 'ApplyVIPC command contract' {
         $script:applyScriptContent | Should -Match "'install'"
     }
 
-    It 'uses warning-only mismatch handling without override switch' {
+    It 'enforces strict VIPC target mismatch handling without override switch' {
         $script:applyScriptContent | Should -Not -Match '\[switch\]\$AllowVipcTargetMismatch'
         $script:applyScriptContent | Should -Not -Match '-AllowVipcTargetMismatch'
-        $script:applyScriptContent | Should -Match 'VIPC target version mismatch detected'
-        $script:applyScriptContent | Should -Match 'Continuing with VIPM CLI apply'
+        $script:applyScriptContent | Should -Match 'VIPC target version mismatch\. Requested LabVIEW numeric version'
+        $script:applyScriptContent | Should -Match 'Command not executed\.'
+        $script:applyScriptContent | Should -Not -Match 'VIPC target version mismatch detected'
+        $script:applyScriptContent | Should -Not -Match 'Continuing with VIPM CLI apply'
     }
 }
 
