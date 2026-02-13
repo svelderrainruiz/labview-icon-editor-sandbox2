@@ -1,0 +1,18 @@
+{
+  "contract_version": "1.0.0",
+  "executor": "g-cli",
+  "help_command": "g-cli --lv-ver <year> --arch <bitness> lunit -- -h",
+  "run_command": "g-cli --lv-ver <year> --arch <bitness> lunit -- -r <report.xml> <project.lvproj>",
+  "invalid_help_forms": [
+    "g-cli lunit --help",
+    "g-cli lunit -- --help"
+  ],
+  "exit_precedence": [
+    "gcli_exit_nonzero_wins",
+    "otherwise_parser_exit"
+  ],
+  "removed_env_knobs": [
+    "LVIE_LUNIT_BACKEND",
+    "LVIE_FORCE_GCLI_LUNIT"
+  ]
+}

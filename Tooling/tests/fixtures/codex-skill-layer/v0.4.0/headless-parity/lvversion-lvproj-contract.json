@@ -1,0 +1,12 @@
+{
+  "contract_version": "1.1.0",
+  "preflight_command": "pwsh -NoProfile -File .\\Tooling\\Assert-LabVIEWVersion.ps1 -RepoRoot <repo>",
+  "version_contract": {
+    "source_of_truth": ".lvversion",
+    "project_lvversion_required": false
+  },
+  "path_contract": {
+    "owner": "runner-cli parity context",
+    "project_parent_match_required": false
+  }
+}
