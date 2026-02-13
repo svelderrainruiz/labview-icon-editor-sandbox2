@@ -28,12 +28,11 @@
     Optional override path for summary output (defaults to GITHUB_STEP_SUMMARY).
 
 .PARAMETER EnforceProjectLvVersion
-    When set, also validates lv_icon_editor.lvproj root LVVersion against
-    .lvversion and enforces that the project parent path equals RepoRoot.
+    Deprecated compatibility switch. Project-file LVVersion and parent-path
+    enforcement are no longer part of this contract.
 
 .PARAMETER ProjectPath
-    Optional project path override used when EnforceProjectLvVersion is set.
-    Falls back to LVIE_PROJECT_PATH, PROJECT_PATH, then <RepoRoot>\lv_icon_editor.lvproj.
+    Deprecated compatibility parameter. Ignored.
 #>
 
 [CmdletBinding()]
@@ -54,6 +53,7 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$SummaryPath,
 
+    [Parameter(Mandatory = $false)]
     [switch]$EnforceProjectLvVersion,
 
     [Parameter(Mandatory = $false)]
@@ -131,93 +131,6 @@ function Resolve-SummaryPath {
     return $env:GITHUB_STEP_SUMMARY
 }
 
-function ConvertTo-NormalizedPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    return ([System.IO.Path]::GetFullPath($Path)).TrimEnd('\', '/')
-}
-
-function Resolve-ProjectPathForContract {
-    param(
-        [string]$ProjectPathInput,
-        [Parameter(Mandatory = $true)]
-        [string]$RepoRoot
-    )
-
-    $candidate = $null
-    $source = $null
-    if (-not [string]::IsNullOrWhiteSpace($ProjectPathInput)) {
-        $candidate = $ProjectPathInput
-        $source = 'parameter:ProjectPath'
-    } elseif (-not [string]::IsNullOrWhiteSpace($env:LVIE_PROJECT_PATH)) {
-        $candidate = $env:LVIE_PROJECT_PATH
-        $source = '$env:LVIE_PROJECT_PATH'
-    } elseif (-not [string]::IsNullOrWhiteSpace($env:PROJECT_PATH)) {
-        $candidate = $env:PROJECT_PATH
-        $source = '$env:PROJECT_PATH'
-    } else {
-        $candidate = 'lv_icon_editor.lvproj'
-        $source = 'default:lv_icon_editor.lvproj'
-    }
-
-    $resolvedCandidate = if ([System.IO.Path]::IsPathRooted($candidate)) {
-        $candidate
-    } else {
-        Join-Path -Path $RepoRoot -ChildPath $candidate
-    }
-
-    if (-not (Test-Path -Path $resolvedCandidate -PathType Leaf)) {
-        throw ("Project version contract failed: project file was not found at '{0}' (source: {1})." -f $resolvedCandidate, $source)
-    }
-
-    return [pscustomobject]@{
-        Path   = (Resolve-Path -Path $resolvedCandidate -ErrorAction Stop).Path
-        Source = $source
-    }
-}
-
-function Get-ProjectLvVersionInfo {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ProjectFilePath
-    )
-
-    $rawXml = Get-Content -Path $ProjectFilePath -Raw -ErrorAction Stop
-    try {
-        [xml]$projectXml = $rawXml
-    } catch {
-        throw ("Project version contract failed: unable to parse project XML at '{0}'. {1}" -f $ProjectFilePath, $_.Exception.Message)
-    }
-
-    $projectNode = $projectXml.Project
-    if (-not $projectNode -and $projectXml.DocumentElement) {
-        $projectNode = $projectXml.DocumentElement
-    }
-    if (-not $projectNode -or $projectNode.Name -ne 'Project') {
-        throw ("Project version contract failed: root Project node was not found in '{0}'." -f $ProjectFilePath)
-    }
-
-    $projectLvVersion = $projectNode.GetAttribute('LVVersion')
-    if ([string]::IsNullOrWhiteSpace($projectLvVersion)) {
-        throw ("Project version contract failed: root Project LVVersion attribute is missing in '{0}'." -f $ProjectFilePath)
-    }
-    if (-not ($projectLvVersion -match '^\d{8}$')) {
-        throw ("Project version contract failed: LVVersion '{0}' in '{1}' is invalid. Expected 8 digits such as 21008000." -f $projectLvVersion, $ProjectFilePath)
-    }
-
-    $numericMajor = [int]$projectLvVersion.Substring(0, 2)
-    $minorRevision = [int]$projectLvVersion.Substring(2, 2)
-    $year = (2000 + $numericMajor).ToString()
-
-    return [pscustomobject]@{
-        Raw           = $projectLvVersion
-        Year          = $year
-        NumericMajor  = $numericMajor
-        MinorRevision = $minorRevision
-        NumericVersion = "$numericMajor.$minorRevision"
-    }
-}
-
 function Write-VersionSummary {
     param(
         [string]$Path,
@@ -225,9 +138,7 @@ function Write-VersionSummary {
         [string]$Status,
         [pscustomobject]$RepoInfo,
         [string[]]$Mismatches,
-        [string]$Guidance,
-        [string]$ProjectContractStatus,
-        [string]$ProjectContractDetails
+        [string]$Guidance
     )
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -240,12 +151,6 @@ function Write-VersionSummary {
         $lines += "- Context: $ContextLabel"
     }
     $lines += ("- .lvversion: {0} (year {1}, minor {2})" -f $RepoInfo.Raw, $RepoInfo.Year, $RepoInfo.MinorRevision)
-    if (-not [string]::IsNullOrWhiteSpace($ProjectContractStatus)) {
-        $lines += ("- Project contract: {0}" -f $ProjectContractStatus)
-    }
-    if (-not [string]::IsNullOrWhiteSpace($ProjectContractDetails)) {
-        $lines += ("- Project details: {0}" -f $ProjectContractDetails)
-    }
     $lines += ("- Status: {0}" -f $Status)
     if ($Mismatches -and $Mismatches.Count -gt 0) {
         $lines += ("- Mismatches: {0}" -f ($Mismatches -join '; '))
@@ -256,6 +161,10 @@ function Write-VersionSummary {
     $lines += ""
 
     $lines | Out-File -FilePath $Path -Append -Encoding utf8
+}
+
+if ($EnforceProjectLvVersion -or -not [string]::IsNullOrWhiteSpace($ProjectPath)) {
+    Write-Verbose "Project contract parameters are deprecated and ignored. .lvversion is the only enforced version contract."
 }
 
 $repoRootResolved = Resolve-RepoRoot -Path $RepoRoot
@@ -300,33 +209,9 @@ foreach ($entry in $declared) {
     }
 }
 
-$projectContractStatus = if ($EnforceProjectLvVersion) { 'enabled' } else { 'not-enforced' }
-$projectContractDetails = $null
-if ($EnforceProjectLvVersion) {
-    $projectResolution = Resolve-ProjectPathForContract -ProjectPathInput $ProjectPath -RepoRoot $repoRootResolved
-    $projectInfo = Get-ProjectLvVersionInfo -ProjectFilePath $projectResolution.Path
-
-    $projectParent = ConvertTo-NormalizedPath -Path (Split-Path -Path $projectResolution.Path -Parent)
-    $repoRootNormalized = ConvertTo-NormalizedPath -Path $repoRootResolved
-    if (-not $projectParent.Equals($repoRootNormalized, [System.StringComparison]::OrdinalIgnoreCase)) {
-        $mismatches += ("project parent '{0}' does not match RepoRoot '{1}' (source: {2})" -f $projectParent, $repoRootNormalized, $projectResolution.Source)
-    }
-
-    $repoNumericMajor = [int]$repoInfo.NumericMajor
-    if ($projectInfo.NumericMajor -ne $repoNumericMajor -or $projectInfo.MinorRevision -ne $repoMinor) {
-        $mismatches += ("project LVVersion={0} -> {1} (year {2}, minor {3}) does not match .lvversion {4} (year {5}, minor {6})" -f $projectInfo.Raw, $projectInfo.NumericVersion, $projectInfo.Year, $projectInfo.MinorRevision, $repoInfo.Raw, $repoYear, $repoMinor)
-    }
-
-    $projectContractStatus = 'ok'
-    $projectContractDetails = ("path={0}; source={1}; LVVersion={2} -> {3} (year {4}, minor {5})" -f $projectResolution.Path, $projectResolution.Source, $projectInfo.Raw, $projectInfo.NumericVersion, $projectInfo.Year, $projectInfo.MinorRevision)
-}
-
 $contextLabel = if ([string]::IsNullOrWhiteSpace($Context)) { '' } else { " [$Context]" }
 $baseMessage = "LabVIEW version contract${contextLabel}: .lvversion=$($repoInfo.Raw) (year $repoYear, minor $repoMinor)."
 $guidance = "Update .lvversion or remove overrides (LVIE_REQUIRED_LABVIEW_VERSION*, LABVIEW_VERSION_YEAR/MINOR). For local runs, pass -AllowVersionMismatch to bypass."
-if ($EnforceProjectLvVersion) {
-    $guidance += " Ensure Project LVVersion matches .lvversion and that Split-Path -Parent PROJECT_PATH equals RepoRoot."
-}
 $summaryPath = $null
 if ($WriteSummary) {
     $summaryPath = Resolve-SummaryPath -OverridePath $SummaryPath
@@ -339,11 +224,8 @@ if ($mismatches.Count -gt 0) {
     $details = "Mismatched declarations: {0}" -f ($mismatches -join '; ')
     $message = "$baseMessage $details $guidance"
     $summaryStatus = if ($AllowMismatch) { 'warning' } else { 'failed' }
-    if ($EnforceProjectLvVersion) {
-        $projectContractStatus = if ($AllowMismatch) { 'warning' } else { 'failed' }
-    }
     if ($summaryPath) {
-        Write-VersionSummary -Path $summaryPath -ContextLabel $Context -Status $summaryStatus -RepoInfo $repoInfo -Mismatches $mismatches -Guidance $guidance -ProjectContractStatus $projectContractStatus -ProjectContractDetails $projectContractDetails
+        Write-VersionSummary -Path $summaryPath -ContextLabel $Context -Status $summaryStatus -RepoInfo $repoInfo -Mismatches $mismatches -Guidance $guidance
     }
     if ($AllowMismatch) {
         Write-Warning $message
@@ -352,13 +234,9 @@ if ($mismatches.Count -gt 0) {
     }
 } else {
     if ($summaryPath) {
-        Write-VersionSummary -Path $summaryPath -ContextLabel $Context -Status 'ok' -RepoInfo $repoInfo -Mismatches @() -Guidance $null -ProjectContractStatus $projectContractStatus -ProjectContractDetails $projectContractDetails
+        Write-VersionSummary -Path $summaryPath -ContextLabel $Context -Status 'ok' -RepoInfo $repoInfo -Mismatches @() -Guidance $null
     }
-    if ($EnforceProjectLvVersion -and -not [string]::IsNullOrWhiteSpace($projectContractDetails)) {
-        Write-Host "$baseMessage Project contract OK. $projectContractDetails"
-    } else {
-        Write-Host "$baseMessage OK."
-    }
+    Write-Host "$baseMessage OK."
 }
 
 Write-Output $repoInfo
