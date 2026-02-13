@@ -84,4 +84,12 @@ Describe 'BuildProjectSpec container parity contract' {
         $linuxExecuteIndex | Should -BeGreaterThan -1
         $linuxSyncIndex | Should -BeLessThan $linuxExecuteIndex
     }
+
+    It 'resolves and passes LabVIEWCLI PortNumber for Windows parity operations' {
+        $script:windowsParityContent | Should -Match 'function\s+Resolve-LabVIEWCliPort'
+        $script:windowsParityContent | Should -Match 'Using LabVIEWCLI port: \{0\} \(source: \{1\}\)'
+
+        $portMatchCount = [regex]::Matches($script:windowsParityContent, "'-PortNumber'")
+        $portMatchCount.Count | Should -BeGreaterThan 1
+    }
 }
