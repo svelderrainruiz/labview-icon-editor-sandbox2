@@ -140,7 +140,7 @@ try {
     Write-Verbose ("VIPC package count: {0}" -f $vipcConfig.PackageCount)
 
     if ($vipcConfig.TargetVersionNumeric -ne $lvInfo.NumericVersion) {
-        Write-Warning ("VIPC target version mismatch detected. Requested LabVIEW numeric version: {0}. VIPC target version: {1} (raw: {2}). Continuing with VIPM CLI apply; enforce installed dependency versions with Assert-VipcApplied." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
+        throw ("VIPC target version mismatch. Requested LabVIEW numeric version: {0}. VIPC target version: {1} (raw: {2}). Command not executed." -f $lvInfo.NumericVersion, $vipcConfig.TargetVersionNumeric, $vipcConfig.TargetVersionRaw)
     }
 
     $vipmArgs = @(
