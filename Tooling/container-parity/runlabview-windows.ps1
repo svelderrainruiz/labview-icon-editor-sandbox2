@@ -47,6 +47,169 @@ function Test-EnabledValue {
         -or $Value.Equals('yes', [System.StringComparison]::OrdinalIgnoreCase)
 }
 
+function ConvertTo-LabVIEWCliPortNumber {
+    param(
+        [AllowNull()]
+        [string]$RawValue,
+        [string]$Source
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RawValue)) {
+        return $null
+    }
+
+    $parsed = 0
+    if (-not [int]::TryParse($RawValue, [ref]$parsed)) {
+        if (-not [string]::IsNullOrWhiteSpace($Source)) {
+            Write-Warning ("Ignoring invalid LabVIEW CLI port '{0}' from {1}" -f $RawValue, $Source)
+        } else {
+            Write-Warning ("Ignoring invalid LabVIEW CLI port '{0}'" -f $RawValue)
+        }
+        return $null
+    }
+
+    if ($parsed -lt 1 -or $parsed -gt 65535) {
+        if (-not [string]::IsNullOrWhiteSpace($Source)) {
+            Write-Warning ("Ignoring out-of-range LabVIEW CLI port '{0}' from {1}" -f $RawValue, $Source)
+        } else {
+            Write-Warning ("Ignoring out-of-range LabVIEW CLI port '{0}'" -f $RawValue)
+        }
+        return $null
+    }
+
+    return $parsed
+}
+
+function Get-LabVIEWIniValue {
+    param(
+        [string]$IniPath,
+        [string]$Key
+    )
+
+    if ([string]::IsNullOrWhiteSpace($IniPath) -or -not (Test-Path -LiteralPath $IniPath -PathType Leaf)) {
+        return $null
+    }
+
+    $escapedKey = [regex]::Escape($Key)
+    foreach ($line in (Get-Content -LiteralPath $IniPath -ErrorAction Stop)) {
+        $match = [regex]::Match($line, "^\s*$escapedKey\s*=\s*(?<value>.+?)\s*$", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        if ($match.Success) {
+            return $match.Groups['value'].Value.Trim()
+        }
+    }
+
+    return $null
+}
+
+function Resolve-LabVIEWCliPort {
+    param(
+        [string]$LabVIEWExecutablePath
+    )
+
+    $envCandidates = @(
+        'LVIE_CONTAINER_PARITY_LABVIEWCLI_PORT',
+        'LVIE_PARITY_LABVIEWCLI_PORT',
+        'LVIE_LABVIEWCLI_PORT',
+        'LVIE_LUNIT_PORT'
+    )
+
+    foreach ($name in $envCandidates) {
+        $value = [Environment]::GetEnvironmentVariable($name)
+        $port = ConvertTo-LabVIEWCliPortNumber -RawValue $value -Source ('$env:{0}' -f $name)
+        if ($null -ne $port) {
+            return [pscustomobject]@{
+                PortNumber = [int]$port
+                Source     = '$env:' + $name
+            }
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($LabVIEWExecutablePath)) {
+        $iniPath = Join-Path -Path (Split-Path -Path $LabVIEWExecutablePath -Parent) -ChildPath 'LabVIEW.ini'
+        try {
+            $iniPortRaw = Get-LabVIEWIniValue -IniPath $iniPath -Key 'server.tcp.port'
+            $iniPort = ConvertTo-LabVIEWCliPortNumber -RawValue $iniPortRaw -Source ('{0} (server.tcp.port)' -f $iniPath)
+            if ($null -ne $iniPort) {
+                return [pscustomobject]@{
+                    PortNumber = [int]$iniPort
+                    Source     = '{0} (server.tcp.port)' -f $iniPath
+                }
+            }
+        } catch {
+            Write-Warning ("Unable to resolve LabVIEW CLI port from LabVIEW.ini: {0}" -f $_.Exception.Message)
+        }
+    }
+
+    return [pscustomobject]@{
+        PortNumber = 3363
+        Source     = 'default'
+    }
+}
+
+function Test-LabVIEWPortListening {
+    param(
+        [int]$PortNumber,
+        [int]$ProcessId
+    )
+
+    $netTcpCommand = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+    if (-not $netTcpCommand) {
+        return $false
+    }
+
+    try {
+        $listeners = Get-NetTCPConnection -State Listen -OwningProcess $ProcessId -ErrorAction Stop |
+            Where-Object { $_.LocalPort -eq $PortNumber }
+        return @($listeners).Count -gt 0
+    } catch {
+        return $false
+    }
+}
+
+function Start-LabVIEWForCli {
+    param(
+        [string]$LabVIEWExecutablePath,
+        [int]$PortNumber,
+        [int]$TimeoutSeconds = 120
+    )
+
+    $netTcpCommand = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+    if (-not $netTcpCommand) {
+        Write-Warning "Get-NetTCPConnection is not available; launching LabVIEW and waiting a fixed delay for startup."
+        $process = Start-Process -FilePath $LabVIEWExecutablePath -PassThru
+        Start-Sleep -Seconds 20
+        return $process
+    }
+
+    $existingListener = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalPort -eq $PortNumber } |
+        Select-Object -First 1
+    if ($existingListener) {
+        Write-Host ("Detected existing LabVIEW listener on port {0} (PID {1}); reusing running process." -f $PortNumber, $existingListener.OwningProcess)
+        return $null
+    }
+
+    $process = Start-Process -FilePath $LabVIEWExecutablePath -PassThru
+    Write-Host ("Launched LabVIEW process for parity operations (PID {0})." -f $process.Id)
+
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($stopwatch.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        if ($process.HasExited) {
+            throw ("LabVIEW process exited before opening VI Server port {0}. Exit code: {1}" -f $PortNumber, $process.ExitCode)
+        }
+
+        if (Test-LabVIEWPortListening -PortNumber $PortNumber -ProcessId $process.Id) {
+            Write-Host ("LabVIEW VI Server is listening on port {0} (PID {1})." -f $PortNumber, $process.Id)
+            return $process
+        }
+
+        Start-Sleep -Milliseconds 500
+        $process.Refresh()
+    }
+
+    throw ("Timed out waiting for LabVIEW to listen on port {0} (PID {1})." -f $PortNumber, $process.Id)
+}
+
 function Sync-IconEditorSourcesForBuildSpec {
     param(
         [string]$WorkspaceRootPath,
@@ -269,6 +432,9 @@ if (-not (Get-Command LabVIEWCLI -ErrorAction SilentlyContinue)) {
     Write-Error "LabVIEWCLI is not available on PATH inside the container."
 }
 
+$portResolution = Resolve-LabVIEWCliPort -LabVIEWExecutablePath $LabVIEWPath
+Write-Output ("Using LabVIEWCLI port: {0} (source: {1})" -f $portResolution.PortNumber, $portResolution.Source)
+
 if (-not (Test-Path -LiteralPath $TargetDir -PathType Container)) {
     Write-Error "Target directory does not exist: $TargetDir"
 }
@@ -281,8 +447,11 @@ $excludeFiles = @($excludeRaw.Split(';', [System.StringSplitOptions]::RemoveEmpt
 
 $stagingDir = Join-Path ([System.IO.Path]::GetTempPath()) ("lvie-parity-{0}" -f [Guid]::NewGuid().ToString('N'))
 New-Item -Path $stagingDir -ItemType Directory -Force | Out-Null
+$launchedLabVIEWProcess = $null
 
 try {
+    $launchedLabVIEWProcess = Start-LabVIEWForCli -LabVIEWExecutablePath $LabVIEWPath -PortNumber $portResolution.PortNumber
+
     Copy-Item -Path (Join-Path $TargetDir '*') -Destination $stagingDir -Recurse -Force
     foreach ($relativePath in $excludeFiles) {
         $candidate = Join-Path $stagingDir $relativePath
@@ -303,6 +472,7 @@ try {
         '-OperationName', 'MassCompile',
         '-DirectoryToCompile', $stagingDir,
         '-LabVIEWPath', $LabVIEWPath,
+        '-PortNumber', $portResolution.PortNumber.ToString(),
         '-Headless'
     ) -WorkspaceRootPath $WorkspaceRoot
     if ($massCompile.ExitCode -ne 0) {
@@ -336,6 +506,7 @@ try {
         '-BuildSpecName', $BuildSpecName,
         '-TargetName', $TargetName,
         '-LabVIEWPath', $LabVIEWPath,
+        '-PortNumber', $portResolution.PortNumber.ToString(),
         '-Headless'
     ) -WorkspaceRootPath $WorkspaceRoot
     if ($buildSpec.ExitCode -ne 0) {
@@ -349,6 +520,30 @@ try {
     $buildOutput = Get-Item -LiteralPath $buildOutputPath
     Write-Output ("Build specification completed: {0} ({1} bytes)" -f $buildOutput.FullName, $buildOutput.Length)
 } finally {
+    if ($launchedLabVIEWProcess -and -not $launchedLabVIEWProcess.HasExited) {
+        try {
+            Write-Output ("Closing launched LabVIEW process (PID {0})." -f $launchedLabVIEWProcess.Id)
+            $closeResult = Invoke-LabVIEWCliOperation -OperationName 'CloseLabVIEW' -Arguments @(
+                '-LogToConsole', 'TRUE',
+                '-OperationName', 'CloseLabVIEW',
+                '-LabVIEWPath', $LabVIEWPath,
+                '-PortNumber', $portResolution.PortNumber.ToString()
+            ) -WorkspaceRootPath $WorkspaceRoot
+
+            if ($closeResult.ExitCode -ne 0) {
+                Write-Warning ("CloseLabVIEW returned exit code {0} for PID {1}." -f $closeResult.ExitCode, $launchedLabVIEWProcess.Id)
+            }
+
+            Start-Sleep -Seconds 2
+            $launchedLabVIEWProcess.Refresh()
+            if (-not $launchedLabVIEWProcess.HasExited) {
+                Write-Warning ("Launched LabVIEW process PID {0} is still running after CloseLabVIEW." -f $launchedLabVIEWProcess.Id)
+            }
+        } catch {
+            Write-Warning ("Failed to close launched LabVIEW process PID {0}: {1}" -f $launchedLabVIEWProcess.Id, $_.Exception.Message)
+        }
+    }
+
     if (Test-Path -LiteralPath $stagingDir) {
         Remove-Item -LiteralPath $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
     }
