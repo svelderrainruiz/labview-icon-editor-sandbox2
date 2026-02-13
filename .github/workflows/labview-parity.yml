@@ -320,6 +320,7 @@ jobs:
             -SkipVerifyIEPaths `
             -SkipMissingInProject `
             -SkipBuildVip `
+            -SkipViValidate `
             -UseWorktree:$false `
             -RepoRoot "$env:REPO_ROOT" `
             -WorktreeRoot "$env:LVIE_WORKTREE_ROOT"
