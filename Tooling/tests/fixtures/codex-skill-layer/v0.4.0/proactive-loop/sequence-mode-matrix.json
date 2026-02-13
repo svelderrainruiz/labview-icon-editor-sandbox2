@@ -1,0 +1,39 @@
+{
+  "modes": [
+    {
+      "name": "baseline",
+      "expected_stage_order": [
+        "if (-not $SkipBuildPpl) {",
+        "if (-not $SkipUnitTests) {"
+      ],
+      "required_contract_markers": [
+        "Deferred PPL failures detected",
+        "Continuing to unit tests"
+      ]
+    },
+    {
+      "name": "sequence",
+      "expected_stage_order": [
+        "$sequenceDiagnostics.stage_order_observed += 'build_pass1'",
+        "$sequenceDiagnostics.stage_order_observed += 'unit_tests'",
+        "$sequenceDiagnostics.stage_order_observed += 'build_pass2'",
+        "$sequenceDiagnostics.stage_order_observed += 'rename'"
+      ],
+      "required_contract_markers": [
+        "EnableSingleBitnessRecoverySequence cannot be combined with -SkipBuildPpl.",
+        "EnableSingleBitnessRecoverySequence cannot be combined with -SkipUnitTests.",
+        "EnableSingleBitnessRecoverySequence requires a single LabVIEW bitness."
+      ],
+      "required_heuristics": [
+        "SEQ_SUCCESS",
+        "SEQ_EXPECTED_PASS1_FAILURE_MISSED",
+        "SEQ_PPL_FAIL_ONLY",
+        "SEQ_UNIT_FAIL_ONLY",
+        "SEQ_BOTH_FAIL",
+        "SEQ_PASS2_FAIL",
+        "SEQ_RENAME_FAIL",
+        "SEQ_CONTRACT_DRIFT"
+      ]
+    }
+  ]
+}

@@ -37,7 +37,7 @@ if ($result.Installed) {
     repo = [string]$state.Lock.repo
     tag = [string]$state.Lock.tag
     asset_name = [string]$state.Lock.asset_name
-    sha256 = [string]$state.Lock.sha256
+    sha256 = [string]$state.Lock.asset_sha256
     version_root = $result.VersionRoot
     installed = [bool]$result.Installed
 }
