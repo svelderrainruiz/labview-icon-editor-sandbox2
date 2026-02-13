@@ -28,6 +28,10 @@ Describe 'Test-CiPipelineSelectorDevModeContract.ps1' {
                 'name: CI Composite'
                 'jobs: {}'
             ) -join [Environment]::NewLine
+            '.github/workflows/labview-parity.yml' = @(
+                'name: LabVIEW Parity'
+                'jobs: {}'
+            ) -join [Environment]::NewLine
             '.github/workflows/labview-container-parity.yml' = @(
                 'name: Container Parity'
                 'jobs: {}'

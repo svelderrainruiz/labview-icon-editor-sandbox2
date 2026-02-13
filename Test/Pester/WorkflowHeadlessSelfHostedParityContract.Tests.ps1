@@ -14,11 +14,15 @@ Describe 'Workflow headless self-hosted parity contract' {
         $script:workflowContent = Get-Content -Path $script:workflowPath -Raw
     }
 
-    It 'uses workflow_dispatch and develop push triggers on the self-hosted runner label contract' {
+    It 'uses workflow_dispatch-only trigger on the self-hosted runner label contract' {
         $script:workflowContent | Should -Match 'workflow_dispatch:'
-        $script:workflowContent | Should -Match 'push:'
-        $script:workflowContent | Should -Match 'branches:\s*\r?\n\s*-\s*develop'
-        $script:workflowContent | Should -Match "runs-on:\s*\$\{\{\s*vars\.LVIE_RUNNER_LABEL\s*\|\|\s*'self-hosted-windows-lv'\s*\}\}"
+        $script:workflowContent | Should -Not -Match '(?m)^\s*push\s*:'
+        $script:workflowContent | Should -Match 'runs-on:\s*\$\{\{\s*vars\.LVIE_RUNNER_LABEL'
+    }
+
+    It 'documents transitional status toward canonical labview-parity workflow' {
+        $script:workflowContent | Should -Match 'Transitional workflow note'
+        $script:workflowContent | Should -Match 'canonical parity execution is moving to \.github/workflows/labview-parity\.yml'
     }
 
     It 'acquires lock + worktree via lvie-job-setup for 64-bit parity runs' {

@@ -14,6 +14,7 @@ $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 $allTargetFiles = @(
     '.github/workflows/ci.yml',
     '.github/workflows/ci-composite.yml',
+    '.github/workflows/labview-parity.yml',
     '.github/workflows/labview-container-parity.yml',
     '.github/workflows/development-mode-toggle.yml',
     'Tooling/container-parity/runlabview-windows.ps1',
@@ -24,6 +25,7 @@ $targetFiles = switch ($Scope) {
     'ci-only' {
         @(
             '.github/workflows/ci.yml',
+            '.github/workflows/labview-parity.yml',
             '.github/workflows/labview-container-parity.yml',
             '.github/workflows/development-mode-toggle.yml',
             'Tooling/container-parity/runlabview-windows.ps1',
@@ -43,6 +45,7 @@ $ruleList = @(
         Files   = @(
             '.github/workflows/ci.yml',
             '.github/workflows/ci-composite.yml',
+            '.github/workflows/labview-parity.yml',
             '.github/workflows/labview-container-parity.yml',
             '.github/workflows/development-mode-toggle.yml'
         )
@@ -54,6 +57,7 @@ $ruleList = @(
         Files   = @(
             '.github/workflows/ci.yml',
             '.github/workflows/ci-composite.yml',
+            '.github/workflows/labview-parity.yml',
             '.github/workflows/labview-container-parity.yml'
         )
     },
@@ -71,6 +75,7 @@ $ruleList = @(
         Message = 'Container parity workflows must not call devmode-linux.sh.'
         Files   = @(
             '.github/workflows/ci-composite.yml',
+            '.github/workflows/labview-parity.yml',
             '.github/workflows/labview-container-parity.yml'
         )
     },
