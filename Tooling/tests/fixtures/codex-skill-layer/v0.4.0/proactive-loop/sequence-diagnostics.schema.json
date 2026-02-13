@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/lvie/proactive-loop/sequence-diagnostics.schema.json",
+  "title": "LVIE Sequence Diagnostics",
+  "type": "object",
+  "required": [
+    "mode",
+    "bitness",
+    "timestamps",
+    "stage_order_observed",
+    "build_pass1",
+    "unit_tests",
+    "build_pass2",
+    "rename",
+    "heuristic_code",
+    "heuristic_reason"
+  ],
+  "properties": {
+    "mode": { "type": "string" },
+    "bitness": { "type": ["string", "integer"] },
+    "attempt": { "type": ["string", "integer", "null"] },
+    "timestamps": {
+      "type": "object",
+      "required": ["start_utc", "end_utc"],
+      "properties": {
+        "start_utc": { "type": "string", "format": "date-time" },
+        "end_utc": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "stage_order_observed": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "forced_faults_applied": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "build_pass1": { "$ref": "#/$defs/stage" },
+    "unit_tests": { "$ref": "#/$defs/stage" },
+    "build_pass2": { "$ref": "#/$defs/stage" },
+    "rename": { "$ref": "#/$defs/stage" },
+    "heuristic_code": { "type": ["string", "null"] },
+    "heuristic_reason": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "invoked": { "type": "boolean" },
+        "forced": { "type": "boolean" },
+        "succeeded": { "type": ["boolean", "null"] },
+        "skipped": { "type": ["boolean", "null"] },
+        "exit_code": { "type": ["integer", "null"] },
+        "detail": { "type": ["string", "null"] },
+        "error": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

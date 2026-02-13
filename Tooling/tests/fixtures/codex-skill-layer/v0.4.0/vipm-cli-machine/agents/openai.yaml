@@ -1,0 +1,4 @@
+interface:
+  display_name: "VIPM CLI Machine"
+  short_description: "Safe-first execution of VIPM CLI workflows."
+  default_prompt: "Use VIPM CLI on this Windows machine with .lvversion-aware defaults, probe-vs-run safety gates, and deterministic command/result capture for build/install/list/search/version tasks."
