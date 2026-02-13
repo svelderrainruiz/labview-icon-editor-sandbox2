@@ -92,4 +92,11 @@ Describe 'BuildProjectSpec container parity contract' {
         $portMatchCount = [regex]::Matches($script:windowsParityContent, "'-PortNumber'")
         $portMatchCount.Count | Should -BeGreaterThan 1
     }
+
+    It 'keeps LabVIEW prelaunch enabled for self-hosted and disabled for container workspace by default' {
+        $script:windowsParityContent | Should -Match 'function\s+Should-PrelaunchLabVIEWForCli'
+        $script:windowsParityContent | Should -Match 'C:\\workspace'
+        $script:windowsParityContent | Should -Match 'LVIE_PRELAUNCH_LABVIEW_FOR_CLI'
+        $script:windowsParityContent | Should -Match 'Skipping LabVIEW prelaunch for CLI operations in container workspace mode\.'
+    }
 }
