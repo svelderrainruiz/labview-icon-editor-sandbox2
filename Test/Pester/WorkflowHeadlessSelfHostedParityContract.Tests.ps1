@@ -48,24 +48,23 @@ Describe 'Workflow headless self-hosted parity contract' {
         $script:workflowContent | Should -Match '-SkipBuildVip'
     }
 
-    It 'uses host-native runlabview-windows parity flow in canonical workflow' {
-        $script:canonicalWorkflowContent | Should -Match 'name:\s*Resolve LabVIEW executable path \(64-bit\)'
-        $script:canonicalWorkflowContent | Should -Match 'Tooling\\support\\LabVIEWExecutablePath\.ps1'
-        $script:canonicalWorkflowContent | Should -Match 'name:\s*Run host-native parity script \(64-bit\)'
-        $script:canonicalWorkflowContent | Should -Match 'Tooling\\container-parity\\runlabview-windows\.ps1'
-        $script:canonicalWorkflowContent | Should -Match 'CONTAINER_PARITY_BUILD_SPEC'
+    It 'uses runner-cli parity context/run flow in canonical workflow self-hosted lane' {
+        $script:canonicalWorkflowContent | Should -Match 'name:\s*Resolve parity context via runner-cli'
+        $script:canonicalWorkflowContent | Should -Match 'parity context'
+        $script:canonicalWorkflowContent | Should -Match 'name:\s*Run parity lane via runner-cli \(self-hosted-windows\)'
+        $script:canonicalWorkflowContent | Should -Match '--mode self-hosted-windows'
         $script:canonicalWorkflowContent | Should -Not -Match 'Run-CICompositeLocal-Auto\.ps1'
     }
 
-    It 'adds a fail-fast project LVVersion gate before parity execution' {
-        $script:workflowContent | Should -Match 'name:\s*Assert project LVVersion contract'
+    It 'adds a fail-fast .lvversion gate before parity execution' {
+        $script:workflowContent | Should -Match 'name:\s*Assert \.lvversion contract'
         $script:workflowContent | Should -Match 'Assert-LabVIEWVersion\.ps1'
-        $script:workflowContent | Should -Match '-EnforceProjectLvVersion'
-        $script:workflowContent | Should -Match '-ProjectPath\s+"\$env:PROJECT_PATH"'
-        $script:workflowContent | Should -Match "-Context\s+'headless-project-contract'"
+        $script:workflowContent | Should -Not -Match '-EnforceProjectLvVersion'
+        $script:workflowContent | Should -Not -Match '-ProjectPath\s+"\$env:PROJECT_PATH"'
+        $script:workflowContent | Should -Match "-Context\s+'headless-version-contract'"
 
         $setupIndex = $script:workflowContent.IndexOf('name: Job setup', [System.StringComparison]::Ordinal)
-        $gateIndex = $script:workflowContent.IndexOf('name: Assert project LVVersion contract', [System.StringComparison]::Ordinal)
+        $gateIndex = $script:workflowContent.IndexOf('name: Assert .lvversion contract', [System.StringComparison]::Ordinal)
         $runIndex = $script:workflowContent.IndexOf('name: Run headless local parity sequence (64-bit)', [System.StringComparison]::Ordinal)
 
         $setupIndex | Should -BeGreaterThan -1
