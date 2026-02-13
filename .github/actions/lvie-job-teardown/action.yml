@@ -70,7 +70,7 @@ runs:
         if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
           Write-Warning "labview_version not provided; using .lvversion ($($lvInfo.Raw))."
         }
-        $labviewVersion = $lvInfo.Year
+        $labviewVersion = $lvInfo.Raw
         & "$repoRoot\\.github\\actions\\revert-development-mode\\RevertDevelopmentMode.ps1" `
           -LabVIEWVersion $labviewVersion `
           -SupportedBitness $bitness `
@@ -113,7 +113,7 @@ runs:
         if ([string]::IsNullOrWhiteSpace($labviewVersion)) {
           Write-Warning "labview_version not provided; using .lvversion ($($lvInfo.Raw))."
         }
-        $labviewVersion = $lvInfo.Year
+        $labviewVersion = $lvInfo.Raw
         & "$repoRoot\\.github\\actions\\close-labview\\Close_LabVIEW.ps1" `
           -LabVIEWVersion $labviewVersion `
           -SupportedBitness $bitness
