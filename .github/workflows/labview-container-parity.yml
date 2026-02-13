@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       lv_release:
-        description: LabVIEW container release tag (for example, 2026q1)
+        description: Optional LabVIEW release tag override (for example, 2020q1). Defaults from .lvversion.
         required: false
-        default: "2026q1"
+        type: string
       run_build_spec:
         description: Run ExecuteBuildSpec parity for Editor Packed Library
         required: false

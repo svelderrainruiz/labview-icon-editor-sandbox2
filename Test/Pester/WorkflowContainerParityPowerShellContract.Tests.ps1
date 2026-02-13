@@ -24,10 +24,11 @@ Describe 'Workflow container parity PowerShell contract' {
     It 'adds path-contract preflight before Windows parity run in labview-parity.yml' {
         $script:canonicalContent | Should -Match 'Validate path contract for Windows container shell'
         $script:canonicalContent | Should -Match 'pwsh -NoProfile -File "\$env:GITHUB_WORKSPACE\\Tooling\\Test-PathContract\.ps1" -WriteSummary'
-        $script:canonicalContent | Should -Match 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\\workspace\\Tooling\\container-parity\\runlabview-windows\.ps1'
+        $script:canonicalContent | Should -Match 'Run parity lane via runner-cli \(windows-container\)'
+        $script:canonicalContent | Should -Match '--mode windows-container'
 
         $preflightIndex = $script:canonicalContent.IndexOf('Validate path contract for Windows container shell')
-        $runIndex = $script:canonicalContent.IndexOf('Run LabVIEWCLI parity script (Windows)')
+        $runIndex = $script:canonicalContent.IndexOf('Run parity lane via runner-cli (windows-container)')
         $preflightIndex | Should -BeGreaterThan -1
         $runIndex | Should -BeGreaterThan -1
         $preflightIndex | Should -BeLessThan $runIndex
