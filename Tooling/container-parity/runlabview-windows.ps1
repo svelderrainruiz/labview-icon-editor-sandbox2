@@ -210,6 +210,33 @@ function Start-LabVIEWForCli {
     throw ("Timed out waiting for LabVIEW to listen on port {0} (PID {1})." -f $PortNumber, $process.Id)
 }
 
+function Should-PrelaunchLabVIEWForCli {
+    param(
+        [string]$WorkspaceRootPath
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($env:LVIE_PRELAUNCH_LABVIEW_FOR_CLI)) {
+        $explicit = $null
+        if ([bool]::TryParse($env:LVIE_PRELAUNCH_LABVIEW_FOR_CLI, [ref]$explicit)) {
+            return [bool]$explicit
+        }
+    }
+
+    # Windows container parity mounts the repo at C:\workspace. In that mode,
+    # direct LabVIEW prelaunch can fail to expose a listening VI Server port.
+    # Keep prelaunch enabled for self-hosted parity unless explicitly overridden.
+    try {
+        $normalizedWorkspace = [System.IO.Path]::GetFullPath($WorkspaceRootPath).TrimEnd('\', '/')
+        if ($normalizedWorkspace.Equals('C:\workspace', [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $false
+        }
+    } catch {
+        # If normalization fails, default to enabling prelaunch for safety.
+    }
+
+    return $true
+}
+
 function Sync-IconEditorSourcesForBuildSpec {
     param(
         [string]$WorkspaceRootPath,
@@ -450,7 +477,12 @@ New-Item -Path $stagingDir -ItemType Directory -Force | Out-Null
 $launchedLabVIEWProcess = $null
 
 try {
-    $launchedLabVIEWProcess = Start-LabVIEWForCli -LabVIEWExecutablePath $LabVIEWPath -PortNumber $portResolution.PortNumber
+    $shouldPrelaunch = Should-PrelaunchLabVIEWForCli -WorkspaceRootPath $WorkspaceRoot
+    if ($shouldPrelaunch) {
+        $launchedLabVIEWProcess = Start-LabVIEWForCli -LabVIEWExecutablePath $LabVIEWPath -PortNumber $portResolution.PortNumber
+    } else {
+        Write-Output "Skipping LabVIEW prelaunch for CLI operations in container workspace mode."
+    }
 
     Copy-Item -Path (Join-Path $TargetDir '*') -Destination $stagingDir -Recurse -Force
     foreach ($relativePath in $excludeFiles) {
