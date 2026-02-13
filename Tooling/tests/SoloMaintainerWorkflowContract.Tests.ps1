@@ -47,12 +47,6 @@ Describe 'Test-SoloMaintainerWorkflowContract.ps1' {
                 '  workflow_dispatch:'
                 'jobs: {}'
             ) -join [Environment]::NewLine
-            'labview-container-parity.yml' = @(
-                'name: Container Parity'
-                'on:'
-                '  workflow_dispatch:'
-                'jobs: {}'
-            ) -join [Environment]::NewLine
             'development-mode-toggle.yml' = @(
                 'name: Toggle Development Mode'
                 'on:'

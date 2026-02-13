@@ -7,17 +7,15 @@ Describe 'Workflow container parity PowerShell contract' {
     BeforeAll {
         $script:repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..')).Path
         $script:canonicalWorkflowPath = Join-Path $script:repoRoot '.github\workflows\labview-parity.yml'
-        $script:wrapperWorkflowPath = Join-Path $script:repoRoot '.github\workflows\labview-container-parity.yml'
         $script:ciCompositeWorkflowPath = Join-Path $script:repoRoot '.github\workflows\ci-composite.yml'
 
-        foreach ($path in @($script:canonicalWorkflowPath, $script:wrapperWorkflowPath, $script:ciCompositeWorkflowPath)) {
+        foreach ($path in @($script:canonicalWorkflowPath, $script:ciCompositeWorkflowPath)) {
             if (-not (Test-Path -Path $path -PathType Leaf)) {
                 throw "Required workflow file not found: $path"
             }
         }
 
         $script:canonicalContent = Get-Content -Path $script:canonicalWorkflowPath -Raw
-        $script:wrapperContent = Get-Content -Path $script:wrapperWorkflowPath -Raw
         $script:ciCompositeContent = Get-Content -Path $script:ciCompositeWorkflowPath -Raw
     }
 
@@ -51,11 +49,8 @@ Describe 'Workflow container parity PowerShell contract' {
         $preflightIndex | Should -BeLessThan $buildIndex
     }
 
-    It 'keeps the legacy workflow as a forwarding wrapper to labview-parity.yml' {
-        $script:wrapperContent | Should -Match 'name:\s*LabVIEW Container Parity \(Compatibility Wrapper\)'
-        $script:wrapperContent | Should -Match 'uses:\s*\./\.github/workflows/labview-parity\.yml'
-        $script:wrapperContent | Should -Match 'run_self_hosted:'
-        $script:wrapperContent | Should -Match 'expected_sha:'
-        $script:wrapperContent | Should -Match 'expected_sha:\s*\$\{\{ inputs\.expected_sha \}\}'
+    It 'removes the legacy wrapper workflow after canonical parity acceptance' {
+        $wrapperWorkflowPath = Join-Path $script:repoRoot '.github\workflows\labview-container-parity.yml'
+        Test-Path -Path $wrapperWorkflowPath -PathType Leaf | Should -BeFalse
     }
 }

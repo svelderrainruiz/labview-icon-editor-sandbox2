@@ -15,7 +15,6 @@ $allTargetFiles = @(
     '.github/workflows/ci.yml',
     '.github/workflows/ci-composite.yml',
     '.github/workflows/labview-parity.yml',
-    '.github/workflows/labview-container-parity.yml',
     '.github/workflows/development-mode-toggle.yml',
     'Tooling/container-parity/runlabview-windows.ps1',
     'Tooling/container-parity/runlabview-linux.sh'
@@ -26,7 +25,6 @@ $targetFiles = switch ($Scope) {
         @(
             '.github/workflows/ci.yml',
             '.github/workflows/labview-parity.yml',
-            '.github/workflows/labview-container-parity.yml',
             '.github/workflows/development-mode-toggle.yml',
             'Tooling/container-parity/runlabview-windows.ps1',
             'Tooling/container-parity/runlabview-linux.sh'
@@ -46,7 +44,6 @@ $ruleList = @(
             '.github/workflows/ci.yml',
             '.github/workflows/ci-composite.yml',
             '.github/workflows/labview-parity.yml',
-            '.github/workflows/labview-container-parity.yml',
             '.github/workflows/development-mode-toggle.yml'
         )
     },
@@ -57,8 +54,7 @@ $ruleList = @(
         Files   = @(
             '.github/workflows/ci.yml',
             '.github/workflows/ci-composite.yml',
-            '.github/workflows/labview-parity.yml',
-            '.github/workflows/labview-container-parity.yml'
+            '.github/workflows/labview-parity.yml'
         )
     },
     [pscustomobject]@{
@@ -75,8 +71,7 @@ $ruleList = @(
         Message = 'Container parity workflows must not call devmode-linux.sh.'
         Files   = @(
             '.github/workflows/ci-composite.yml',
-            '.github/workflows/labview-parity.yml',
-            '.github/workflows/labview-container-parity.yml'
+            '.github/workflows/labview-parity.yml'
         )
     },
     [pscustomobject]@{

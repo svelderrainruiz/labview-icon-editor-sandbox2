@@ -1,6 +1,6 @@
 # LabVIEW Container Parity Lane
 
-This repository includes a hosted parity workflow at `.github/workflows/labview-container-parity.yml`.
+This repository includes a hosted parity workflow at `.github/workflows/labview-parity.yml`.
 
 ## Purpose
 
@@ -65,7 +65,7 @@ LabVIEWCLI operation logs are captured and uploaded per OS as diagnostics:
 
 Manual run:
 
-1. Open Actions and run **LabVIEW Container Parity**.
+1. Open Actions and run **LabVIEW Parity**.
 2. Optionally set `lv_release` (for example `2026q1`).
 3. Leave `run_build_spec=true` (default) to keep packed-library parity enabled; set it to `false` only when intentionally bypassing build-spec execution.
 

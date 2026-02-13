@@ -39,7 +39,7 @@ Optional helper:
 ## Allowed Manual Workflows
 
 - `.github/workflows/development-mode-toggle.yml`
-- `.github/workflows/labview-container-parity.yml`
+- `.github/workflows/labview-parity.yml`
 - `.github/workflows/runner-audit.yml`
 - Collaboration-heavy workflows that are manual-only in solo mode:
   - `.github/workflows/stale-issues.yml`
