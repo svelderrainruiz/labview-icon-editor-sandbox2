@@ -243,4 +243,4 @@ if (-not (Wait-ForLabVIEWExit -Version $labviewYear -Bitness $SupportedBitness -
 
 Write-Host "LabVIEW $labviewYear ($SupportedBitness-bit) closed or not running."
 Write-CloseMetric -Outcome $closeOutcome -HadProcess $true
-
+exit 0
