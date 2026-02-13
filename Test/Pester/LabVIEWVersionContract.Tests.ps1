@@ -26,25 +26,6 @@ Describe 'LabVIEW version contract' {
             Set-Content -Path (Join-Path $root '.lvversion') -Value $Version -Encoding ascii
             return $root
         }
-
-        function script:Write-ProjectFile {
-            param(
-                [Parameter(Mandatory = $true)]
-                [string]$RepoRoot,
-
-                [Parameter(Mandatory = $true)]
-                [string]$RelativePath,
-
-                [Parameter(Mandatory = $true)]
-                [string]$ProjectXml
-            )
-
-            $projectPath = Join-Path $RepoRoot $RelativePath
-            $projectDir = Split-Path -Path $projectPath -Parent
-            New-Item -Path $projectDir -ItemType Directory -Force | Out-Null
-            Set-Content -Path $projectPath -Value $ProjectXml -Encoding ascii
-            return $projectPath
-        }
     }
 
     $envVars = @(
@@ -108,63 +89,9 @@ Describe 'LabVIEW version contract' {
         { & $script:assertScript -RepoRoot $root } | Should -Not -Throw
     }
 
-    It 'passes project LVVersion gate when lvproj matches .lvversion and parent path equals repo root' {
+    It 'accepts deprecated project contract parameters as no-op compatibility' {
         $root = & $script:newTempRepo -Version '21.0' -VersionHelperPath $script:versionHelper
-        $projectPath = Write-ProjectFile `
-            -RepoRoot $root `
-            -RelativePath 'lv_icon_editor.lvproj' `
-            -ProjectXml "<?xml version='1.0' encoding='UTF-8'?><Project Type='Project' LVVersion='21008000'></Project>"
-
-        { & $script:assertScript -RepoRoot $root -ProjectPath $projectPath -EnforceProjectLvVersion } | Should -Not -Throw
-    }
-
-    It 'fails project LVVersion gate when lvproj LVVersion mismatches .lvversion' {
-        $root = & $script:newTempRepo -Version '21.0' -VersionHelperPath $script:versionHelper
-        $projectPath = Write-ProjectFile `
-            -RepoRoot $root `
-            -RelativePath 'lv_icon_editor.lvproj' `
-            -ProjectXml "<?xml version='1.0' encoding='UTF-8'?><Project Type='Project' LVVersion='20008000'></Project>"
-
-        { & $script:assertScript -RepoRoot $root -ProjectPath $projectPath -EnforceProjectLvVersion } | Should -Throw
-    }
-
-    It 'fails project LVVersion gate when LVVersion attribute is missing' {
-        $root = & $script:newTempRepo -Version '21.0' -VersionHelperPath $script:versionHelper
-        $projectPath = Write-ProjectFile `
-            -RepoRoot $root `
-            -RelativePath 'lv_icon_editor.lvproj' `
-            -ProjectXml "<?xml version='1.0' encoding='UTF-8'?><Project Type='Project'></Project>"
-
-        { & $script:assertScript -RepoRoot $root -ProjectPath $projectPath -EnforceProjectLvVersion } | Should -Throw
-    }
-
-    It 'fails project LVVersion gate when LVVersion is malformed' {
-        $root = & $script:newTempRepo -Version '21.0' -VersionHelperPath $script:versionHelper
-        $projectPath = Write-ProjectFile `
-            -RepoRoot $root `
-            -RelativePath 'lv_icon_editor.lvproj' `
-            -ProjectXml "<?xml version='1.0' encoding='UTF-8'?><Project Type='Project' LVVersion='21AB8000'></Project>"
-
-        { & $script:assertScript -RepoRoot $root -ProjectPath $projectPath -EnforceProjectLvVersion } | Should -Throw
-    }
-
-    It 'fails project LVVersion gate when project parent path does not match RepoRoot' {
-        $root = & $script:newTempRepo -Version '21.0' -VersionHelperPath $script:versionHelper
-        $projectPath = Write-ProjectFile `
-            -RepoRoot $root `
-            -RelativePath 'nested\lv_icon_editor.lvproj' `
-            -ProjectXml "<?xml version='1.0' encoding='UTF-8'?><Project Type='Project' LVVersion='21008000'></Project>"
-
-        { & $script:assertScript -RepoRoot $root -ProjectPath $projectPath -EnforceProjectLvVersion } | Should -Throw
-    }
-
-    It 'does not enforce project LVVersion gate when switch is not set' {
-        $root = & $script:newTempRepo -Version '21.0' -VersionHelperPath $script:versionHelper
-        Write-ProjectFile `
-            -RepoRoot $root `
-            -RelativePath 'nested\lv_icon_editor.lvproj' `
-            -ProjectXml "<?xml version='1.0' encoding='UTF-8'?><Project Type='Project' LVVersion='20008000'></Project'" | Out-Null
-
-        { & $script:assertScript -RepoRoot $root } | Should -Not -Throw
+        $missingProjectPath = Join-Path $root 'nested\missing.lvproj'
+        { & $script:assertScript -RepoRoot $root -ProjectPath $missingProjectPath -EnforceProjectLvVersion } | Should -Not -Throw
     }
 }
