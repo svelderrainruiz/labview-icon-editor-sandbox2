@@ -417,7 +417,7 @@ function Get-SequenceDiagnosticsPath {
     return Join-Path $LogRoot $fileName
 }
 
-function Write-SequenceDiagnostics {
+function Write-SequenceDiagnostic {
     param(
         [Parameter(Mandatory = $true)]
         [hashtable]$Diagnostics,
@@ -1983,7 +1983,7 @@ try {
             $sequenceDiagnostics.heuristic_code = $heuristic.Code
             $sequenceDiagnostics.heuristic_reason = $heuristic.Reason
             $sequenceDiagnostics.timestamps.end_utc = (Get-Date).ToUniversalTime().ToString('o')
-            Write-SequenceDiagnostics -Diagnostics $sequenceDiagnostics -Path $sequenceDiagnosticsPath
+            Write-SequenceDiagnostic -Diagnostics $sequenceDiagnostics -Path $sequenceDiagnosticsPath
             $env:LVIE_SEQUENCE_HEURISTIC_CODE = $heuristic.Code
             $env:LVIE_SEQUENCE_DIAGNOSTICS_PATH = $sequenceDiagnosticsPath
             throw ("{0} Fix RunUnitTests.ps1 in the run repo before executing sequence mode." -f $heuristic.Reason)
@@ -2059,7 +2059,7 @@ try {
             $sequenceDiagnostics.heuristic_code = $heuristic.Code
             $sequenceDiagnostics.heuristic_reason = $heuristic.Reason
             $sequenceDiagnostics.timestamps.end_utc = (Get-Date).ToUniversalTime().ToString('o')
-            Write-SequenceDiagnostics -Diagnostics $sequenceDiagnostics -Path $sequenceDiagnosticsPath
+            Write-SequenceDiagnostic -Diagnostics $sequenceDiagnostics -Path $sequenceDiagnosticsPath
             $env:LVIE_SEQUENCE_HEURISTIC_CODE = $heuristic.Code
             $env:LVIE_SEQUENCE_DIAGNOSTICS_PATH = $sequenceDiagnosticsPath
             throw $heuristic.Reason
@@ -2214,7 +2214,7 @@ try {
         $sequenceDiagnostics.heuristic_code = $heuristic.Code
         $sequenceDiagnostics.heuristic_reason = $heuristic.Reason
         $sequenceDiagnostics.timestamps.end_utc = (Get-Date).ToUniversalTime().ToString('o')
-        Write-SequenceDiagnostics -Diagnostics $sequenceDiagnostics -Path $sequenceDiagnosticsPath
+        Write-SequenceDiagnostic -Diagnostics $sequenceDiagnostics -Path $sequenceDiagnosticsPath
         $env:LVIE_SEQUENCE_HEURISTIC_CODE = $heuristic.Code
         $env:LVIE_SEQUENCE_DIAGNOSTICS_PATH = $sequenceDiagnosticsPath
 

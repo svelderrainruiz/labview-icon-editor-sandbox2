@@ -210,7 +210,7 @@ function Start-LabVIEWForCli {
     throw ("Timed out waiting for LabVIEW to listen on port {0} (PID {1})." -f $PortNumber, $process.Id)
 }
 
-function Should-PrelaunchLabVIEWForCli {
+function Test-LabVIEWPrelaunchForCli {
     param(
         [string]$WorkspaceRootPath
     )
@@ -231,6 +231,7 @@ function Should-PrelaunchLabVIEWForCli {
             return $false
         }
     } catch {
+        Write-Verbose ("Unable to normalize workspace path '{0}' for prelaunch detection: {1}" -f $WorkspaceRootPath, $_.Exception.Message)
         # If normalization fails, default to enabling prelaunch for safety.
     }
 
@@ -477,7 +478,7 @@ New-Item -Path $stagingDir -ItemType Directory -Force | Out-Null
 $launchedLabVIEWProcess = $null
 
 try {
-    $shouldPrelaunch = Should-PrelaunchLabVIEWForCli -WorkspaceRootPath $WorkspaceRoot
+    $shouldPrelaunch = Test-LabVIEWPrelaunchForCli -WorkspaceRootPath $WorkspaceRoot
     if ($shouldPrelaunch) {
         $launchedLabVIEWProcess = Start-LabVIEWForCli -LabVIEWExecutablePath $LabVIEWPath -PortNumber $portResolution.PortNumber
     } else {
