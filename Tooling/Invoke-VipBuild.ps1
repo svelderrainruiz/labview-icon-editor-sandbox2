@@ -182,8 +182,13 @@ if (Test-Path -Path $versionHelper) {
     $repoInfo = Get-LabVIEWVersionInfo -RepoRoot $resolvedRepoRoot
     $inputProvided = $PSBoundParameters.ContainsKey('LabVIEWVersion') -and $LabVIEWVersion -ne 0
     if ($inputProvided) {
-        $inputInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $resolvedRepoRoot
+        $versionInput = [string]$LabVIEWVersion
+        if ($PSBoundParameters.ContainsKey('LabVIEWMinorRevision')) {
+            $versionInput = "{0}.{1}" -f $LabVIEWVersion, $LabVIEWMinorRevision
+        }
+        $inputInfo = Get-LabVIEWVersionInfo -VersionInput $versionInput -RepoRoot $resolvedRepoRoot
         $LabVIEWVersion = [int]$inputInfo.Year
+        $LabVIEWMinorRevision = [int]$inputInfo.MinorRevision
     } else {
         $LabVIEWVersion = [int]$repoInfo.Year
         Write-Warning "LabVIEWVersion not provided; defaulting to .lvversion ($($repoInfo.Raw))."
