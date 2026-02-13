@@ -10,10 +10,37 @@ Describe 'LUnit (dev mode, no LabVIEW) integration' {
         $script:bitnessesToTest = @()
         $script:projectFile = $null
         $script:runDevModeTests = $false
+        $script:labviewNumericVersion = ''
+        $script:hasLabVIEWCli = $false
+        $script:hasGcli = $false
+        $script:enableGcliFallback = $false
+        $script:lunitBackendMode = 'labviewcli'
+        $script:lunitBackendSource = 'default:labviewcli'
+        $script:stageLogRoot = Join-Path $PSScriptRoot 'tmp\lunit-stage-logs'
 
         if (-not [string]::IsNullOrWhiteSpace($env:RUN_DEV_MODE_TESTS)) {
             $flag = $env:RUN_DEV_MODE_TESTS.Trim().ToLowerInvariant()
             $script:runDevModeTests = @('1', 'true', 'yes', 'y') -contains $flag
+        }
+        if (-not [string]::IsNullOrWhiteSpace($env:LVIE_ENABLE_GCLI_LUNIT_FALLBACK)) {
+            $fallbackFlag = $env:LVIE_ENABLE_GCLI_LUNIT_FALLBACK.Trim().ToLowerInvariant()
+            $script:enableGcliFallback = @('1', 'true', 'yes', 'y', 'on') -contains $fallbackFlag
+        }
+        $backendRaw = [Environment]::GetEnvironmentVariable('LVIE_LUNIT_BACKEND')
+        if (-not [string]::IsNullOrWhiteSpace($backendRaw)) {
+            $normalizedBackend = $backendRaw.Trim().ToLowerInvariant()
+            if (@('labviewcli', 'gcli') -contains $normalizedBackend) {
+                $script:lunitBackendMode = $normalizedBackend
+                $script:lunitBackendSource = '$env:LVIE_LUNIT_BACKEND'
+            } else {
+                Write-Warning ("Ignoring invalid LVIE_LUNIT_BACKEND value '{0}' for integration test setup." -f $backendRaw)
+            }
+        } elseif (-not [string]::IsNullOrWhiteSpace($env:LVIE_FORCE_GCLI_LUNIT)) {
+            $forceRaw = $env:LVIE_FORCE_GCLI_LUNIT.Trim().ToLowerInvariant()
+            if (@('1', 'true', 'yes', 'y', 'on') -contains $forceRaw) {
+                $script:lunitBackendMode = 'gcli'
+                $script:lunitBackendSource = '$env:LVIE_FORCE_GCLI_LUNIT'
+            }
         }
 
         $script:repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -34,6 +61,15 @@ Describe 'LUnit (dev mode, no LabVIEW) integration' {
             $script:labviewVersion = if ([string]::IsNullOrWhiteSpace($env:LABVIEW_VERSION)) { '2021' } else { $env:LABVIEW_VERSION }
         }
 
+        $versionHelper = Join-Path $script:repoRoot 'Tooling\support\LabVIEWVersion.ps1'
+        if (Test-Path -Path $versionHelper) {
+            . $versionHelper
+            $versionInfo = Get-LabVIEWVersionInfo -VersionInput $versionInput -RepoRoot $script:repoRoot
+            $script:labviewNumericVersion = $versionInfo.NumericVersion
+        } else {
+            $script:labviewNumericVersion = '21.0'
+        }
+
         if (-not $script:runDevModeTests) {
             $script:skipAll = $true
             $script:skipReason = 'Set RUN_DEV_MODE_TESTS=1 to enable this integration test.'
@@ -46,10 +82,25 @@ Describe 'LUnit (dev mode, no LabVIEW) integration' {
             return
         }
 
-        if (-not (Get-Command g-cli -ErrorAction SilentlyContinue)) {
-            $script:skipAll = $true
-            $script:skipReason = 'g-cli not found in PATH.'
-            return
+        $script:hasLabVIEWCli = [bool](Get-Command LabVIEWCLI -ErrorAction SilentlyContinue)
+        $script:hasGcli = [bool](Get-Command g-cli -ErrorAction SilentlyContinue)
+        if ($script:lunitBackendMode -eq 'gcli') {
+            if (-not $script:hasGcli) {
+                $script:skipAll = $true
+                $script:skipReason = "Forced g-cli backend selected ($($script:lunitBackendSource)) but g-cli is not available in PATH."
+                return
+            }
+        } else {
+            if (-not $script:hasLabVIEWCli) {
+                $script:skipAll = $true
+                $script:skipReason = 'LabVIEWCLI is not available in PATH.'
+                return
+            }
+            if ($script:enableGcliFallback -and -not $script:hasGcli) {
+                $script:skipAll = $true
+                $script:skipReason = 'g-cli fallback is enabled for this test but g-cli is not available in PATH.'
+                return
+            }
         }
 
         $script:projectFile = Join-Path $script:repoRoot 'lv_icon_editor.lvproj'
@@ -57,6 +108,25 @@ Describe 'LUnit (dev mode, no LabVIEW) integration' {
             $script:skipAll = $true
             $script:skipReason = "Project file not found: $script:projectFile"
             return
+        }
+
+        function Test-LUnitPackageInstalled {
+            param(
+                [string]$NumericVersion,
+                [ValidateSet('32', '64')]
+                [string]$Bitness,
+                [Parameter(Mandatory = $true)]
+                [string]$PackageId
+            )
+
+            $dbRoot = Join-Path $env:ProgramData 'JKI\VIPM\databases'
+            if (-not (Test-Path -Path $dbRoot -PathType Container)) {
+                return $false
+            }
+
+            $dbFolder = if ($Bitness -eq '64') { "LV $NumericVersion (64-bit)" } else { "LV $NumericVersion" }
+            $pkgPath = Join-Path (Join-Path $dbRoot $dbFolder) $PackageId
+            return (Test-Path -Path $pkgPath -PathType Container)
         }
 
         $bitnessCandidates = Resolve-BitnessList -Bitnesses $null -FallbackInput $script:labviewBitness
@@ -72,12 +142,32 @@ Describe 'LUnit (dev mode, no LabVIEW) integration' {
                 continue
             }
 
+            $canUseLabVIEWCli = Test-LUnitPackageInstalled -NumericVersion $script:labviewNumericVersion -Bitness $bitness -PackageId 'astemes_lib_lunit_cli'
+            $canUseGcli = $script:hasGcli -and (Test-LUnitPackageInstalled -NumericVersion $script:labviewNumericVersion -Bitness $bitness -PackageId 'sas_workshops_lib_lunit_for_g_cli')
+
+            if ($script:lunitBackendMode -eq 'gcli') {
+                if (-not $canUseGcli) {
+                    Write-Warning ("Skipping {0}-bit LUnit; forced g-cli backend requires dependency 'sas_workshops_lib_lunit_for_g_cli' (LV {1})." -f $bitness, $script:labviewNumericVersion)
+                    continue
+                }
+            } else {
+                if (-not $canUseLabVIEWCli) {
+                    Write-Warning ("Skipping {0}-bit LUnit; dependency 'astemes_lib_lunit_cli' is required for LabVIEWCLI mode (LV {1})." -f $bitness, $script:labviewNumericVersion)
+                    continue
+                }
+
+                if ($script:enableGcliFallback -and -not $canUseGcli) {
+                    Write-Warning ("Skipping {0}-bit LUnit; fallback enabled but dependency 'sas_workshops_lib_lunit_for_g_cli' is missing (LV {1})." -f $bitness, $script:labviewNumericVersion)
+                    continue
+                }
+            }
+
             $script:bitnessesToTest += $bitness
         }
 
         if (-not $script:bitnessesToTest -or $script:bitnessesToTest.Count -eq 0) {
             $script:skipAll = $true
-            $script:skipReason = "No LabVIEW $script:labviewVersion installs available for LUnit."
+            $script:skipReason = "No LabVIEW $script:labviewVersion installs available for LUnit (LabVIEWCLI package missing, fallback package missing when enabled, or LabVIEW not installed)."
             return
         }
     }
@@ -88,24 +178,43 @@ Describe 'LUnit (dev mode, no LabVIEW) integration' {
             return
         }
 
-        $results = Invoke-LabVIEWStage `
-            -StageName 'lunit' `
-            -RepoRoot $script:repoRoot `
-            -LabVIEWVersion $script:labviewVersion `
-            -Bitnesses $script:bitnessesToTest `
-            -ConnectTimeoutMs ([int]$script:connectTimeoutMs) `
-            -DevModeNoLabVIEW `
-            -Action {
-                param($context)
-                $unitArgs = @(
-                    '-LabVIEWVersion', $context.LabVIEWVersion,
-                    '-SupportedBitness', $context.Bitness,
-                    '-ProjectPath', $script:projectFile,
-                    '-ConnectTimeoutMs', $context.ConnectTimeoutMs
-                )
-                $run = Invoke-LabVIEWScript -ScriptPath $script:lunitScript -Arguments $unitArgs
-                return $run
+        if (Test-Path -Path $script:stageLogRoot) {
+            Remove-Item -Path $script:stageLogRoot -Recurse -Force
+        }
+        New-Item -Path $script:stageLogRoot -ItemType Directory -Force | Out-Null
+
+        $previousStageLogRoot = $env:LVIE_STAGE_LOG_ROOT
+        $env:LVIE_STAGE_LOG_ROOT = $script:stageLogRoot
+        try {
+            $results = Invoke-LabVIEWStage `
+                -StageName 'lunit' `
+                -RepoRoot $script:repoRoot `
+                -LabVIEWVersion $script:labviewVersion `
+                -Bitnesses $script:bitnessesToTest `
+                -ConnectTimeoutMs ([int]$script:connectTimeoutMs) `
+                -DevModeNoLabVIEW `
+                -Action {
+                    param($context)
+                    $unitArgs = @(
+                        '-LabVIEWVersion', $context.LabVIEWVersion,
+                        '-SupportedBitness', $context.Bitness,
+                        '-ProjectPath', $script:projectFile,
+                        '-ConnectTimeoutMs', $context.ConnectTimeoutMs
+                    )
+                    if ($script:enableGcliFallback) {
+                        $unitArgs += '-EnableGcliFallback'
+                    }
+                    $run = Invoke-LabVIEWScript -ScriptPath $script:lunitScript -Arguments $unitArgs
+                    return $run
+                }
+        }
+        finally {
+            if ($null -eq $previousStageLogRoot) {
+                Remove-Item Env:LVIE_STAGE_LOG_ROOT -ErrorAction SilentlyContinue
+            } else {
+                $env:LVIE_STAGE_LOG_ROOT = $previousStageLogRoot
             }
+        }
 
         if (-not $results -or $results.Count -eq 0) {
             Set-ItResult -Skipped -Because 'No matching LabVIEW installs.'
@@ -121,6 +230,31 @@ Describe 'LUnit (dev mode, no LabVIEW) integration' {
 
         foreach ($result in $ran) {
             $result.Succeeded | Should -BeTrue -Because ($result.Error)
+        }
+
+        $summaryFile = Get-ChildItem -Path $script:stageLogRoot -Filter 'labview-stage-lunit-*-summary.json' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+        $summaryFile | Should -Not -BeNullOrEmpty
+
+        $summary = Get-Content -Path $summaryFile.FullName -Raw | ConvertFrom-Json
+        $summary.LogFile | Should -Not -BeNullOrEmpty
+        (Test-Path -Path $summary.LogFile -PathType Leaf) | Should -BeTrue
+
+        $logEntries = Get-Content -Path $summary.LogFile -ErrorAction Stop | ForEach-Object {
+            $_ | ConvertFrom-Json
+        }
+
+        foreach ($result in $ran) {
+            $entry = $logEntries | Where-Object { $_.Bitness -eq $result.Bitness } | Select-Object -Last 1
+            $entry | Should -Not -BeNullOrEmpty
+            $tailText = @($entry.Steps.Action.OutputTail) -join "`n"
+            if ($script:lunitBackendMode -eq 'gcli') {
+                $tailText | Should -Match 'Falling back to g-cli LUnit execution'
+                $tailText | Should -Not -Match 'Executing LabVIEWCLI LUnit operation'
+            } else {
+                $tailText | Should -Match 'Executing LabVIEWCLI LUnit operation|Falling back to g-cli LUnit execution'
+            }
         }
     }
 }

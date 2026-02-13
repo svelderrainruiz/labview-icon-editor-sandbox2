@@ -88,4 +88,10 @@ Describe 'LabVIEW version contract' {
         $env:LABVIEW_MINOR_REVISION = '0'
         { & $script:assertScript -RepoRoot $root } | Should -Not -Throw
     }
+
+    It 'accepts deprecated project contract parameters as no-op compatibility' {
+        $root = & $script:newTempRepo -Version '21.0' -VersionHelperPath $script:versionHelper
+        $missingProjectPath = Join-Path $root 'nested\missing.lvproj'
+        { & $script:assertScript -RepoRoot $root -ProjectPath $missingProjectPath -EnforceProjectLvVersion } | Should -Not -Throw
+    }
 }
