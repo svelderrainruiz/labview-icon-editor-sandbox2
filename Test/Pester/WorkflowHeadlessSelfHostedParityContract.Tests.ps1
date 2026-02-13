@@ -53,6 +53,7 @@ Describe 'Workflow headless self-hosted parity contract' {
         $script:canonicalWorkflowContent | Should -Match 'parity context'
         $script:canonicalWorkflowContent | Should -Match 'name:\s*Run parity lane via runner-cli \(self-hosted-windows\)'
         $script:canonicalWorkflowContent | Should -Match '--mode self-hosted-windows'
+        $script:canonicalWorkflowContent | Should -Match 'parity-self-hosted:[\s\S]*?name:\s*Setup \.NET SDK[\s\S]*?dotnet-install-dir:\s*\$\{\{\s*runner\.temp\s*\}\}[\\/]+dotnet'
         $script:canonicalWorkflowContent | Should -Not -Match 'Run-CICompositeLocal-Auto\.ps1'
     }
 
