@@ -53,8 +53,18 @@ Describe 'Workflow headless self-hosted parity contract' {
         $script:canonicalWorkflowContent | Should -Match 'parity context'
         $script:canonicalWorkflowContent | Should -Match 'name:\s*Run parity lane via runner-cli \(self-hosted-windows\)'
         $script:canonicalWorkflowContent | Should -Match '--mode self-hosted-windows'
-        $script:canonicalWorkflowContent | Should -Match 'parity-self-hosted:[\s\S]*?name:\s*Setup \.NET SDK[\s\S]*?dotnet-install-dir:\s*\$\{\{\s*runner\.temp\s*\}\}[\\/]+dotnet'
         $script:canonicalWorkflowContent | Should -Not -Match 'Run-CICompositeLocal-Auto\.ps1'
+
+        $selfHostedStart = $script:canonicalWorkflowContent.IndexOf('parity-self-hosted:', [System.StringComparison]::Ordinal)
+        $selfHostedEnd = $script:canonicalWorkflowContent.IndexOf('parity-windows:', [System.StringComparison]::Ordinal)
+        $selfHostedStart | Should -BeGreaterThan -1
+        $selfHostedEnd | Should -BeGreaterThan $selfHostedStart
+
+        $selfHostedBlock = $script:canonicalWorkflowContent.Substring($selfHostedStart, $selfHostedEnd - $selfHostedStart)
+        $selfHostedBlock | Should -Match 'name:\s*Assert \.NET SDK availability \(self-hosted\)'
+        $selfHostedBlock | Should -Match 'Get-Command dotnet'
+        $selfHostedBlock | Should -Match 'Self-hosted parity requires \.NET 8 SDK'
+        $selfHostedBlock | Should -Not -Match 'actions/setup-dotnet@v4'
     }
 
     It 'adds a fail-fast .lvversion gate before parity execution' {
