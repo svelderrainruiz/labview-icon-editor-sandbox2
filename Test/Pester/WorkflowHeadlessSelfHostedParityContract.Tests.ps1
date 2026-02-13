@@ -7,11 +7,16 @@ Describe 'Workflow headless self-hosted parity contract' {
     BeforeAll {
         $script:repoRoot = (Resolve-Path -Path (Join-Path $PSScriptRoot '..\..')).Path
         $script:workflowPath = Join-Path $script:repoRoot '.github\workflows\headless-self-hosted-parity.yml'
+        $script:canonicalWorkflowPath = Join-Path $script:repoRoot '.github\workflows\labview-parity.yml'
         if (-not (Test-Path -Path $script:workflowPath -PathType Leaf)) {
             throw "Workflow file not found: $script:workflowPath"
         }
+        if (-not (Test-Path -Path $script:canonicalWorkflowPath -PathType Leaf)) {
+            throw "Workflow file not found: $script:canonicalWorkflowPath"
+        }
 
         $script:workflowContent = Get-Content -Path $script:workflowPath -Raw
+        $script:canonicalWorkflowContent = Get-Content -Path $script:canonicalWorkflowPath -Raw
     }
 
     It 'uses workflow_dispatch-only trigger on the self-hosted runner label contract' {
@@ -41,6 +46,12 @@ Describe 'Workflow headless self-hosted parity contract' {
         $script:workflowContent | Should -Match '-SkipVerifyIEPaths'
         $script:workflowContent | Should -Match '-SkipMissingInProject'
         $script:workflowContent | Should -Match '-SkipBuildVip'
+    }
+
+    It 'requires canonical LabVIEW parity self-hosted run to skip vi_validate' {
+        $script:canonicalWorkflowContent | Should -Match 'name:\s*Run headless local parity sequence \(64-bit\)'
+        $script:canonicalWorkflowContent | Should -Match 'Run-CICompositeLocal-Auto\.ps1'
+        $script:canonicalWorkflowContent | Should -Match '-SkipViValidate'
     }
 
     It 'adds a fail-fast project LVVersion gate before parity execution' {
