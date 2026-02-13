@@ -196,11 +196,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-          dotnet-install-dir: ${{ runner.temp }}\\dotnet
+      - name: Assert .NET SDK availability (self-hosted)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+          if (-not $dotnet) {
+            throw ".NET SDK is required on the self-hosted runner. Install .NET 8 SDK and ensure 'dotnet' is on PATH."
+          }
+
+          & dotnet --info | Out-Host
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet --info failed with exit code $LASTEXITCODE."
+          }
+
+          $dotnetVersion = (& dotnet --version).Trim()
+          if (-not $dotnetVersion.StartsWith('8.')) {
+            throw "Self-hosted parity requires .NET 8 SDK. Found: $dotnetVersion"
+          }
+
+          Write-Host ("Using .NET SDK {0} at {1}" -f $dotnetVersion, $dotnet.Source)
 
       - name: Job setup
         uses: ./.github/actions/lvie-job-setup
