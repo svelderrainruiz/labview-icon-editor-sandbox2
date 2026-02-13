@@ -24,7 +24,7 @@ public static class ConformanceService
         return new RunnerCliManifest
         {
             SpecDocumentId = "LVIE-RC-REQ-v5",
-            SpecVersion = "v5.1",
+            SpecVersion = "v5.2",
             SupportedCommands = new List<string>
             {
                 "validate-contract",
@@ -35,6 +35,8 @@ public static class ConformanceService
                 "pylavi summarize",
                 "pylavi fetch",
                 "missing-in-project",
+                "parity context",
+                "parity run",
                 "manifest",
                 "conformance check"
             },

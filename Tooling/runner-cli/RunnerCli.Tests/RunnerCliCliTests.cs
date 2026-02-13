@@ -40,7 +40,46 @@ public class RunnerCliCliTests
         Assert.True(TryGetPropertyIgnoreCase(root, "build_version", out _), "build_version missing");
         Assert.True(TryGetPropertyIgnoreCase(root, "generated_utc", out _), "generated_utc missing");
         Assert.Equal("LVIE-RC-REQ-v5", specDocumentId.GetString());
-        Assert.Equal("v5.1", specVersion.GetString());
+        Assert.Equal("v5.2", specVersion.GetString());
+        var supportedCommands = root
+            .GetProperty("supported_commands")
+            .EnumerateArray()
+            .Select(item => item.GetString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToArray();
+        Assert.Contains("parity context", supportedCommands);
+        Assert.Contains("parity run", supportedCommands);
+    }
+
+    [Fact]
+    public void ParityContext_emits_json_payload_and_derives_release_from_lvversion()
+    {
+        var repoRoot = FindRepoRoot();
+        var (exitCode, stdout, stderr) = RunCli(repoRoot, $"parity context --repo-root \"{repoRoot}\" --json");
+
+        Assert.Equal(0, exitCode);
+        Assert.True(string.IsNullOrWhiteSpace(stderr), $"stderr: {stderr}");
+
+        using var doc = JsonDocument.Parse(stdout);
+        var root = doc.RootElement;
+        Assert.Equal(repoRoot, root.GetProperty("repo_root").GetString());
+        Assert.Equal("lv_icon_editor.lvproj", root.GetProperty("project_relative_path").GetString());
+        Assert.Equal("Editor Packed Library", root.GetProperty("build_spec_name").GetString());
+        var year = root.GetProperty("labview_year").GetString();
+        var release = root.GetProperty("lv_release_resolved").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(year), "labview_year missing");
+        Assert.False(string.IsNullOrWhiteSpace(release), "lv_release_resolved missing");
+        Assert.StartsWith(year!, release!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ParityContext_fails_when_lv_release_year_does_not_match_lvversion()
+    {
+        var repoRoot = FindRepoRoot();
+        var (exitCode, _, stderr) = RunCli(repoRoot, $"parity context --repo-root \"{repoRoot}\" --lv-release 1999q1");
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains(".lvversion resolves to LabVIEW", stderr, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
