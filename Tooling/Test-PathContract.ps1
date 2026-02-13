@@ -11,6 +11,7 @@ $windowsContainerShellContract = 'powershell.exe 5.1'
 $repoRootPath = (Resolve-Path -Path $RepoRoot -ErrorAction Stop).Path
 $allowedLiteralPathSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 @(
+    '.github/workflows/labview-parity.yml',
     '.github/workflows/labview-container-parity.yml',
     '.github/workflows/ci-composite.yml',
     'Tooling/container-parity/path-contract.sh',

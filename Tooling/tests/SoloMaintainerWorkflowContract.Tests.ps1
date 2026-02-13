@@ -41,6 +41,12 @@ Describe 'Test-SoloMaintainerWorkflowContract.ps1' {
                 '          publishMode = ''manual-intent'''
                 '          publishReason = ''manual-intent-required-develop-push-merged-pr-detected'''
             ) -join [Environment]::NewLine
+            'labview-parity.yml' = @(
+                'name: LabVIEW Parity'
+                'on:'
+                '  workflow_dispatch:'
+                'jobs: {}'
+            ) -join [Environment]::NewLine
             'labview-container-parity.yml' = @(
                 'name: Container Parity'
                 'on:'
