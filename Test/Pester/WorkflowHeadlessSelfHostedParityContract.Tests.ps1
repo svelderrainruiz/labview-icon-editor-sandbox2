@@ -48,10 +48,13 @@ Describe 'Workflow headless self-hosted parity contract' {
         $script:workflowContent | Should -Match '-SkipBuildVip'
     }
 
-    It 'requires canonical LabVIEW parity self-hosted run to skip vi_validate' {
-        $script:canonicalWorkflowContent | Should -Match 'name:\s*Run headless local parity sequence \(64-bit\)'
-        $script:canonicalWorkflowContent | Should -Match 'Run-CICompositeLocal-Auto\.ps1'
-        $script:canonicalWorkflowContent | Should -Match '-SkipViValidate'
+    It 'uses host-native runlabview-windows parity flow in canonical workflow' {
+        $script:canonicalWorkflowContent | Should -Match 'name:\s*Resolve LabVIEW executable path \(64-bit\)'
+        $script:canonicalWorkflowContent | Should -Match 'Tooling\\support\\LabVIEWExecutablePath\.ps1'
+        $script:canonicalWorkflowContent | Should -Match 'name:\s*Run host-native parity script \(64-bit\)'
+        $script:canonicalWorkflowContent | Should -Match 'Tooling\\container-parity\\runlabview-windows\.ps1'
+        $script:canonicalWorkflowContent | Should -Match 'CONTAINER_PARITY_BUILD_SPEC'
+        $script:canonicalWorkflowContent | Should -Not -Match 'Run-CICompositeLocal-Auto\.ps1'
     }
 
     It 'adds a fail-fast project LVVersion gate before parity execution' {
