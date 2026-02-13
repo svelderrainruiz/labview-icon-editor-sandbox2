@@ -32,10 +32,6 @@ Describe 'Test-CiPipelineSelectorDevModeContract.ps1' {
                 'name: LabVIEW Parity'
                 'jobs: {}'
             ) -join [Environment]::NewLine
-            '.github/workflows/labview-container-parity.yml' = @(
-                'name: Container Parity'
-                'jobs: {}'
-            ) -join [Environment]::NewLine
             '.github/workflows/development-mode-toggle.yml' = @(
                 'name: Development Mode Toggle'
                 'on:'

@@ -13,7 +13,6 @@ $coreWorkflowFiles = @(
     '.github/workflows/ci.yml',
     '.github/workflows/ci-composite.yml',
     '.github/workflows/labview-parity.yml',
-    '.github/workflows/labview-container-parity.yml',
     '.github/workflows/development-mode-toggle.yml',
     '.github/workflows/runner-cli.yml',
     '.github/workflows/runner-audit.yml'

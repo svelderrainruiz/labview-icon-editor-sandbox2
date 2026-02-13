@@ -43,7 +43,6 @@ on:
   pull_request:
     paths:
       - ".github/workflows/labview-parity.yml"
-      - ".github/workflows/labview-container-parity.yml"
       - "Tooling/container-parity/**"
       - "Tooling/runner-cli/**"
       - "Test/Templates/**"
