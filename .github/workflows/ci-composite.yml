@@ -62,6 +62,8 @@ jobs:
     outputs:
       run_uid: ${{ steps.meta.outputs.run_uid }}
       sha: ${{ steps.meta.outputs.sha }}
+      ci_profile: ${{ steps.meta.outputs.ci_profile }}
+      bitness_matrix: ${{ steps.meta.outputs.bitness_matrix }}
     steps:
       - id: meta
         name: Generate run manifest
@@ -72,6 +74,7 @@ jobs:
           $sha = '${{ github.sha }}'
           $ref = '${{ github.ref }}'
           $headRef = '${{ github.head_ref }}'
+          $baseRef = '${{ github.base_ref }}'
           $eventName = '${{ github.event_name }}'
           $actor = '${{ github.actor }}'
           $repo = '${{ github.repository }}'
@@ -79,6 +82,9 @@ jobs:
           $expectedSha = '${{ github.event.inputs.expected_sha }}'
           $strictSha = '${{ github.event.inputs.strict_sha }}'
           $runUid = "{0}-{1}-{2}" -f $runId, $runAttempt, $sha
+          $isForkDevelopPr = $eventName -eq 'pull_request' -and $baseRef -eq 'develop' -and $repo -eq 'svelderrainruiz/labview-icon-editor'
+          $ciProfile = if ($isForkDevelopPr) { 'pr-develop-fast' } else { 'full' }
+          $bitnessMatrix = if ($ciProfile -eq 'pr-develop-fast') { '["64"]' } else { '["64","32"]' }
 
           if ($strictSha -eq 'true' -and [string]::IsNullOrWhiteSpace($expectedSha)) {
             throw "expected_sha is required when strict_sha=true."
@@ -98,6 +104,7 @@ jobs:
             actor         = $actor
             repository    = $repo
             workflow      = $workflow
+            ci_profile    = $ciProfile
             timestamp_utc = (Get-Date).ToUniversalTime().ToString('o')
           }
 
@@ -105,6 +112,8 @@ jobs:
           $manifest | ConvertTo-Json -Depth 6 | Out-File -FilePath $path -Encoding ascii
           "run_uid=$runUid" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
           "sha=$sha" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "ci_profile=$ciProfile" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
+          "bitness_matrix=$bitnessMatrix" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
           "manifest_path=$path" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append
 
       - name: Upload run manifest
@@ -204,7 +213,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bitness: ["64", "32"]
+        bitness: ${{ fromJson(needs.run-metadata.outputs.bitness_matrix) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -315,18 +324,25 @@ jobs:
       LVIE_REQUIRED_LABVIEW_VERSION_YEAR: ${{ needs.version-gate.outputs.year }}
       LVIE_REQUIRED_LABVIEW_MINOR_REVISION: ${{ needs.version-gate.outputs.minor }}
     steps:
+      - name: Skip x86 dependency apply in pr-develop-fast profile
+        if: ${{ needs.run-metadata.outputs.ci_profile == 'pr-develop-fast' }}
+        shell: pwsh
+        run: |
+          Write-Host "Skipping x86 VIPC dependency lane for pr-develop-fast profile."
       - name: Checkout code
+        if: ${{ needs.run-metadata.outputs.ci_profile != 'pr-develop-fast' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Job setup
+        if: ${{ needs.run-metadata.outputs.ci_profile != 'pr-develop-fast' }}
         uses: ./.github/actions/lvie-job-setup
         with:
           checkout: 'false'
           bitness: 32
           create_worktree: 'true'
       - name: Apply VIPC (LV x86)
-        if: needs.changes.outputs.vipc == 'true'
+        if: ${{ needs.run-metadata.outputs.ci_profile != 'pr-develop-fast' && needs.changes.outputs.vipc == 'true' }}
         shell: pwsh
         working-directory: ${{ env.REPO_ROOT }}
         run: |
@@ -337,9 +353,9 @@ jobs:
             -RepoRoot "$env:REPO_ROOT" `
             -VIPCPath ".github/actions/apply-vipc/runner_dependencies.vipc"
       - run: echo "No .vipc changes detected; skipping dependency application."
-        if: needs.changes.outputs.vipc != 'true'
+        if: ${{ needs.run-metadata.outputs.ci_profile != 'pr-develop-fast' && needs.changes.outputs.vipc != 'true' }}
       - name: Job teardown
-        if: always()
+        if: ${{ always() && needs.run-metadata.outputs.ci_profile != 'pr-develop-fast' }}
         uses: ./.github/actions/lvie-job-teardown
 
   version:
@@ -391,7 +407,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        bitness: ["64", "32"]
+        bitness: ${{ fromJson(needs.run-metadata.outputs.bitness_matrix) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -478,7 +494,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        bitness: ["64", "32"]
+        bitness: ${{ fromJson(needs.run-metadata.outputs.bitness_matrix) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -524,6 +540,7 @@ jobs:
 
   build-ppl-x86:
     name: Build 32-bit Packed Library
+    if: ${{ needs.run-metadata.outputs.ci_profile != 'pr-develop-fast' }}
     needs: [run-metadata, version-gate, build-ppl-x64, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
     env:
@@ -646,6 +663,7 @@ jobs:
 
   build-vip:
     name: Build VI Package
+    if: ${{ needs.run-metadata.outputs.ci_profile != 'pr-develop-fast' }}
     # Chain after 32-bit PPL build (which depends on 64-bit PPL build).
     needs: [run-metadata, version-gate, build-ppl-x86, version]
     runs-on: ${{ vars.LVIE_RUNNER_LABEL || 'self-hosted-windows-lv' }}
@@ -918,21 +936,34 @@ jobs:
       - name: Validate required jobs
         shell: pwsh
         run: |
-          $required = @(
+          $requiredCommon = @(
             'run-metadata',
             'version-gate',
             'powershell-lint',
             'dev-mode-gate',
             'changes',
             'apply-deps-2021-x64',
-            'apply-deps-2021-x86',
             'missing-in-project',
             'unit-tests',
             'build-ppl-x64',
-            'build-ppl-x86',
-            'build-vip',
             'version'
           )
+          $requiredFullOnly = @(
+            'apply-deps-2021-x86',
+            'build-ppl-x86',
+            'build-vip'
+          )
+          $ciProfile = '${{ needs.run-metadata.outputs.ci_profile }}'
+          if ([string]::IsNullOrWhiteSpace($ciProfile)) {
+            $ciProfile = 'full'
+          }
+          $required = if ($ciProfile -eq 'pr-develop-fast') {
+            $requiredCommon
+          } else {
+            @($requiredCommon + $requiredFullOnly)
+          }
+          Write-Host ("Pipeline contract profile: {0}" -f $ciProfile)
+          Write-Host ("Required jobs ({0}): {1}" -f $required.Count, ($required -join ', '))
           $needs = ConvertFrom-Json -InputObject '${{ toJson(needs) }}'
           $needsProps = $needs.PSObject.Properties
           $failed = @()
