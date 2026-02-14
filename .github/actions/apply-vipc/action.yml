@@ -13,22 +13,28 @@ runs:
       run: |
         $lvVersion = "${{ inputs.labview_version }}"
         if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-          throw "labview_version is required."
+          Write-Warning "labview_version not provided; ApplyVIPC will resolve .lvversion from repo root."
         }
 
-        & "${{ github.action_path }}/ApplyVIPC.ps1" `
-          -MinimumSupportedLVVersion $lvVersion `
-          -VIP_LVVersion ${{ inputs.vip_lv_version }} `
-          -SupportedBitness ${{ inputs.supported_bitness }} `
-          -RepoRoot "${{ inputs.repo_root }}" `
-          -VIPCPath "${{ inputs.vipc_path }}"
+        $allowMismatch = ("${{ inputs.allow_vipc_target_mismatch }}" -eq 'true')
+        $applyArgs = @(
+          '-LabVIEWVersion', $lvVersion,
+          '-SupportedBitness', '${{ inputs.supported_bitness }}',
+          '-RepoRoot', '${{ inputs.repo_root }}',
+          '-VIPCPath', '${{ inputs.vipc_path }}',
+          '-VipmTimeoutSeconds', '${{ inputs.vipm_timeout_seconds }}',
+          '-VipmMaxAttempts', '${{ inputs.vipm_max_attempts }}',
+          '-VipmRetryDelaySeconds', '${{ inputs.vipm_retry_delay_seconds }}'
+        )
+        if ($allowMismatch) {
+          $applyArgs += '-AllowVipcTargetMismatch'
+        }
+
+        & "${{ github.action_path }}/ApplyVIPC.ps1" @applyArgs
 inputs:
   labview_version:
     description: 'LabVIEW version to target (year or numeric).'
-    required: true
-  vip_lv_version:
-    description: 'VIPC LabVIEW version (year or numeric).'
-    required: true
+    required: false
   supported_bitness:
     description: '32 or 64'
     required: true
@@ -38,5 +44,22 @@ inputs:
   vipc_path:
     description: 'Path under repo for the .vipc file (relative to workspace)'
     required: true
+  allow_vipc_target_mismatch:
+    description: 'Temporarily allow VIPC target mismatch against .lvversion.'
+    required: false
+    default: 'false'
+  vipm_timeout_seconds:
+    description: 'Timeout for vipm command execution.'
+    required: false
+    default: '1800'
+  vipm_max_attempts:
+    description: 'Maximum attempts for lock-contention retries.'
+    required: false
+    default: '3'
+  vipm_retry_delay_seconds:
+    description: 'Delay between lock-contention retries.'
+    required: false
+    default: '5'
+
 
 

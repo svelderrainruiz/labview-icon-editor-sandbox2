@@ -87,7 +87,17 @@ if ($gitOutput) {
     $gitOutput | ForEach-Object { Write-Host $_ }
 }
 if ($LASTEXITCODE -ne 0) {
-    throw "git worktree add failed with exit code $LASTEXITCODE."
+    $gitText = if ($gitOutput) {
+        (($gitOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine).Trim()
+    } else {
+        ''
+    }
+
+    if ([string]::IsNullOrWhiteSpace($gitText)) {
+        throw "git worktree add failed with exit code $LASTEXITCODE."
+    }
+
+    throw ("git worktree add failed with exit code {0}. git output:{1}{2}" -f $LASTEXITCODE, [Environment]::NewLine, $gitText)
 }
 
 Write-Output $targetPath

@@ -105,6 +105,13 @@ Write-Host "Close_LabVIEW script: $CloseScript"
 
 $ErrorActionPreference = 'Stop'
 
+$devModePolicyHelper = Join-Path $PSScriptRoot '..\..\..\Tooling\support\DevModePolicy.ps1'
+if (-not (Test-Path -LiteralPath $devModePolicyHelper -PathType Leaf)) {
+    throw "Dev mode policy helper not found: $devModePolicyHelper"
+}
+. $devModePolicyHelper
+Assert-DevModeInvocationBlocked -EntryPoint $PSCommandPath
+
 function Test-ForceNoLabVIEWDevMode {
     $value = $env:LVIE_FORCE_NO_LABVIEW_DEVMODE
     if ([string]::IsNullOrWhiteSpace($value)) {
