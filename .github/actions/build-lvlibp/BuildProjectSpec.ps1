@@ -650,9 +650,6 @@ try {
         Write-Output "Skipping workspace-to-install Icon Editor source synchronization before build-spec execution."
     }
 
-    Write-Output "Closing LabVIEW after MassCompile to clear in-memory VI state before build-spec execution."
-    Invoke-CloseLabVIEWSafely -Version $labviewVersionForClose -Bitness $SupportedBitness
-
     if (Test-Path -Path $outputPath -PathType Leaf) {
         Remove-Item -Path $outputPath -Force
     }
