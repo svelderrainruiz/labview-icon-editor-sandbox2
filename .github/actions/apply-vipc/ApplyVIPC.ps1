@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Applies a .vipc file to a given LabVIEW version/bitness.
-    This version includes additional debug/verbose output.
+    Uses VIPM CLI as the authoritative apply path.
 
 .EXAMPLE
     .\applyvipc.ps1 -LabVIEWVersion "2021" -SupportedBitness "64" -RepoRoot "C:\release\labview-icon-editor-fork" -VIPCPath "Tooling\deployment\runner_dependencies.vipc" -Verbose
@@ -18,7 +18,13 @@ Param (
     [string]$VIPCPath,
     [switch]$AllowVipcTargetMismatch,
     [string]$WorktreeRoot,
-    [switch]$SkipWorktreeRootCheck
+    [switch]$SkipWorktreeRootCheck,
+    [ValidateRange(60, 7200)]
+    [int]$VipmTimeoutSeconds = 1800,
+    [ValidateRange(1, 10)]
+    [int]$VipmMaxAttempts = 3,
+    [ValidateRange(0, 120)]
+    [int]$VipmRetryDelaySeconds = 5
 )
 
 Write-Verbose "Script Name: $($MyInvocation.MyCommand.Definition)"
@@ -28,6 +34,9 @@ Write-Verbose " - SupportedBitness:          $SupportedBitness"
 Write-Verbose " - RepoRoot:              $RepoRoot"
 Write-Verbose " - VIPCPath:                  $VIPCPath"
 Write-Verbose " - AllowVipcTargetMismatch:   $AllowVipcTargetMismatch"
+Write-Verbose " - VipmTimeoutSeconds:        $VipmTimeoutSeconds"
+Write-Verbose " - VipmMaxAttempts:           $VipmMaxAttempts"
+Write-Verbose " - VipmRetryDelaySeconds:     $VipmRetryDelaySeconds"
 
 # -------------------------
 # 1) Resolve Paths & Validate
@@ -130,9 +139,15 @@ if (-not (Test-Path -Path $versionHelper)) {
 }
 . $versionHelper
 
+$vipmHelper = Join-Path -Path $ResolvedRepoRoot -ChildPath 'Tooling\support\VipmCli.ps1'
+if (-not (Test-Path -Path $vipmHelper)) {
+    throw "VIPM CLI helper not found at $vipmHelper"
+}
+. $vipmHelper
+
 $lvInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $ResolvedRepoRoot
 $vipmVersion = Get-VipmVersionString -NumericVersion $lvInfo.NumericVersion -Bitness $SupportedBitness
-$targetLvVer = $lvInfo.Year
+$targetLvVer = ConvertTo-VipmLabVIEWYear -VersionInput $lvInfo
 
 # -------------------------
 # 3) VIPC target version guard
@@ -167,35 +182,36 @@ Write-Output "Applying dependencies for LabVIEW $vipmVersion..."
 Write-Verbose "VIPM version string: $vipmVersion"
 
 # -------------------------
-# 4) Execute the Commands & Handle Errors
+# 4) Execute the command via VIPM CLI & handle errors
 # -------------------------
 try {
-    $vipcArgs = @(
-        '--lv-ver', $targetLvVer,
-        '--arch', $SupportedBitness,
-        'vipc', '--',
-        '-t', '3000',
-        '-v', $vipmVersion,
+    $installArgs = @(
+        '--labview-version', $targetLvVer,
+        '--labview-bitness', $SupportedBitness,
+        'install',
         $ResolvedVIPCPath
     )
 
-    Write-Output ("Executing: g-cli {0}" -f ($vipcArgs -join ' '))
-    $output = & g-cli @vipcArgs 2>&1
-    $exitCode = $LASTEXITCODE
-    if ($output) {
-        $output | ForEach-Object { Write-Host $_ }
+    Write-Output ("Executing: vipm {0}" -f ($installArgs -join ' '))
+    $result = Invoke-VipmCliCommand `
+        -Arguments $installArgs `
+        -TimeoutSeconds $VipmTimeoutSeconds `
+        -MaxAttempts $VipmMaxAttempts `
+        -RetryDelaySeconds $VipmRetryDelaySeconds
+
+    if (-not [string]::IsNullOrWhiteSpace($result.StdOut)) {
+        $result.StdOut -split "\r?\n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { Write-Host $_ }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($result.StdErr)) {
+        $result.StdErr -split "\r?\n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { Write-Warning $_ }
     }
 
-    if ($exitCode -ne 0) {
-        throw "g-cli vipc failed with exit code $exitCode."
+    if ($result.TimedOut) {
+        throw ("vipm install timed out after {0} attempt(s)." -f $result.Attempts)
     }
 
-    try {
-        Write-Output ("Closing LabVIEW {0} ({1}-bit) after VIPC apply..." -f $targetLvVer, $SupportedBitness)
-        & g-cli --lv-ver $targetLvVer --arch $SupportedBitness QuitLabVIEW | Out-Null
-    }
-    catch {
-        Write-Warning ("Failed to close LabVIEW {0} ({1}-bit): {2}" -f $targetLvVer, $SupportedBitness, $_.Exception.Message)
+    if ($result.ExitCode -ne 0) {
+        throw ("vipm install failed with exit code {0} after {1} attempt(s)." -f $result.ExitCode, $result.Attempts)
     }
 
     $global:LASTEXITCODE = 0

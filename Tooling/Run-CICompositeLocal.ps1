@@ -1815,16 +1815,20 @@ try {
     if (-not $SkipVipc) {
         foreach ($bitness in $bitnessList) {
             $vipcAuditPath = Join-Path $repoRoot ("builds\status\vipc-audit-{0}.json" -f $bitness)
-            Invoke-Checked -Label "Audit VIPC (LV$LabVIEWVersion $bitness-bit)" -Action {
-                & (Join-Path $repoRoot 'Tooling/Assert-VipcApplied.ps1') `
-                    -RepoRoot $repoRoot `
-                    -VIPCPath $VipcPath `
-                    -SupportedBitness $bitness `
-                    -LabVIEWVersion $LabVIEWVersion `
-                    -OutputPath $vipcAuditPath
+
+            $runAudit = {
+                Invoke-Checked -Label "Audit VIPC (LV$LabVIEWVersion $bitness-bit)" -Action {
+                    & (Join-Path $repoRoot 'Tooling/Assert-VipcApplied.ps1') `
+                        -RepoRoot $repoRoot `
+                        -VIPCPath $VipcPath `
+                        -SupportedBitness $bitness `
+                        -LabVIEWVersion $LabVIEWVersion `
+                        -OutputPath $vipcAuditPath
+                }
             }
 
             if ($VipcMode -eq 'audit') {
+                & $runAudit
                 Write-Host ("VIPC mode 'audit': skipping ApplyVIPC for {0}-bit." -f $bitness)
                 continue
             }
@@ -1841,7 +1845,8 @@ try {
                         -LabVIEWVersion $LabVIEWVersion `
                         -SupportedBitness $bitness `
                         -RepoRoot $repoRoot `
-                        -VIPCPath $VipcPath
+                        -VIPCPath $VipcPath `
+                        -AllowVipcTargetMismatch
                 }
 
                 if ($applyResult.Output -and $applyResult.Output.Count -gt 0) {
@@ -1864,6 +1869,7 @@ try {
                 }
 
                 Write-Host ("Informational VIPC apply completed successfully for {0}-bit. Log: {1}" -f $bitness, $vipcApplyLogPath)
+                & $runAudit
                 continue
             }
 
@@ -1872,8 +1878,10 @@ try {
                     -LabVIEWVersion $LabVIEWVersion `
                     -SupportedBitness $bitness `
                     -RepoRoot $repoRoot `
-                    -VIPCPath $VipcPath
+                    -VIPCPath $VipcPath `
+                    -AllowVipcTargetMismatch
             }
+            & $runAudit
         }
     }
 
