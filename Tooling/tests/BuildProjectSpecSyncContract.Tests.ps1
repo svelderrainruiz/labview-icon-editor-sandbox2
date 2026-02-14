@@ -47,4 +47,12 @@ Describe 'BuildProjectSpec source sync contract' {
         $script:ciCompositeWorkflowContent | Should -Match '-SyncIconEditorSourcesToInstall'
         $script:runCiCompositeLocalContent | Should -Match '-SyncIconEditorSourcesToInstall'
     }
+
+    It 'normalizes symbolic resource and vilib URL aliases to repo-relative paths during build-spec execution' {
+        $script:content | Should -Match '\$resourcePrefix = ''/<resource>/plugins/'''
+        $script:content | Should -Match '\$resourceReplacement = ''\.\./resource/plugins/'''
+        $script:content | Should -Match '\$vilibPrefix = ''/<vilib>/LabVIEW Icon API/'''
+        $script:content | Should -Match '\$vilibReplacement = ''\.\./vi\.lib/LabVIEW Icon API/'''
+        $script:content | Should -Match 'Normalized project URL aliases for build-spec execution'
+    }
 }

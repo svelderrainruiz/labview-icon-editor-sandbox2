@@ -455,6 +455,41 @@ function Set-BuildSpecVersionValues {
     Set-BuildSpecVersionProperty -ProjectXml $projectXml -BuildSpecNode $buildSpecNode -PropertySuffix 'patch' -Value $Patch
     Set-BuildSpecVersionProperty -ProjectXml $projectXml -BuildSpecNode $buildSpecNode -PropertySuffix 'build' -Value $Build
 
+    $resourcePrefix = '/<resource>/plugins/'
+    $resourceReplacement = '../resource/plugins/'
+    $vilibPrefix = '/<vilib>/LabVIEW Icon API/'
+    $vilibReplacement = '../vi.lib/LabVIEW Icon API/'
+    $resourceUpdates = 0
+    $vilibUpdates = 0
+
+    foreach ($itemNode in @($projectXml.SelectNodes('//Item[@URL]'))) {
+        if (-not ($itemNode -is [System.Xml.XmlElement])) {
+            continue
+        }
+
+        $urlValue = $itemNode.GetAttribute('URL')
+        if ([string]::IsNullOrWhiteSpace($urlValue)) {
+            continue
+        }
+
+        if ($urlValue.StartsWith($resourcePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $normalized = $resourceReplacement + $urlValue.Substring($resourcePrefix.Length)
+            $null = $itemNode.SetAttribute('URL', $normalized)
+            $resourceUpdates++
+            continue
+        }
+
+        if ($urlValue.StartsWith($vilibPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $normalized = $vilibReplacement + $urlValue.Substring($vilibPrefix.Length)
+            $null = $itemNode.SetAttribute('URL', $normalized)
+            $vilibUpdates++
+        }
+    }
+
+    if ($resourceUpdates -gt 0 -or $vilibUpdates -gt 0) {
+        Write-Output ("Normalized project URL aliases for build-spec execution (resource={0}, vilib={1})." -f $resourceUpdates, $vilibUpdates)
+    }
+
     $projectXml.Save($ProjectPath)
 }
 
