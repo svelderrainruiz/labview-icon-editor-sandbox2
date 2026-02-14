@@ -18,5 +18,7 @@ Describe 'BuildProjectSpec source sync contract' {
         $script:content | Should -Match '\[switch\]\$SyncIconEditorSourcesToInstall'
         $script:content | Should -Match 'if \(\$SyncIconEditorSourcesToInstall\.IsPresent\)'
         $script:content | Should -Match 'Skipping workspace-to-install Icon Editor source synchronization before build-spec execution\.'
+        $script:content | Should -Match 'function Clear-IconEditorSourcesForBuildSpec'
+        $script:content | Should -Match 'Clear-IconEditorSourcesForBuildSpec -LabVIEWExecutablePath \$labviewExecutablePath'
     }
 }
