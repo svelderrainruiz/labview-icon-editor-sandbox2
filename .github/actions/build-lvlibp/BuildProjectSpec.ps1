@@ -80,7 +80,8 @@ param(
     [Int32]$Build,
     [string]$Commit,
     [ValidateRange(0, 600000)]
-    [int]$ConnectTimeoutMs = 0
+    [int]$ConnectTimeoutMs = 0,
+    [switch]$SyncIconEditorSourcesToInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -640,8 +641,12 @@ try {
     }
     Write-Output "MassCompile completed successfully."
 
-    Write-Output "Synchronizing workspace Icon Editor sources into LabVIEW install before build-spec execution."
-    Sync-IconEditorSourcesForBuildSpec -RepoRootPath $RepoRoot -LabVIEWExecutablePath $labviewExecutablePath
+    if ($SyncIconEditorSourcesToInstall.IsPresent) {
+        Write-Output "Synchronizing workspace Icon Editor sources into LabVIEW install before build-spec execution."
+        Sync-IconEditorSourcesForBuildSpec -RepoRootPath $RepoRoot -LabVIEWExecutablePath $labviewExecutablePath
+    } else {
+        Write-Output "Skipping workspace-to-install Icon Editor source synchronization before build-spec execution."
+    }
 
     if (Test-Path -Path $outputPath -PathType Leaf) {
         Remove-Item -Path $outputPath -Force
