@@ -2014,6 +2014,7 @@ try {
                         -LabVIEWVersion $LabVIEWVersion `
                         -SupportedBitness $sequenceBitness `
                         -RepoRoot $repoRoot `
+                        -SyncIconEditorSourcesToInstall `
                         -Major $versionInfo.Major `
                         -Minor $versionInfo.Minor `
                         -Patch $versionInfo.Patch `
@@ -2131,6 +2132,7 @@ try {
                         -LabVIEWVersion $LabVIEWVersion `
                         -SupportedBitness $sequenceBitness `
                         -RepoRoot $repoRoot `
+                        -SyncIconEditorSourcesToInstall `
                         -Major $versionInfo.Major `
                         -Minor $versionInfo.Minor `
                         -Patch $versionInfo.Patch `
@@ -2226,6 +2228,7 @@ try {
                             -LabVIEWVersion $LabVIEWVersion `
                             -SupportedBitness $bitness `
                             -RepoRoot $repoRoot `
+                            -SyncIconEditorSourcesToInstall `
                             -Major $versionInfo.Major `
                             -Minor $versionInfo.Minor `
                             -Patch $versionInfo.Patch `

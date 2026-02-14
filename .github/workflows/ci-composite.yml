@@ -1097,6 +1097,7 @@ jobs:
             -LabVIEWVersion $env:LABVIEW_VERSION_RAW `
             -SupportedBitness 32 `
             -RepoRoot "$env:REPO_ROOT" `
+            -SyncIconEditorSourcesToInstall `
             -Major ${{ needs.version.outputs.MAJOR }} `
             -Minor ${{ needs.version.outputs.MINOR }} `
             -Patch ${{ needs.version.outputs.PATCH }} `
@@ -1151,6 +1152,7 @@ jobs:
             -LabVIEWVersion $env:LABVIEW_VERSION_RAW `
             -SupportedBitness 64 `
             -RepoRoot "$env:REPO_ROOT" `
+            -SyncIconEditorSourcesToInstall `
             -Major ${{ needs.version.outputs.MAJOR }} `
             -Minor ${{ needs.version.outputs.MINOR }} `
             -Patch ${{ needs.version.outputs.PATCH }} `
