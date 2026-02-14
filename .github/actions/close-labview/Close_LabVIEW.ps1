@@ -8,17 +8,19 @@
 
 .PARAMETER LabVIEWVersion
     LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
+    Alias: MinimumSupportedLVVersion.
 
 .PARAMETER SupportedBitness
     Bitness of the LabVIEW instance ("32" or "64").
 
 .EXAMPLE
-    .\Close_LabVIEW.ps1 -SupportedBitness "64"
+    .\Close_LabVIEW.ps1 -LabVIEWVersion "2021" -SupportedBitness "64"
 #>
 param(
+    [Alias('MinimumSupportedLVVersion')]
     [AllowNull()]
     [AllowEmptyString()]
-    [string]$LabVIEWVersion = '',
+    [string]$LabVIEWVersion = '2021',
     [string]$SupportedBitness,
     [ValidateRange(5, 600)]
     [int]$TimeoutSeconds = 120,
@@ -37,7 +39,7 @@ if (Test-Path -Path $versionHelper) {
     $labviewYear = $versionInfo.Year
 }
 if ([string]::IsNullOrWhiteSpace($labviewYear)) {
-    throw "LabVIEW version could not be resolved. Check .lvversion."
+    $labviewYear = '2021'
 }
 
 function Ensure-CsvHeader {
@@ -243,4 +245,3 @@ if (-not (Wait-ForLabVIEWExit -Version $labviewYear -Bitness $SupportedBitness -
 
 Write-Host "LabVIEW $labviewYear ($SupportedBitness-bit) closed or not running."
 Write-CloseMetric -Outcome $closeOutcome -HadProcess $true
-

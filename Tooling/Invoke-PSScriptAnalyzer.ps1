@@ -54,9 +54,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git was not found on PATH."
-}
 function Resolve-RepoRoot {
     param([string]$PathOverride)
 
@@ -64,20 +61,7 @@ function Resolve-RepoRoot {
         return (Resolve-Path -Path $PathOverride -ErrorAction Stop).Path
     }
 
-    $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($git) {
-        try {
-            $gitRoot = git -C $scriptRoot rev-parse --show-toplevel 2>$null
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($gitRoot)) {
-                return (Resolve-Path -Path $gitRoot.Trim() -ErrorAction Stop).Path
-            }
-        } catch {
-            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
-        }
-    }
-
-    return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
+    return (Resolve-Path -Path (Join-Path $PSScriptRoot '..')).Path
 }
 
 function Resolve-DefaultPath {

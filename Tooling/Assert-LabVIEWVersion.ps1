@@ -65,24 +65,11 @@ $ErrorActionPreference = 'Stop'
 function Resolve-RepoRoot {
     param([string]$Path)
 
-    if (-not [string]::IsNullOrWhiteSpace($Path)) {
-        return (Resolve-Path -Path $Path -ErrorAction Stop).Path
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw 'RepoRoot is required.'
     }
 
-    $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($git) {
-        try {
-            $gitRoot = git -C $scriptRoot rev-parse --show-toplevel 2>$null
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($gitRoot)) {
-                return (Resolve-Path -Path $gitRoot.Trim()).Path
-            }
-        } catch {
-            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
-        }
-    }
-
-    return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
+    return (Resolve-Path -Path $Path -ErrorAction Stop).Path
 }
 
 function Resolve-VersionInput {

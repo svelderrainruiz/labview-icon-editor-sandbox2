@@ -25,8 +25,7 @@ runs:
       shell: pwsh
       run: |
         # Try CLI first, fall back to PowerShell
-        $cliName = if ($IsWindows) { 'runner-cli.exe' } else { 'runner-cli' }
-        $cli = Join-Path $env:RUNNER_TEMP 'runner-cli' $cliName
+        $cli = Join-Path $env:RUNNER_TEMP 'runner-cli' 'runner-cli.exe'
         if (Test-Path $cli) {
           Write-Host 'Using runner-cli to initialize contract …'
           $contractPath = Join-Path $env:RUNNER_WORKSPACE 'lvie' 'runner-contract.json'

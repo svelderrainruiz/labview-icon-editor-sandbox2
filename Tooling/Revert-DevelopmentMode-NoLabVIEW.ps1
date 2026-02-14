@@ -7,11 +7,12 @@
     Performs file-system and INI edits to mirror the packaged state:
     - unzips vi.lib\LabVIEW Icon API.zip back to vi.lib\LabVIEW Icon API
     - renames resource\plugins\lv_icon.ship to lv_icon.lvlibp
-    - removes Localhost.LibraryPaths from LabVIEW.ini
+    - removes RepoRoot from Localhost.LibraryPaths in LabVIEW.ini
     This is intended for local testing; official revert can use the LabVIEW-based workflow.
 
 .PARAMETER LabVIEWVersion
     LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
+    Alias: MinimumSupportedLVVersion.
 
 .PARAMETER SupportedBitness
     One or more bitness values ("32", "64") to run (default: both).
@@ -24,14 +25,12 @@
 
 .PARAMETER SkipProcessCheck
     Skip checking for running LabVIEW or g-cli processes.
-
-.PARAMETER SkipRepoVersionCheck
-    When LabVIEWVersion is provided, skip strict .lvversion equality validation.
 #>
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
+    [Alias('MinimumSupportedLVVersion')]
     [AllowNull()]
     [AllowEmptyString()]
     [string]$LabVIEWVersion = '',
@@ -47,10 +46,7 @@ param(
     [string]$ContractPath,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipProcessCheck,
-
-    [Parameter(Mandatory = $false)]
-    [switch]$SkipRepoVersionCheck
+    [switch]$SkipProcessCheck
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,27 +63,14 @@ function Resolve-RepoRoot {
         [string]$PathOverride
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($PathOverride)) {
+    if ($PathOverride) {
         if (-not (Test-Path -Path $PathOverride)) {
             throw "RepoRoot does not exist: $PathOverride"
         }
         return (Resolve-Path -Path $PathOverride).Path
     }
 
-    $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($git) {
-        try {
-            $gitRoot = git -C $scriptRoot rev-parse --show-toplevel 2>$null
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($gitRoot)) {
-                return (Resolve-Path -Path $gitRoot.Trim()).Path
-            }
-        } catch {
-            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
-        }
-    }
-
-    return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
+    return (Resolve-Path -Path (Join-Path $PSScriptRoot '..')).Path
 }
 
 function Get-LabVIEWInstallRoot {
@@ -260,7 +243,7 @@ function Restore-IconApiFolderFromZip {
     }
 }
 
-function Get-IniLibraryPathLine {
+function Get-IniLibraryPathList {
     param(
         [string]$IniPath
     )
@@ -269,33 +252,17 @@ function Get-IniLibraryPathLine {
         return @()
     }
 
-    return @(Get-Content -Path $IniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' })
-}
-
-function Get-IniLibraryPathList {
-    param(
-        [string]$IniPath
-    )
-
-    $lines = Get-IniLibraryPathLine -IniPath $IniPath
-    if (-not $lines -or $lines.Count -eq 0) {
+    $line = Get-Content -Path $IniPath | Where-Object { $_ -match '(?i)^\s*localhost\.librarypaths\s*=' } | Select-Object -First 1
+    if (-not $line) {
         return @()
     }
 
-    $paths = @()
-    foreach ($line in $lines) {
-        $value = $line -replace '(?i)^\s*localhost\.librarypaths\s*=\s*', ''
-        if ([string]::IsNullOrWhiteSpace($value)) {
-            continue
-        }
-
-        $paths += ($value -split ';' |
-                   ForEach-Object { $_.Trim().Trim('"') } |
-                   Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                   Where-Object { -not (Test-IsInvalidLibraryPathToken -PathValue $_) })
+    $value = $line -replace '(?i)^\s*localhost\.librarypaths\s*=\s*', ''
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        return @()
     }
 
-    return $paths
+    return ($value -split ';' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 }
 
 function Format-IniPath {
@@ -314,31 +281,10 @@ function Format-IniPath {
     return $PathValue
 }
 
-function Test-IsInvalidLibraryPathToken {
-    param(
-        [string]$PathValue
-    )
-
-    if ([string]::IsNullOrWhiteSpace($PathValue)) {
-        return $true
-    }
-
-    $trimmed = $PathValue.Trim().Trim('"')
-    if ([string]::IsNullOrWhiteSpace($trimmed)) {
-        return $true
-    }
-
-    # Ignore obvious corruption fragments such as bare drive roots (e.g. C:\).
-    if ($trimmed -match '^[A-Za-z]:\\?$') {
-        return $true
-    }
-
-    return $false
-}
-
 function Remove-IniLibraryPath {
     param(
-        [string]$IniPath
+        [string]$IniPath,
+        [string]$RepoRoot
     )
 
     if (-not (Test-Path -Path $IniPath)) {
@@ -346,34 +292,74 @@ function Remove-IniLibraryPath {
     }
 
     $lines = @((Get-Content -Path $IniPath))
-    $hasToken = $false
-    foreach ($line in $lines) {
-        if ($line -match '(?i)^\s*localhost\.librarypaths\s*=') {
-            $hasToken = $true
+    $lineIndex = $null
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '(?i)^\s*localhost\.librarypaths\s*=') {
+            $lineIndex = $i
             break
         }
     }
-    if (-not $hasToken) {
+
+    if ($null -eq $lineIndex) {
         return
     }
 
-    # Enforce strict contract on revert: remove every Localhost.LibraryPaths line.
-    $lines = @($lines | Where-Object { $_ -notmatch '(?i)^\s*localhost\.librarypaths\s*=' })
+    $raw = $lines[$lineIndex] -replace '(?i)^\s*localhost\.librarypaths\s*=\s*', ''
+    $paths = @()
+    if (-not [string]::IsNullOrWhiteSpace($raw)) {
+        $paths = @($raw -split ';' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
+
+    $repoRootNormalized = Resolve-PathValue -PathValue $RepoRoot
+    if (-not $repoRootNormalized) {
+        return
+    }
+
+    $remaining = @()
+    foreach ($pathValue in $paths) {
+        $normalized = Resolve-PathValue -PathValue $pathValue
+        if (-not $normalized) { continue }
+        if ($normalized.ToLowerInvariant() -ne $repoRootNormalized.ToLowerInvariant()) {
+            $remaining += $pathValue
+        }
+    }
+
+    if ($remaining.Count -gt 0) {
+        $formatted = $remaining | ForEach-Object { Format-IniPath -PathValue $_ } | Where-Object { $_ }
+        $lines[$lineIndex] = "Localhost.LibraryPaths={0}" -f ($formatted -join ';')
+    } else {
+        if ($lineIndex -eq 0) {
+            $lines = $lines | Select-Object -Skip 1
+        } elseif ($lineIndex -eq ($lines.Count - 1)) {
+            $lines = $lines | Select-Object -First ($lines.Count - 1)
+        } else {
+            $lines = $lines[0..($lineIndex - 1)] + $lines[($lineIndex + 1)..($lines.Count - 1)]
+        }
+    }
+
     Set-Content -Path $IniPath -Value $lines -Encoding ascii
 }
 
-function Test-LibraryPathAbsent {
+function Test-LibraryPathContainsRepoRoot {
     param(
-        [string]$IniPath
+        [string]$IniPath,
+        [string]$RepoRoot
     )
 
-    $keyLines = Get-IniLibraryPathLine -IniPath $IniPath
-    if ($keyLines.Count -ne 0) {
+    $repoRootNormalized = Resolve-PathValue -PathValue $RepoRoot
+    if (-not $repoRootNormalized) {
         return $false
     }
+    $repoKey = $repoRootNormalized.ToLowerInvariant()
 
-    $paths = @(Get-IniLibraryPathList -IniPath $IniPath)
-    return ($paths.Count -eq 0)
+    foreach ($pathValue in (Get-IniLibraryPathList -IniPath $IniPath)) {
+        $candidate = Resolve-PathValue -PathValue $pathValue
+        if ($candidate -and $candidate.ToLowerInvariant() -eq $repoKey) {
+            return $true
+        }
+    }
+
+    return $false
 }
 
 function Test-IEDevModeDisabled {
@@ -441,8 +427,8 @@ function Disable-DevModeNoLabVIEW {
 
     try {
         $preDisabled = Test-IEDevModeDisabled -LabVIEWInstallRoot $installRoot
-        $preLibraryPathAbsent = Test-LibraryPathAbsent -IniPath $iniPath
-        if ($preDisabled -and $preLibraryPathAbsent) {
+        $preHasRepo = Test-LibraryPathContainsRepoRoot -IniPath $iniPath -RepoRoot $RepoRoot
+        if ($preDisabled -and -not $preHasRepo) {
             $entry.actualState = 'disabled'
             $entry.status = 'skipped'
             $entry.notes += 'Dev mode already disabled.'
@@ -494,20 +480,20 @@ function Disable-DevModeNoLabVIEW {
         }
 
         Write-Host ("Updating Localhost.LibraryPaths in {0}" -f $iniPath)
-        Remove-IniLibraryPath -IniPath $iniPath
+        Remove-IniLibraryPath -IniPath $iniPath -RepoRoot $RepoRoot
         $entry.changes += [ordered]@{ operation = 'remove-library-paths'; status = 'changed'; path = $iniPath }
 
         $issues = @()
         $postDisabled = Test-IEDevModeDisabled -LabVIEWInstallRoot $installRoot
-        $postLibraryPathAbsent = Test-LibraryPathAbsent -IniPath $iniPath
+        $postHasRepo = Test-LibraryPathContainsRepoRoot -IniPath $iniPath -RepoRoot $RepoRoot
         if (-not $postDisabled) {
             $issues += 'Install files did not reflect reverted state.'
         }
-        if (-not $postLibraryPathAbsent) {
-            $issues += 'Localhost.LibraryPaths token must be absent after revert.'
+        if ($postHasRepo) {
+            $issues += 'Localhost.LibraryPaths still includes repo root.'
         }
 
-        $entry.actualState = if ($postDisabled -and $postLibraryPathAbsent) { 'disabled' } else { 'partial' }
+        $entry.actualState = if ($postDisabled -and -not $postHasRepo) { 'disabled' } else { 'partial' }
         if ($issues.Count -gt 0) {
             $entry.status = 'failed'
             $entry.error = ("Dev mode revert (no LabVIEW) failed: {0}" -f ($issues -join ' '))
@@ -535,8 +521,7 @@ function Invoke-RevertDevModeNoLabVIEWMain {
         [string[]]$SupportedBitness,
         [string]$RepoRoot,
         [string]$ContractPath,
-        [switch]$SkipProcessCheck,
-        [switch]$SkipRepoVersionCheck
+        [switch]$SkipProcessCheck
     )
 
     $resolvedRepoRoot = Resolve-RepoRoot -PathOverride $RepoRoot
@@ -545,12 +530,7 @@ function Invoke-RevertDevModeNoLabVIEWMain {
     $labviewYear = $LabVIEWVersion
     if (Test-Path -Path $versionHelper) {
         . $versionHelper
-        $useBypass = $SkipRepoVersionCheck -and -not [string]::IsNullOrWhiteSpace($LabVIEWVersion)
-        if ($useBypass) {
-            $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion
-        } else {
-            $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $resolvedRepoRoot
-        }
+        $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $resolvedRepoRoot
         $labviewYear = $versionInfo.Year
     }
     if (-not (Test-Path -Path $contractHelper)) {
@@ -558,7 +538,7 @@ function Invoke-RevertDevModeNoLabVIEWMain {
     }
     . $contractHelper
     if ([string]::IsNullOrWhiteSpace($labviewYear)) {
-        throw "LabVIEW version could not be resolved. Check .lvversion."
+        $labviewYear = '2021'
     }
 
     try {
@@ -589,10 +569,8 @@ if ($MyInvocation.InvocationName -ne '.') {
         -SupportedBitness $SupportedBitness `
         -RepoRoot $RepoRoot `
         -ContractPath $ContractPath `
-        -SkipProcessCheck:$SkipProcessCheck `
-        -SkipRepoVersionCheck:$SkipRepoVersionCheck
+        -SkipProcessCheck:$SkipProcessCheck
 }
-
 
 
 
