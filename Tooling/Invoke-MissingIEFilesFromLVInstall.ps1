@@ -10,6 +10,7 @@
 
 .PARAMETER LabVIEWVersion
     LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
+    Alias: MinimumSupportedLVVersion.
 
 .PARAMETER SupportedBitness
     LabVIEW bitness to target ("32" or "64"). Defaults to "64".
@@ -94,6 +95,7 @@ param(
     [Parameter(Mandatory = $false)]
     [AllowNull()]
     [AllowEmptyString()]
+    [Alias('MinimumSupportedLVVersion')]
     [string]$LabVIEWVersion = '',
 
     [Parameter(Mandatory = $false)]
@@ -171,9 +173,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git was not found on PATH."
-}
 $devModeRequested = $EnableDevMode -or $EnableDevModeNoLabVIEW
 if ($EnableDevMode -and $EnableDevModeNoLabVIEW) {
     Write-Warning "EnableDevModeNoLabVIEW is set; ignoring EnableDevMode."
@@ -226,27 +225,14 @@ function Resolve-RepoRoot {
         [string]$PathOverride
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($PathOverride)) {
+    if ($PathOverride) {
         if (-not (Test-Path -Path $PathOverride)) {
             throw "RepoRoot does not exist: $PathOverride"
         }
         return (Resolve-Path -Path $PathOverride).Path
     }
 
-    $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($git) {
-        try {
-            $gitRoot = git -C $scriptRoot rev-parse --show-toplevel 2>$null
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($gitRoot)) {
-                return (Resolve-Path -Path $gitRoot.Trim()).Path
-            }
-        } catch {
-            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
-        }
-    }
-
-    return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
+    return (Resolve-Path -Path (Join-Path $PSScriptRoot '..')).Path
 }
 
 function Get-LabVIEWInstallRoot {
@@ -548,7 +534,7 @@ if (Test-Path -Path $versionHelper) {
     $labviewYear = $versionInfo.Year
 }
 if ([string]::IsNullOrWhiteSpace($labviewYear)) {
-    throw "LabVIEW version could not be resolved. Check .lvversion."
+    $labviewYear = '2021'
 }
 if ([string]::IsNullOrWhiteSpace($StatusFileArchiveDirectory) -and $artifactRootResolved) {
     $StatusFileArchiveDirectory = Join-Path $artifactRootResolved 'verify-iepaths'
@@ -588,8 +574,6 @@ $strictState = Resolve-BoolFromEnv -Name 'LVIE_VERIFY_IEPATHS_STRICT' -Fallback 
 $autoRevert = $AutoRevertIfEnabled -or (Resolve-BoolFromEnv -Name 'LVIE_VERIFY_IEPATHS_AUTO_REVERT' -Fallback $false)
 $forceNoLabVIEW = Resolve-BoolFromEnv -Name 'LVIE_FORCE_NO_LABVIEW_DEVMODE' -Fallback $false
 $preferNoLabVIEW = $forceNoLabVIEW -or $EnableDevModeNoLabVIEW -or (Resolve-BoolFromEnv -Name 'LVIE_VERIFY_IEPATHS_NO_LABVIEW' -Fallback $false)
-$allowNoLabVIEWEnableFailure = Resolve-BoolFromEnv -Name 'LVIE_VERIFY_IEPATHS_ALLOW_NO_LABVIEW_ENABLE_FAILURE' -Fallback (Resolve-BoolFromEnv -Name 'LVIE_RUNNER_ACL_WARN_ONLY' -Fallback $false)
-$devModeRelaxedChecks = $false
 $preState = Get-IEInstallState -LabVIEWInstallRoot $installRoot
 Write-Host ("Install state (pre): {0}" -f (Format-IEInstallState -State $preState))
 Write-VerifyIEPathsSummaryLine ("Verify IE Paths pre-state ({0} {1}-bit): {2}" -f $labviewYear, $SupportedBitness, (Format-IEInstallState -State $preState))
@@ -653,7 +637,6 @@ if (-not (Get-Command g-cli -ErrorAction SilentlyContinue)) {
 $gCliPath = (Get-Command g-cli -ErrorAction SilentlyContinue).Source
 
 if ($devModeRequested) {
-    $devModeEnableSucceeded = $false
     if ($preferNoLabVIEW) {
         $devModeScript = Join-Path $repoRoot 'Tooling\Set-DevelopmentMode-NoLabVIEW.ps1'
         if (-not (Test-Path -Path $devModeScript)) {
@@ -661,25 +644,10 @@ if ($devModeRequested) {
         }
 
         Write-Host ("Enabling development mode without LabVIEW before VerifyIEPaths (LV{0} {1}-bit)..." -f $labviewYear, $SupportedBitness)
-        try {
-            & $devModeScript `
-                -LabVIEWVersion $labviewYear `
-                -SupportedBitness $SupportedBitness `
-                -RepoRoot $repoRoot
-            if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
-                throw "Development mode enable failed with exit code $LASTEXITCODE."
-            }
-            $devModeEnableSucceeded = $true
-        } catch {
-            $devModeEnableError = $_.Exception.Message
-            $accessDenied = $devModeEnableError -match '(?i)\baccess\b.*\bdenied\b'
-            if ($allowNoLabVIEWEnableFailure -and $accessDenied) {
-                Write-Warning ("Development mode enable (no LabVIEW) failed due access denied; continuing without dev-mode allowances. Details: {0}" -f $devModeEnableError)
-                Write-VerifyIEPathsSummaryLine ("Verify IE Paths dev-mode enable skipped ({0} {1}-bit): access denied." -f $labviewYear, $SupportedBitness)
-            } else {
-                throw
-            }
-        }
+        & $devModeScript `
+            -LabVIEWVersion $labviewYear `
+            -SupportedBitness $SupportedBitness `
+            -RepoRoot $repoRoot
     } else {
         $devModeScript = Join-Path $repoRoot '.github\actions\set-development-mode\Set_Development_Mode.ps1'
         if (-not (Test-Path -Path $devModeScript)) {
@@ -695,22 +663,19 @@ if ($devModeRequested) {
             -ProcessTimeoutMs $ProcessTimeoutMs `
             -UseLabVIEW `
             -AllowFallbackToNoLabVIEW:$AllowFallbackToNoLabVIEW
-        if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
-            throw "Development mode enable failed with exit code $LASTEXITCODE."
-        }
-        $devModeEnableSucceeded = $true
     }
 
-    if ($devModeEnableSucceeded) {
-        if (-not (Test-IEDevModeEnabled -LabVIEWInstallRoot $installRoot)) {
-            Write-Warning ("Development mode did not appear enabled (LV{0} {1}-bit). VerifyIEPaths may not behave as expected." -f $labviewYear, $SupportedBitness)
-        }
-
-        $postEnableState = Get-IEInstallState -LabVIEWInstallRoot $installRoot
-        Write-Host ("Install state (post-enable): {0}" -f (Format-IEInstallState -State $postEnableState))
-        Write-VerifyIEPathsSummaryLine ("Verify IE Paths post-enable ({0} {1}-bit): {2}" -f $labviewYear, $SupportedBitness, (Format-IEInstallState -State $postEnableState))
-        $devModeRelaxedChecks = $postEnableState.DevModeEnabled
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+        throw "Development mode enable failed with exit code $LASTEXITCODE."
     }
+
+    if (-not (Test-IEDevModeEnabled -LabVIEWInstallRoot $installRoot)) {
+        Write-Warning ("Development mode did not appear enabled (LV{0} {1}-bit). VerifyIEPaths may not behave as expected." -f $labviewYear, $SupportedBitness)
+    }
+
+    $postEnableState = Get-IEInstallState -LabVIEWInstallRoot $installRoot
+    Write-Host ("Install state (post-enable): {0}" -f (Format-IEInstallState -State $postEnableState))
+    Write-VerifyIEPathsSummaryLine ("Verify IE Paths post-enable ({0} {1}-bit): {2}" -f $labviewYear, $SupportedBitness, (Format-IEInstallState -State $postEnableState))
 }
 
 $gCliArgs = @(
@@ -740,13 +705,7 @@ try {
     if ($result.ExitCode -ne 0) {
         $allowGcliExit = $IgnoreGcliExitCode -or $devModeRequested
         if ($allowGcliExit) {
-            $reason = if ($IgnoreGcliExitCode) {
-                'IgnoreGcliExitCode is set'
-            } elseif ($devModeRelaxedChecks) {
-                'development mode is enabled'
-            } else {
-                'development mode was requested'
-            }
+            $reason = if ($IgnoreGcliExitCode) { 'IgnoreGcliExitCode is set' } else { 'development mode is enabled' }
             Write-Warning ("VerifyIEPaths.vi returned exit code {0}; continuing because {1}." -f $result.ExitCode, $reason)
         } else {
             throw "VerifyIEPaths.vi failed with exit code $($result.ExitCode)."
@@ -830,5 +789,4 @@ finally {
 if ($preflight -and $preflight.CleanRoomAfter) {
     Invoke-PreflightCleanup -RepoRoot $preflight.RepoRoot -Phase 'after'
 }
-
 

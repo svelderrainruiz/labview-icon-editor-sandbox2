@@ -1,51 +1,21 @@
-# Infrastructure Change
+# Description
 
-## Summary
-- Related issue/discussion:
-- Scope (what changed):
-- Why this is needed:
-- Out of scope:
+Please include a summary of the changes and the related issue. Please also include relevant motivation and context. List any dependencies that are required for this change.
+<input type="text" id="Description" name="Description"/>
 
-## Change Type
-- [ ] GitHub workflow (`.github/workflows`)
-- [ ] Composite action (`.github/actions`)
-- [ ] PowerShell/tooling (`Tooling/`)
-- [ ] Runner/env contract (paths, vars, locks, dependencies)
-- [ ] CI policy/gates/concurrency
-- [ ] Other (describe):
+## Type of change
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Changes to GitHub actions
+- [ ] Changes to Powershell scripts
 
-## Version Increment Label
-- [ ] Exactly one canonical release label is applied (`Version Increment: Major`, `Version Increment: Minor`, or `Version Increment: Patch`)
-- [ ] Compatibility aliases are accepted during migration (`major`, `minor`, `patch`) and will be deprecated after two release cycles
+## Documentation changes made to
 
-## Risk and Impact
-- Risk level: [ ] Low [ ] Medium [ ] High
-- Primary failure mode(s):
-- Blast radius (jobs/branches/runners/users affected):
-- [ ] Permission/token scope changed and documented
-- [ ] Secret/variable additions or renames documented
-- [ ] No auth/secret/permission changes
+- [ ] LabVIEW Wiki
+- [ ] Readme.md
+- [ ] No documentation changes were necessary
 
-## Test Evidence
-### Automated
-- [ ] Relevant workflow run(s) passed (link):
-- [ ] Local parity or targeted script run completed (command + result):
-- [ ] Failure-path/guardrail behavior validated (if applicable)
+# Checklist:
 
-### Manual
-- [ ] Affected path validated end-to-end
-- [ ] Non-affected path smoke-checked
-- Logs/artifacts/notes:
-
-## Rollout and Rollback
-- Rollout plan (order + scope):
-- Post-merge validation (what/where/how long):
-- Rollback trigger(s):
-- Rollback steps:
-- [ ] No migration/stateful changes
-- [ ] Migration/stateful changes documented
-
-## Documentation and Ops Notes
-- [ ] Docs/runbook updated in-repo (`docs/` or `Tooling/README.md`)
-- [ ] No documentation updates required (reason):
-- Follow-up tasks (if any):
+- [ ] Built a [Baseline VI Package locally](https://github.com/ni/labview-icon-editor#baseline-VI-package) locally
+- [ ] Built the icon editor via a GitHub action

@@ -25,7 +25,7 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 
 - **Prerequisites**:
   1. **LabVIEW 2021 (21.0), both 32-bit and 64-bit**.
-  2. **PowerShell 7+** and **Git** on PATH.
+  2. **PowerShell 7+** and **Git**.  
   3. **Apply** `.github\actions\apply-vipc\runner_dependencies.vipc` to **LabVIEW 2021 (21.0), 32-bit & 64-bit**—matching the `apply-deps` matrix in [`../.github/workflows/ci-composite.yml`](../.github/workflows/ci-composite.yml).
 
 ---
@@ -38,13 +38,6 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
    `<LabVIEW>\vi.lib\LabVIEW Icon API`
 
 2. **Clone** the [Icon Editor](https://github.com/ni/labview-icon-editor.git) to your development location.
-   If you are working from a fork, set `origin` to your fork and add `upstream` to the main repo:
-   ```powershell
-   git remote set-url origin https://github.com/<your-user>/labview-icon-editor.git
-   git remote add upstream https://github.com/ni/labview-icon-editor.git
-   ```
-   You can verify with `pwsh -NoProfile -File .\Tooling\Test-ForkRemotes.ps1`.
-   The script also performs a non-interactive connectivity check; set `LVIE_SKIP_REMOTE_CONNECTIVITY_CHECK=1` to skip when offline.
 
 3. **Apply** dependencies:  
    `.github\actions\apply-vipc\runner_dependencies.vipc` to **LabVIEW 2021 (21.0), 32-bit & 64-bit**.
@@ -54,11 +47,10 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 
 5. **Enable Dev Mode**:
    ```powershell
-   .\Set_Development_Mode.ps1
+   .\Set_Development_Mode.ps1 -LabVIEWVersion 2021
    ```
 
    Removes the default `lv_icon.lvlibp` and points LabVIEW to your local Icon Editor code.
-   Omit `-LabVIEWVersion` to use `.lvversion`; if you pass it, it must match `.lvversion`.
 
 6. **Open** the project:
    `lv_icon_editor.lvproj`  
@@ -96,9 +88,8 @@ This document describes how to **build, test, and distribute** the **LabVIEW Ico
 
 5. **Revert Dev Mode (optional)**:
    ```powershell
-   ..\revert-development-mode\RevertDevelopmentMode.ps1
+   ..\revert-development-mode\RevertDevelopmentMode.ps1 -LabVIEWVersion 2021
    ```
-   If you pass `-LabVIEWVersion`, it must match `.lvversion` or the script will fail fast.
 
 6. **Install** the `.vip` in VIPM (as Admin). Validate your custom Icon Editor changes.
 

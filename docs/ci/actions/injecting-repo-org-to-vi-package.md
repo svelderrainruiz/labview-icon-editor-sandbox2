@@ -71,6 +71,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/build-lvlibp
         with:
+          labview_version: 2021
           supported_bitness: ${{ matrix.bitness }}
           repo_root: ${{ github.workspace }}
           major: ${{ needs.version.outputs.MAJOR }}
@@ -96,6 +97,8 @@ jobs:
       - uses: ./.github/actions/modify-vipb-display-info
         with:
           vipb_path: .github/actions/build-vi-package/NI Icon editor.vipb
+          labview_version: 2021
+          labview_minor_revision: 0
           repo_root: ${{ github.workspace }}
           supported_bitness: 64
           major: ${{ needs.version.outputs.MAJOR }}
@@ -107,6 +110,8 @@ jobs:
           display_information_json: ${{ steps.display-info.outputs.json }}
       - uses: ./.github/actions/build-vi-package
         with:
+          labview_version: 2021
+          labview_minor_revision: 0
           supported_bitness: 64
           major: ${{ needs.version.outputs.MAJOR }}
           minor: ${{ needs.version.outputs.MINOR }}

@@ -1,16 +1,13 @@
 #Requires -Version 7.0
 <#
 .SYNOPSIS
-    Creates a short-path worktree for a CI job and exports canonical path contract variables.
+    Creates a short-path worktree for a CI job and exports REPO_ROOT/PROJECT_PATH.
 
 .DESCRIPTION
     Centralizes CI worktree creation so workflows only need to pass a bitness and
     (optionally) a variant label. The script resolves the worktree root, creates
     a deterministic folder name, calls New-CIWorktree.ps1, and exports:
       - LVIE_WORKTREE_ROOT
-      - LVIE_REPO_ROOT
-      - LVIE_PROJECT_RELATIVE_PATH
-      - LVIE_PROJECT_PATH
       - REPO_ROOT
       - PROJECT_PATH
 
@@ -33,8 +30,7 @@
     Run attempt. Defaults to GITHUB_RUN_ATTEMPT.
 
 .PARAMETER ProjectFile
-    Project file relative path to export as LVIE_PROJECT_PATH/PROJECT_PATH.
-    Defaults to lv_icon_editor.lvproj.
+    Project file name to export as PROJECT_PATH. Defaults to lv_icon_editor.lvproj.
 
 .PARAMETER WorktreeRoot
     Optional explicit worktree root. If omitted, LVIE_WORKTREE_ROOT or a
@@ -72,9 +68,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git was not found on PATH."
-}
 function Resolve-RepoRoot {
     param([string]$BasePath)
 
@@ -86,20 +79,7 @@ function Resolve-RepoRoot {
         return [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
     }
 
-    $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($git) {
-        try {
-            $gitRoot = git -C $scriptRoot rev-parse --show-toplevel 2>$null
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($gitRoot)) {
-                return (Resolve-Path -Path $gitRoot.Trim()).Path
-            }
-        } catch {
-            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
-        }
-    }
-
-    return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
+    return (Resolve-Path -Path (Join-Path $PSScriptRoot '..')).Path
 }
 
 function Resolve-NormalizedPath {
@@ -115,26 +95,6 @@ function Resolve-NormalizedPath {
     }
 
     return $full
-}
-
-function Get-RunnerCliRuntime {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-    if ($IsWindows) { return 'win-x64' }
-    if ($IsLinux) {
-        if ($arch -eq 'Arm64') { return 'linux-arm64' }
-        return 'linux-x64'
-    }
-    if ($IsMacOS) {
-        if ($arch -eq 'Arm64') { return 'osx-arm64' }
-        return 'osx-x64'
-    }
-    return 'win-x64'
-}
-
-function Get-RunnerCliFileName {
-    param([string]$Runtime)
-    if ($Runtime -like 'win-*') { return 'runner-cli.exe' }
-    return 'runner-cli'
 }
 
 function Get-RegisteredWorktreePathList {
@@ -362,41 +322,14 @@ if (-not (Test-Path -Path $projectPath)) {
 
 $lvInfo = Resolve-LabVIEWVersionInfo -VersionPath (Join-Path $worktree '.lvversion')
 
-$runnerCliPath = $null
-$ensureRunnerCli = Join-Path $worktree 'Tooling\Ensure-RunnerCli.ps1'
-if (Test-Path -Path $ensureRunnerCli) {
-    try {
-        Write-Host "Ensuring runner-cli is built in the new worktree..."
-        $runtime = Get-RunnerCliRuntime
-        $cliFile = Get-RunnerCliFileName -Runtime $runtime
-        $preferredPath = Join-Path $worktree "Tooling\runner-cli\publish\$runtime\$cliFile"
-        $ensureResult = & $ensureRunnerCli -RepoRoot $worktree -RunnerCliPath $preferredPath -SkipDownload
-        if ($ensureResult -and $ensureResult.Path) {
-            $runnerCliPath = $ensureResult.Path
-            Write-Host ("runner-cli ready at {0}" -f $runnerCliPath)
-        }
-    } catch {
-        if ($env:LVIE_REQUIRE_RUNNER_CLI -eq '1') {
-            throw
-        }
-        Write-Warning ("runner-cli build failed in worktree: {0}" -f $_.Exception.Message)
-    }
-}
-
 if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) {
     "LVIE_WORKTREE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-    "LVIE_REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-    "LVIE_PROJECT_RELATIVE_PATH=$ProjectFile" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-    "LVIE_PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "REPO_ROOT=$worktree" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "PROJECT_PATH=$projectPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "LABVIEW_VERSION_RAW=$($lvInfo.Raw)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "LABVIEW_VERSION_YEAR=$($lvInfo.Year)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "LABVIEW_MINOR_REVISION=$($lvInfo.MinorRevision)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
     "LABVIEW_NUMERIC_VERSION=$($lvInfo.NumericVersion)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-    if (-not [string]::IsNullOrWhiteSpace($runnerCliPath)) {
-        "LVIE_RUNNER_CLI_PATH=$runnerCliPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
-    }
 }
 
 Write-Host ("Worktree created: {0}" -f $worktree)

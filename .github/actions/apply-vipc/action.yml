@@ -13,18 +13,22 @@ runs:
       run: |
         $lvVersion = "${{ inputs.labview_version }}"
         if ([string]::IsNullOrWhiteSpace($lvVersion)) {
-          Write-Warning "labview_version not provided; ApplyVIPC will resolve .lvversion from repo root."
+          throw "labview_version is required."
         }
 
         & "${{ github.action_path }}/ApplyVIPC.ps1" `
-          -LabVIEWVersion $lvVersion `
+          -MinimumSupportedLVVersion $lvVersion `
+          -VIP_LVVersion ${{ inputs.vip_lv_version }} `
           -SupportedBitness ${{ inputs.supported_bitness }} `
           -RepoRoot "${{ inputs.repo_root }}" `
           -VIPCPath "${{ inputs.vipc_path }}"
 inputs:
   labview_version:
     description: 'LabVIEW version to target (year or numeric).'
-    required: false
+    required: true
+  vip_lv_version:
+    description: 'VIPC LabVIEW version (year or numeric).'
+    required: true
   supported_bitness:
     description: '32 or 64'
     required: true
@@ -34,6 +38,5 @@ inputs:
   vipc_path:
     description: 'Path under repo for the .vipc file (relative to workspace)'
     required: true
-
 
 

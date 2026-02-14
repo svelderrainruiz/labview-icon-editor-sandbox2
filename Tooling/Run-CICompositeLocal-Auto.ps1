@@ -43,33 +43,6 @@
 .PARAMETER EnsureCleanState
     Revert dev mode before enabling it for Verify IE Paths.
 
-.PARAMETER SkipDevModeNoLabVIEWSmoke
-    Skip DevMode.NoLabVIEW smoke tests in parity runs.
-
-.PARAMETER DevModeNoLabVIEWSmokeDepth
-    Smoke depth: minimal, balanced, or full.
-
-.PARAMETER ForceGcliLunit
-    Force g-cli as the primary LUnit backend for parity unit tests.
-
-.PARAMETER SkipViValidate
-    Skip pylavi vi_validate checks.
-
-.PARAMETER ViValidateConfigPath
-    Path to pylavi vi_validate config file (relative to repo root).
-
-.PARAMETER ViValidateProfile
-    vi_validate profile: strict, legacy, or both (default: strict).
-
-.PARAMETER ViValidateReportOnly
-    Emit vi_validate warnings but do not fail the run.
-
-.PARAMETER ViValidateSkipVersionGate
-    Skip passing --eq to vi_validate (useful for legacy cleanup runs).
-
-.PARAMETER ViValidateOnly
-    Run only the pylavi vi_validate gate and exit.
-
 .PARAMETER UseWorktree
     Create a worktree under the configured root and run parity from there.
 
@@ -95,9 +68,6 @@
     If set, purge known output folders before and after the run.
 #>
 
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "git was not found on PATH."
-}
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
@@ -144,29 +114,6 @@ param(
     [Parameter(Mandatory = $false)]
     [switch]$EnsureCleanState,
 
-    [switch]$SkipDevModeNoLabVIEWSmoke,
-
-    [Parameter(Mandatory = $false)]
-    [ValidateSet('minimal', 'balanced', 'full')]
-    [string]$DevModeNoLabVIEWSmokeDepth = 'balanced',
-
-    [switch]$ForceGcliLunit,
-
-    [switch]$SkipViValidate,
-
-    [Parameter(Mandatory = $false)]
-    [string]$ViValidateConfigPath = 'Tooling/pylavi/vi-validate.yml',
-
-    [Parameter(Mandatory = $false)]
-    [ValidateSet('strict', 'legacy', 'both')]
-    [string]$ViValidateProfile = 'strict',
-
-    [switch]$ViValidateReportOnly,
-
-    [switch]$ViValidateSkipVersionGate,
-
-    [switch]$ViValidateOnly,
-
     [Parameter(Mandatory = $false)]
     [bool]$UseWorktree = $true,
 
@@ -202,19 +149,7 @@ function Resolve-RepoRoot {
         return (Resolve-Path -Path $PathOverride).Path
     }
 
-    $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-    $git = Get-Command git -ErrorAction SilentlyContinue
-    if ($git) {
-        try {
-            $gitRoot = git -C $scriptRoot rev-parse --show-toplevel 2>$null
-            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($gitRoot)) {
-                return (Resolve-Path -Path $gitRoot.Trim()).Path
-            }
-        } catch {
-            Write-Verbose ("git rev-parse failed: {0}" -f $_.Exception.Message)
-        }
-    }
-    return (Resolve-Path -Path (Join-Path $scriptRoot '..')).Path
+    return (Resolve-Path -Path (Join-Path $PSScriptRoot '..')).Path
 }
 
 function Initialize-CsvHeader {
@@ -260,7 +195,7 @@ if (Test-Path -Path $versionHelper) {
     $LabVIEWVersion = $labviewInfo.Year
 }
 if ([string]::IsNullOrWhiteSpace($LabVIEWVersion)) {
-    throw "LabVIEW version could not be resolved. Check .lvversion."
+    $LabVIEWVersion = '2021'
 }
 $runScript = Join-Path $repoRoot 'Tooling/Run-CICompositeLocal.ps1'
 if (-not (Test-Path -Path $runScript)) {
@@ -311,8 +246,7 @@ if (Get-Command Invoke-Preflight -ErrorAction SilentlyContinue) {
         -ScriptArguments $scriptArgs `
         -RunId $RunId `
         -ArtifactRoot $ArtifactRoot `
-        -CleanRoom:$CleanRoom `
-        -RequireViValidate:$(-not $SkipViValidate)
+        -CleanRoom:$CleanRoom
     if ($preflight.Reinvoked) {
         return
     }
@@ -327,15 +261,6 @@ if ($DryRun) {
         -LabVIEWBitness $LabVIEWBitness `
         -AllowVersionMismatch:$AllowVersionMismatch `
         -DryRun `
-        -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke `
-        -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
-        -ForceGcliLunit:$ForceGcliLunit `
-        -SkipViValidate:$SkipViValidate `
-        -ViValidateConfigPath $ViValidateConfigPath `
-        -ViValidateProfile $ViValidateProfile `
-        -ViValidateReportOnly:$ViValidateReportOnly `
-        -ViValidateSkipVersionGate:$ViValidateSkipVersionGate `
-        -ViValidateOnly:$ViValidateOnly `
         -RepoRoot $runRepoRoot `
         -WorktreeRoot $resolvedWorktreeRoot `
         -SkipWorktreeRootCheck:$SkipWorktreeRootCheck `
@@ -368,15 +293,6 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
             -LabVIEWBitness $LabVIEWBitness `
             -AllowVersionMismatch:$AllowVersionMismatch `
             -EnsureCleanState:$EnsureCleanState `
-            -SkipDevModeNoLabVIEWSmoke:$SkipDevModeNoLabVIEWSmoke `
-            -DevModeNoLabVIEWSmokeDepth $DevModeNoLabVIEWSmokeDepth `
-            -ForceGcliLunit:$ForceGcliLunit `
-            -SkipViValidate:$SkipViValidate `
-            -ViValidateConfigPath $ViValidateConfigPath `
-            -ViValidateProfile $ViValidateProfile `
-            -ViValidateReportOnly:$ViValidateReportOnly `
-            -ViValidateSkipVersionGate:$ViValidateSkipVersionGate `
-            -ViValidateOnly:$ViValidateOnly `
             -ConnectTimeoutMs $attemptConnectTimeout `
             -ProcessTimeoutMs $attemptProcessTimeout `
             -RepoRoot $runRepoRoot `
@@ -408,6 +324,5 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
 if ($preflight -and $preflight.CleanRoomAfter) {
     Invoke-PreflightCleanup -RepoRoot $preflight.RepoRoot -Phase 'after'
 }
-
 
 

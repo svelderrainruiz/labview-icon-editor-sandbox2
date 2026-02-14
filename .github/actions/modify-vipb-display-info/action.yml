@@ -15,39 +15,17 @@ runs:
         DISPLAY_INFORMATION_JSON: |
           ${{ inputs.display_information_json }}
       run: |
-        $repoRoot = "${{ inputs.repo_root }}"
-        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
-          $repoRoot = $env:GITHUB_WORKSPACE
+        $lvVersion = "${{ inputs.labview_version }}"
+        if ([string]::IsNullOrWhiteSpace($lvVersion)) {
+          throw "labview_version is required."
         }
-        if ([string]::IsNullOrWhiteSpace($repoRoot)) {
-          throw "repo_root is required."
-        }
-        $repoRoot = (Resolve-Path -Path $repoRoot -ErrorAction Stop).Path
-
-        $lvVersionInput = "${{ inputs.labview_version }}"
-        $assertScript = Join-Path $repoRoot 'Tooling\Assert-LabVIEWVersion.ps1'
-        if (-not (Test-Path -Path $assertScript)) {
-          throw "Assert-LabVIEWVersion.ps1 not found at $assertScript"
-        }
-        $lvInfo = & $assertScript -RepoRoot $repoRoot -ExpectedVersion $lvVersionInput -Context 'modify-vipb-display-info'
-        if ([string]::IsNullOrWhiteSpace($lvVersionInput)) {
-          Write-Warning "labview_version not provided; using .lvversion ($($lvInfo.Raw))."
-        }
-        $lvVersion = $lvInfo.Year
-        $minorInput = "${{ inputs.labview_minor_revision }}"
-        if (-not [string]::IsNullOrWhiteSpace($minorInput)) {
-          if ([int]$minorInput -ne [int]$lvInfo.MinorRevision) {
-            throw "labview_minor_revision '$minorInput' does not match .lvversion minor '$($lvInfo.MinorRevision)'."
-          }
-        }
-        $lvMinor = if ([string]::IsNullOrWhiteSpace($minorInput)) { $lvInfo.MinorRevision } else { [int]$minorInput }
         $displayInformationJson = $Env:DISPLAY_INFORMATION_JSON
         & "${{ github.action_path }}/ModifyVIPBDisplayInfo.ps1" `
           -SupportedBitness ${{ inputs.supported_bitness }} `
-          -RepoRoot $repoRoot `
+          -RepoRoot "${{ inputs.repo_root }}" `
           -VIPBPath "${{ inputs.vipb_path }}" `
-          -LabVIEWVersion $lvVersion `
-          -LabVIEWMinorRevision $lvMinor `
+          -MinimumSupportedLVVersion $lvVersion `
+          -LabVIEWMinorRevision ${{ inputs.labview_minor_revision }} `
           -Major ${{ inputs.major }} `
           -Minor ${{ inputs.minor }} `
           -Patch ${{ inputs.patch }} `
@@ -58,7 +36,7 @@ runs:
 inputs:
   labview_version:
     description: 'LabVIEW version to target (year or numeric).'
-    required: false
+    required: true
   supported_bitness:
     description: '32 or 64'
     required: true
@@ -71,7 +49,7 @@ inputs:
   labview_minor_revision:
     description: 'LabVIEW minor revision (e.g., 0 for 21.0)'
     required: false
-    default: ''
+    default: '0'
   major:
     description: 'Major version component'
     required: true
@@ -93,6 +71,5 @@ inputs:
   display_information_json:
     description: 'DisplayInformation JSON string'
     required: true
-
 
 

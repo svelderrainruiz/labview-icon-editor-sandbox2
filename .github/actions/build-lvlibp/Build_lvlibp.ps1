@@ -8,6 +8,7 @@
 
 .PARAMETER LabVIEWVersion
     LabVIEW version year (e.g., 2021) or numeric version (e.g., 21.0).
+    Alias: MinimumSupportedLVVersion.
 
 .PARAMETER SupportedBitness
     Bitness of the LabVIEW environment ("32" or "64").
@@ -31,12 +32,13 @@
     Commit hash or identifier recorded in the build.
 
 .EXAMPLE
-    .\Build_lvlibp.ps1 -SupportedBitness "64" -RepoRoot "C:\labview-icon-editor" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "Placeholder"
+    .\Build_lvlibp.ps1 -LabVIEWVersion "2021" -SupportedBitness "64" -RepoRoot "C:\labview-icon-editor" -Major 1 -Minor 0 -Patch 0 -Build 0 -Commit "Placeholder"
 #>
 param(
+    [Alias('MinimumSupportedLVVersion')]
     [AllowNull()]
     [AllowEmptyString()]
-    [string]$LabVIEWVersion = '',
+    [string]$LabVIEWVersion = '2021',
     [string]$SupportedBitness,
     [string]$RepoRoot,
     [string]$WorktreeRoot,
@@ -89,7 +91,7 @@ if ($RepoRoot) {
     }
 }
 if ([string]::IsNullOrWhiteSpace($labviewYear)) {
-    throw "LabVIEW version could not be resolved. Check .lvversion."
+    $labviewYear = '2021'
 }
 
 function Invoke-CloseLabVIEWSafely {
@@ -144,5 +146,4 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Build succeeded."
     exit 0
 }
-
 
