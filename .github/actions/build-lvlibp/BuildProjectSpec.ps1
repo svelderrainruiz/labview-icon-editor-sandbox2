@@ -184,12 +184,14 @@ if (-not (Test-Path -Path $projectPath -PathType Leaf)) {
 }
 
 $labviewYear = $LabVIEWVersion
+$labviewVersionForClose = $LabVIEWVersion
 if ($RepoRoot) {
     $versionHelper = Join-Path -Path $RepoRoot -ChildPath 'Tooling\support\LabVIEWVersion.ps1'
     if (Test-Path -Path $versionHelper) {
         . $versionHelper
         $versionInfo = Get-LabVIEWVersionInfo -VersionInput $LabVIEWVersion -RepoRoot $RepoRoot
         $labviewYear = $versionInfo.Year
+        $labviewVersionForClose = $versionInfo.Raw
     }
 }
 if ([string]::IsNullOrWhiteSpace($labviewYear)) {
@@ -552,41 +554,6 @@ function Sync-IconEditorSourcesForBuildSpec {
     Write-Output "  vi.lib\LabVIEW Icon API -> $installIconApi"
 }
 
-function Clear-IconEditorSourcesForBuildSpec {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$LabVIEWExecutablePath
-    )
-
-    $labviewRoot = Split-Path -Path $LabVIEWExecutablePath -Parent
-    $installPlugins = Join-Path -Path $labviewRoot -ChildPath 'resource\plugins'
-    $installIconApi = Join-Path -Path $labviewRoot -ChildPath 'vi.lib\LabVIEW Icon API'
-
-    $pathsToRemove = @(
-        (Join-Path -Path $installPlugins -ChildPath 'NIIconEditor')
-        (Join-Path -Path $installPlugins -ChildPath 'lv_IconEditor.lvlib')
-        (Join-Path -Path $installPlugins -ChildPath 'lv_icon.vi')
-        (Join-Path -Path $installPlugins -ChildPath 'lv_icon.vit')
-        (Join-Path -Path $installPlugins -ChildPath 'SAMPLE_lv_icon.vi')
-        (Join-Path -Path $installIconApi -ChildPath 'lv_icon')
-    )
-
-    $removed = 0
-    foreach ($candidate in $pathsToRemove) {
-        if (-not (Test-Path -LiteralPath $candidate)) {
-            continue
-        }
-
-        Remove-Item -LiteralPath $candidate -Recurse -Force
-        Write-Output ("Removed stale install copy before build-spec execution: {0}" -f $candidate)
-        $removed++
-    }
-
-    if ($removed -eq 0) {
-        Write-Output "No stale Icon Editor install copies were present before build-spec execution."
-    }
-}
-
 function Invoke-LabVIEWCliOperation {
     param(
         [Parameter(Mandatory = $true)]
@@ -681,8 +648,10 @@ try {
         Sync-IconEditorSourcesForBuildSpec -RepoRootPath $RepoRoot -LabVIEWExecutablePath $labviewExecutablePath
     } else {
         Write-Output "Skipping workspace-to-install Icon Editor source synchronization before build-spec execution."
-        Clear-IconEditorSourcesForBuildSpec -LabVIEWExecutablePath $labviewExecutablePath
     }
+
+    Write-Output "Closing LabVIEW after MassCompile to clear in-memory VI state before build-spec execution."
+    Invoke-CloseLabVIEWSafely -Version $labviewVersionForClose -Bitness $SupportedBitness
 
     if (Test-Path -Path $outputPath -PathType Leaf) {
         Remove-Item -Path $outputPath -Force
@@ -739,7 +708,7 @@ finally {
     }
 
     try {
-        Invoke-CloseLabVIEWSafely -Version $labviewYear -Bitness $SupportedBitness
+        Invoke-CloseLabVIEWSafely -Version $labviewVersionForClose -Bitness $SupportedBitness
     }
     catch {
         Write-Warning ("Close LabVIEW cleanup failed: {0}" -f $_.Exception.Message)

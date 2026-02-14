@@ -18,7 +18,12 @@ Describe 'BuildProjectSpec source sync contract' {
         $script:content | Should -Match '\[switch\]\$SyncIconEditorSourcesToInstall'
         $script:content | Should -Match 'if \(\$SyncIconEditorSourcesToInstall\.IsPresent\)'
         $script:content | Should -Match 'Skipping workspace-to-install Icon Editor source synchronization before build-spec execution\.'
-        $script:content | Should -Match 'function Clear-IconEditorSourcesForBuildSpec'
-        $script:content | Should -Match 'Clear-IconEditorSourcesForBuildSpec -LabVIEWExecutablePath \$labviewExecutablePath'
+        $script:content | Should -Match 'Closing LabVIEW after MassCompile to clear in-memory VI state before build-spec execution\.'
+        $script:content | Should -Match 'Invoke-CloseLabVIEWSafely -Version \$labviewVersionForClose -Bitness \$SupportedBitness'
+    }
+
+    It 'uses lvversion-normalized raw version for close-labview calls' {
+        $script:content | Should -Match '\$labviewVersionForClose = \$versionInfo\.Raw'
+        $script:content | Should -Not -Match 'Invoke-CloseLabVIEWSafely -Version \$labviewYear -Bitness \$SupportedBitness'
     }
 }
